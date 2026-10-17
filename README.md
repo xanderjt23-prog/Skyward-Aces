@@ -5,32 +5,44 @@ A 3D browser dogfighting game, from WW1 biplanes to modern fighter jets. It uses
 ## Menus
 - **Top bar**: research XP, coins, and the pilot profile (level, XP to the next level, K/D ratio, other stats and settings). Each level needs 1.1× the XP of the one before it.
 - **Play**: Singleplayer or Multiplayer, then one of four modes:
-  - **Destroy**: two teams of 1–60. Kills score 3; small, medium and big bases score 2, 3 and 5. The host sets the match length. The team with the most points wins.
+  - **Destroy**: two teams of 1–60 (some bots fly bombers and attack aircraft). Kills score 3; small, medium and big bases score 2, 3 and 5. The host sets the match length. The team with the most points wins.
   - **Dogfight**: 1v1 up to 8v8, with 0–12 respawns each. The last team flying wins.
   - **Missions**: historical missions for the nation of your aircraft, closest era first. Mission types are fighter sweeps, bomber intercepts, ground strikes and bomber escorts.
   - **Survival**: co-op waves of enemy fighters, with bombers every third wave.
 - **Multiplayer**: the host clicks *Generate join code* and shares the code; other players enter it under *Join*. The host picks the mode and settings, can move players between teams, and chooses whether empty slots are filled with bots. Bots fly the average era of the human players. If a player drops out mid-battle, a bot takes over their aircraft.
-- **Hangar**: a tab for each nation, aircraft grouped by era, full stats and a 3D preview.
+- **Hangar**: a tab for each nation (with its flag), aircraft grouped by era with a picture and type (fighter, heavy fighter, dive bomber, heavy bomber, strike aircraft...), full stats and a 3D preview.
 - **Modifications**: ammunition belts per gun; bombs, rockets, missiles and gun pods per hardpoint, limited by station type, weight per pylon, total payload, era and nation; airframe upgrades. Everything bought can be fitted and removed freely.
-- **Research**: spend XP on aircraft. In each nation you can research up to one era above the newest era you own in that nation. Every nation starts with one WW1 aircraft.
+- **Research**: spend XP on aircraft — fighters, bombers and attack aircraft (about 130 in all). In each nation you can research up to one era above the newest era you own in that nation. Every nation starts with one WW1 aircraft.
 - **Achievements**: 30 achievements with progress bars.
+- **Rewards**: XP and coins for kills, assists, damage, bases and winning. Assists add to your own score but never to the team score. Leaving a battle early forfeits the participation reward: you keep only what you earned.
 
 ## Controls
+All controls can be rebound in **Profile → Controls** (keys or mouse buttons). Defaults:
 | | |
 |---|---|
-| Mouse | aim; the aircraft flies towards the circle |
+| Mouse | aim — the aircraft banks and pulls towards the circle (small moves = small, smooth corrections) |
 | Left mouse | guns (and gun pods) |
-| Right mouse (hold) | look around |
+| Right mouse (hold) | zoom in |
+| V (hold) | look around |
 | W / S | throttle; hold W at 100% for WEP or afterburner |
 | A / D, Q / E | roll, rudder (keyboard overrides) |
-| Arrow keys | keyboard stick |
-| Space | drop bombs |
+| Arrow up / down | keyboard stick (push / pull) |
+| Space | drop bombs (a yellow diamond on the HUD shows where they will land) |
 | R | fire rockets |
 | F | fire missile (wait for the lock tone) |
 | X | flares |
+| G / B | landing gear / wheel brakes (Realistic Mode) |
 | C | chase / nose camera |
 | Tab | scoreboard |
 | Esc | pause / leave |
+
+The crosshair colour can be changed in the profile settings.
+
+## Realistic Mode
+A checkbox in every game mode. You start on your team's airfield runway with the engine idling: throttle up and pull up at the speed the HUD shows. Raise the gear after take-off. Lower it to land; a gentle touchdown on the wheels (wings level, sink under ~6 m/s) is a landing, 6-9 m/s is a hard landing that damages the airframe, more is a crash. Stop at your own airfield for 12 seconds to refuel, rearm and repair. Airfields can be bombed: a team whose airfields are all destroyed can no longer take off. Bots take off from the runway too.
+
+## Sound
+Everything is synthesised in the browser (no recordings): piston engines buzz at their real cylinder firing frequency (rotary, inline and radial engines differ, multi-engine aircraft beat), jets have a roar, turbine whine and afterburner rumble, guns fire at their real rate of fire with a report per calibre (Gatling guns growl), distant sounds arrive late at the speed of sound and lose their highs, and nearby aircraft fly past with a Doppler shift.
 
 ## How the simulation works
 - **Flight model** (`js/flight.js`): thrust, drag and climb are derived from each aircraft's real top speed, climb rate, turn time, roll rate and G limit. Lift depends on angle of attack, and the wing stalls past the critical angle. Turning bleeds speed, piston engines lose power at altitude, and controls stiffen in very fast dives.

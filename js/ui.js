@@ -233,6 +233,7 @@ const UI = (() => {
   const MAPS_OPT = [['', 'Random'], ...Object.entries(World.MAPS).map(([k, v]) => [k, v.name])];
   function settingsForm(s, editable) {
     const dis = editable ? '' : 'disabled';
+    const realistic = `<label class="row realistic"><input type="checkbox" id="s-real" ${s.realistic ? 'checked' : ''} ${dis}> <b>Realistic Mode</b> <span class="small muted">— take off from your team's airfield runway, land on it to refuel, rearm and repair. If a team's airfields are destroyed, it can no longer take off.</span></label>`;
     const sel = (id, opts, v) => `<select id="${id}" ${dis}>${opts.map(([k, n]) => `<option value="${k}" ${String(k) === String(v) ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
     let h = '';
     if (s.mode === 'destroy') {
@@ -245,7 +246,8 @@ const UI = (() => {
         <div class="grid c2"><div class="field"><label>Time limit</label>${sel('s-time', [[0, 'None'], [300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [1200, '20 minutes'], [1800, '30 minutes']], s.time)}</div><div class="field"><label>Map</label>${sel('s-map', MAPS_OPT, s.map)}</div></div>`;
     } else if (s.mode === 'survival') {
       h += `<div class="grid c2"><div class="field"><label>Respawns per pilot: <b id="rsv">${s.respawns}</b></label><input type="range" id="s-resp" min="0" max="12" value="${s.respawns}" ${dis}></div><div class="field"><label>Map</label>${sel('s-map', MAPS_OPT, s.map)}</div></div>`;
-    } else {
+    }
+    if (s.mode === 'missions') {
       const lead = editable ? cur() : (lobby && lobby.hostPlane ? PLANES[lobby.hostPlane] : cur());
       const ms = missionsFor(lead); if (!s.mission || !ms.find(x => x.id === s.mission)) s.mission = ms[0] && ms[0].id;
       h += `<p class="muted small">Missions for ${flag(lead.nation)} ${NATIONS[lead.nation].name}, closest to the ${ERAS[lead.era].name} era of the ${esc(lead.name)} first.</p><div class="grid c2">`;
@@ -253,13 +255,14 @@ const UI = (() => {
         <div class="small muted" style="margin:6px 0">${esc(m.brief)}</div><span class="pill">${{ sweep: 'Fighter sweep', intercept: 'Intercept bombers', strike: 'Ground strike', escort: 'Bomber escort' }[m.type]}</span> <span class="pill">vs ${NATIONS[m.enemy].name}</span></div>`;
       h += `</div>`;
     }
-    return h;
+    return realistic + h;
   }
   function bindSettings(s, onChange) {
     const on = (id, ev, f) => { const el = $('#' + id); if (el) el[ev] = e => { f(e.target.value); onChange && onChange(); }; };
     on('sz0', 'oninput', v => { s.teamSize[0] = +v; $('#sz0v').textContent = v; }); on('sz1', 'oninput', v => { s.teamSize[1] = +v; $('#sz1v').textContent = v; });
     on('s-time', 'onchange', v => s.time = +v); on('s-map', 'onchange', v => s.map = v);
-    on('s-size', 'onchange', v => s.teamSize = [+v, +v]); on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
+    on('s-size', 'onchange', v => s.teamSize = [+v, +v]);
+    const re = $('#s-real'); if (re) re.onchange = e => { s.realistic = e.target.checked; onChange && onChange(); }; on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
     $$('[data-mis]').forEach(c => c.onclick = () => { s.mission = c.dataset.mis; onChange && onChange(true); });
   }
   function modeCards(selMode) {
@@ -286,7 +289,7 @@ const UI = (() => {
       h += `<h3>Choose a game mode</h3>${modeCards(play.mode)}<div class="card" style="margin-top:14px">${settingsForm(play.settings, true)}</div>
         <div class="row" style="margin-top:14px"><button id="p-back">← Back</button><button class="primary" id="p-start" style="font-size:20px;padding:10px 30px">Take off</button></div>`;
       body(h);
-      $$('[data-mode]').forEach(c => c.onclick = () => { play.mode = c.dataset.mode; play.settings = defaults(play.mode); renderPlay(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const re = play.settings.realistic; play.mode = c.dataset.mode; play.settings = defaults(play.mode); play.settings.realistic = re; renderPlay(); });
       bindSettings(play.settings, re => { if (re) renderPlay(); });
       $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
       $('#p-start').onclick = startSingle;
@@ -338,7 +341,7 @@ const UI = (() => {
     if ($('#lb-copy')) $('#lb-copy').onclick = () => { try { navigator.clipboard.writeText(L.code); toastMenu('Copied'); } catch (e) {} };
     if (!s) return;
     if (L.host) {
-      $$('[data-mode]').forEach(c => c.onclick = () => { const fill = s.fill; L.settings = defaults(c.dataset.mode); L.settings.fill = fill; lobbySync(); renderLobby(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const fill = s.fill, re = s.realistic; L.settings = defaults(c.dataset.mode); L.settings.fill = fill; L.settings.realistic = re; lobbySync(); renderLobby(); });
       bindSettings(s, re => { lobbySync(); if (re) renderLobby(); });
       $('#fill-bots').onchange = e => { s.fill = e.target.checked; lobbySync(); };
       $$('[data-mv]').forEach(b => b.onclick = () => { const p = L.players.find(x => x.peer === b.dataset.mv); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } });

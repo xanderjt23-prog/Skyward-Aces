@@ -7,6 +7,7 @@ const V3 = THREE.Vector3;
 const CONV = [0, 150, 220, 300, 400, 500, 500, 500]; // gun convergence by era (m)
 
 class Craft {
+  static SERVICE_TIME = 12;
   constructor(match, spec) {
     this.match = match; this.spec = spec;
     this.id = spec.id; this.team = spec.team; this.name = spec.name; this.isBot = !!spec.bot; this.human = !spec.bot;
@@ -27,9 +28,7 @@ class Craft {
   spawn(pos, heading, speed) {
     const d = this.def;
     this.dm = Damage.create(d, this.lo.mods, { hpMul: this.spec.hpMul });
-    this.mass = d.mass + (this.lo.mods.armor ? 40 : 0);
-    this.stations = d.hp.map((st, i) => { const id = this.lo.stores[i]; if (!id || !STORES[id] || !storeAllowed(d, id, st)) return null; const s = STORES[id];
-      this.mass += s.mass * st[3]; return { id, s, n: st[3] * (s.count || 1), pylons: st[3], label: st[0], gunAmmo: s.kind === 'g' ? GUNS[s.gun].ammo * s.guns * st[3] : 0 }; }).filter(Boolean);
+    this.loadStores();
     this.perf = Flight.perf(d, this.lo.mods, this.mass);
     this.fuel = 1; this.endurance = d.kind === 'jet' ? 900 : 1500;
     this.pos.copy(pos); this.quat.setFromEuler(new THREE.Euler(0, heading, 0, 'YXZ'));
@@ -40,7 +39,7 @@ class Craft {
     this.flares = d.flares * (this.lo.mods.flares ? 2 : 1);
     this.alive = true; this.everSpawned = true; this.wreck = false; this.spawnT = this.match.time; this.model.visible = true;
     const u = this.model.userData; u.wingL.visible = u.wingR.visible = true; this.model.rotation.set(0, 0, 0);
-    this.crashed = false; this.dmgVer++; this.missileWarn = 0; this.lockTarget = null; this.lockT = 0;
+    this.crashed = false; this.dmgVer++; this.onGround = false; this.gearDown = false; this.serviceT = 0; this.serviced = false; this.brakes = false; this.missileWarn = 0; this.lockTarget = null; this.lockT = 0;
     if (this.ai) this.ai.reset();
   }
   buildGuns() {
@@ -89,10 +88,69 @@ class Craft {
     // weapons
     for (const g of this.guns) { g.cd -= dt; if (g.firing && this.dm.fx.ctrl) this.fireGun(g); g.firing = false; }
     for (const t of this.turrets) this.updateTurret(t, dt);
-    // collisions with the ground / sea
-    const gy = m.world.groundAt(this.pos.x, this.pos.z);
-    if (this.pos.y < gy + 1.5) { this.pos.y = gy + 1.5; m.onCrash(this, gy < 1); return; }
+    // ---- ground / sea contact: in Realistic mode a gentle touchdown on the wheels is a landing, anything else a crash
+    const lay = Models.layout(this.def), gy = m.world.groundAt(this.pos.x, this.pos.z);
+    const clear = this.gearDown || lay.fixed && m.cfg.realistic ? lay.gearH : 1.5;
+    if (this.pos.y < gy + clear) {
+      if (this.canTouchDown(gy)) { this.pos.y = gy + clear; this.rollOnGround(dt); }
+      else { this.pos.y = gy + 1.5; m.onCrash(this, gy < 1); return; }
+    } else if (this.onGround && this.pos.y > gy + clear + 0.4) this.onGround = false;
     if (this.pos.y > 15000) this.vel.y = Math.min(this.vel.y, 0);
+  }
+  canTouchDown(gy) {
+    const m = this.match; if (!m.cfg.realistic || this.dm.destroyed || this.wreck) return false;
+    if (!(this.gearDown || Models.layout(this.def).fixed)) return false;     // belly landing
+    if (m.world.heightAt(this.pos.x, this.pos.z) < 0.3) return false;         // water
+    if (this.onGround) return true;
+    const f = new V3(0, 0, -1).applyQuaternion(this.quat), r = new V3(1, 0, 0).applyQuaternion(this.quat);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, f.y))), bank = Math.abs(Math.asin(Math.max(-1, Math.min(1, r.y))));
+    const slope = Math.abs(m.world.groundAt(this.pos.x + 12, this.pos.z) - m.world.groundAt(this.pos.x - 12, this.pos.z)) + Math.abs(m.world.groundAt(this.pos.x, this.pos.z + 12) - m.world.groundAt(this.pos.x, this.pos.z - 12));
+    const ok = this.vel.y > -9 && bank < 0.35 && pitch > -0.14 && this.speed < this.perf.vs * 1.9 + 15 && slope < 5;
+    // a hard landing (6-9 m/s sink) survives, but bends the airframe
+    if (ok && this.vel.y < -6) { const dmg = (-this.vel.y - 6) / 3; Damage.apply(this.dm, this.dm.comps.map((c, i) => ({ ci: i, dmg: (c.type === 'fuselage' || c.type === 'wing' ? 0.35 : 0.1) * c.max * dmg })).filter(h => this.dm.comps[h.ci].type !== 'crew'), { attacker: null, time: m.time }); this.processDamageEvents(); if (this === m.player) m.events.push({ t: m.time, e: 'hard', text: 'Hard landing!' }); }
+    return ok && !this.dm.destroyed;
+  }
+  // rolling on the wheels: no sideways slip, rolling friction and brakes, wings held level, nose-wheel / tail-wheel steering
+  rollOnGround(dt) {
+    const m = this.match; this.onGround = true;
+    // the wheels keep it down unless the pilot pulls up
+    if (this.vel.y < 0 || this.ctl.pitch < 0.15) this.vel.y = Math.min(0, Math.max(this.vel.y, 0));
+    const f = new V3(0, 0, -1).applyQuaternion(this.quat), fh = new V3(f.x, 0, f.z).normalize();
+    let along = this.vel.dot(fh);
+    const decel = (0.3 + (this.brakes ? 4 : 0) + (this.ctl.throttle < 0.05 ? 0.4 : 0)) * dt;
+    along = along > 0 ? Math.max(0, along - decel) : Math.min(0, along + decel);
+    this.vel.set(fh.x * along, this.vel.y, fh.z * along);
+    let h = Math.atan2(-fh.x, -fh.z), pitch = Math.max(-0.03, Math.min(0.26, Math.asin(Math.max(-1, Math.min(1, f.y)))));
+    h -= this.ctl.yaw * Math.min(1, Math.abs(along) / 6) * 0.6 * dt;
+    this.quat.setFromEuler(new THREE.Euler(pitch, h, 0, 'YXZ')); this.rates.z = 0; this.rates.y = 0;
+    // servicing at our own airfield: stop on (or next to) the runway
+    const home = m.bases.find(b => b.home && b.team === this.team && !b.dead && b.runway && b.runway.c.distanceTo(new V3(this.pos.x, b.runway.c.y, this.pos.z)) < b.runway.len / 2 + 400);
+    if (home && this.speed < 3) { this.serviceT = (this.serviceT || 0) + dt; if (this.serviceT >= Craft.SERVICE_TIME && !this.serviced) { this.serviced = true; this.resupply(); } }
+    else if (this.speed > 8) { this.serviceT = 0; this.serviced = false; }
+    this.atHome = !!home;
+  }
+  toggleGear() {
+    const m = this.match;
+    if (!m.cfg.realistic) return;
+    if (Models.layout(this.def).fixed) { if (this === m.player) UI.toast('This aircraft has fixed landing gear'); return; }
+    if (this.onGround) { if (this === m.player) UI.toast('Cannot raise the gear on the ground'); return; }
+    this.gearDown = !this.gearDown; if (this === m.player) Sound.clunk();
+  }
+  // refuel, rearm and repair (Realistic mode, after landing at home)
+  resupply() {
+    this.dm = Damage.create(this.def, this.lo.mods, { hpMul: this.spec.hpMul });
+    this.loadStores(); this.perf = Flight.perf(this.def, this.lo.mods, this.mass);
+    this.guns = this.buildGuns(); this.turrets = this.buildTurrets();
+    this.flares = this.def.flares * (this.lo.mods.flares ? 2 : 1); this.fuel = 1;
+    const u = this.model.userData; u.wingL.visible = u.wingR.visible = true;
+    this.dmgVer++;
+    if (this === this.match.player) this.match.events.push({ t: this.match.time, e: 'service', text: 'Refuelled, rearmed and repaired' });
+  }
+  loadStores() {
+    const d = this.def;
+    this.mass = d.mass + (this.lo.mods.armor ? 40 : 0);
+    this.stations = d.hp.map((st, i) => { const id = this.lo.stores[i]; if (!id || !STORES[id] || !storeAllowed(d, id, st)) return null; const s = STORES[id];
+      this.mass += s.mass * st[3]; return { id, s, n: st[3] * (s.count || 1), pylons: st[3], label: st[0], gunAmmo: s.kind === 'g' ? GUNS[s.gun].ammo * s.guns * st[3] : 0 }; }).filter(Boolean);
   }
   processDamageEvents() {
     const dm = this.dm;
@@ -222,6 +280,7 @@ class Craft {
     o.visible = true; o.position.copy(this.pos); o.quaternion.copy(this.quat);
     const u = o.userData, thr = this.ctl.throttle * (this.dm ? Math.max(...this.dm.fx.thrust, 0) : 1);
     for (const p of u.props) p.rotation.z += dt * (12 + thr * 60);
+    if (u.gear) u.gear.visible = !!(this.gearDown || (this.netFlags & 16) && !this.local);
     const ab = this.afterburner || (this.netFlags & 4);
     for (const gl of u.glows) { gl.visible = !!ab && !this.wreck; if (ab) gl.scale.set(1, 1, 0.8 + Math.random() * 0.4); }
     // smoke and fire trails from damaged components
@@ -249,7 +308,7 @@ class Craft {
   packState() {
     const p = this.pos, q = this.quat, v = this.vel, r1 = x => Math.round(x * 10) / 10, r3 = x => Math.round(x * 1000) / 1000;
     let f = 0; const t = this.match.time;
-    if (t - (this.firingGuns || -9) < 0.15) f |= 1; if (t - (this.firingTurret || -9) < 0.15) f |= 2; if (this.afterburner) f |= 4; if (this.wreck) f |= 8;
+    if (t - (this.firingGuns || -9) < 0.15) f |= 1; if (t - (this.firingTurret || -9) < 0.15) f |= 2; if (this.afterburner) f |= 4; if (this.wreck) f |= 8; if (this.gearDown) f |= 16;
     const s = [this.id, this.alive ? 1 : 0, r1(p.x), r1(p.y), r1(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w), r1(v.x), r1(v.y), r1(v.z), Math.round(this.ctl.throttle * 100), f];
     return s;
   }

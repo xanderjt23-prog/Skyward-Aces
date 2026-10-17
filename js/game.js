@@ -130,6 +130,8 @@ const Game = (() => {
     const m = G.match;
     G.aimDir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     Flight.steer(p, G.aimDir, p.ctl, { allowPush: false });
+    // on the wheels the aim steers the nose wheel; the wings stay level
+    if (p.onGround) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); const hErr = Math.atan2(f.x * G.aimDir.z - f.z * G.aimDir.x, f.x * G.aimDir.x + f.z * G.aimDir.z); p.ctl.yaw = Math.max(-1, Math.min(1, hErr * 3)); p.ctl.roll = 0; }
     // keyboard overrides (and keyboard-only flying)
     const I = Input.down;
     if (I('rollLeft')) p.ctl.roll = -1; if (I('rollRight')) p.ctl.roll = 1;

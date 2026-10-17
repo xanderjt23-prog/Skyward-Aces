@@ -110,6 +110,12 @@ const Models = (() => {
     else if (pl.eng === 2) for (const s of [-1, 1]) engines.push({ x: s * fr * 0.65, y: 0, z: L * 0.3, r: fr * 0.62, len: L * 0.32, jet: true });
     else engines.push({ x: 0, y: 0, z: L * 0.3, r: fr * 0.8, len: L * 0.32, jet: true });
     const lay = { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ, engines, bi, big, jet, upperY: fr * 1.75 };
+    // landing gear: fixed gear (biplanes etc.) or retractable main gear under the wings; gearH = height of the CG above the ground when sitting on the wheels
+    lay.fixed = bi || !!pl.fixedGear;
+    lay.wheelR = Math.max(0.3, fr * (big ? 0.45 : 0.32));
+    lay.gearLen = fr * (jet ? 1.0 : 1.25) + 0.3;
+    lay.gearH = bi ? fr * 2.0 + 0.32 : pl.fixedGear ? -(wingY - fr * 1.2 - 0.3) : -(wingY - lay.gearLen - lay.wheelR);
+    lay.gearX = Math.max(fr * 1.1, Math.min(S * 0.18, pl.eng >= 2 ? S * 0.18 : S * 0.12));
     return (layoutCache[pl.id] = lay);
   }
 
@@ -202,11 +208,19 @@ const Models = (() => {
     for (const s of [-1, 1]) insignia(body, pl.nation, Math.min(fr * 1.4, 1.6), [s * fr * 0.95, 0, L * 0.22], 'x', pl.era);
 
     const g = new THREE.Group();
+    let gearMesh = null;
+    if (!lay.fixed) {
+      const gb = new Builder(), wr = lay.wheelR, gl = lay.gearLen, gz = wingZ - chord * 0.15;
+      for (const sd of [-1, 1]) { gb.add(box(0.12, gl, 0.12), 0x555555, [sd * lay.gearX, wingY - gl / 2, gz]); gb.add(cyl(wr, wr, wr * 0.5, 12), dark, [sd * lay.gearX, wingY - gl, gz], [0, 0, Math.PI / 2]); }
+      if (lay.jet) { gb.add(box(0.1, lay.gearH - wr * 0.8, 0.1), 0x555555, [0, -(lay.gearH - wr * 0.8) / 2, -L * 0.32]); gb.add(cyl(wr * 0.8, wr * 0.8, wr * 0.4, 10), dark, [0, -lay.gearH + wr * 0.8, -L * 0.32], [0, 0, Math.PI / 2]); }
+      else { const th = Math.max(0.3, lay.gearH * 0.45); gb.add(box(0.08, th, 0.08), 0x555555, [0, -th / 2, L * 0.4]); gb.add(cyl(0.18, 0.18, 0.12, 8), dark, [0, -th, L * 0.4], [0, 0, Math.PI / 2]); }
+      gearMesh = new THREE.Mesh(gb.build(), mat('vc')); gearMesh.visible = false; g.add(gearMesh);
+    }
     const bodyMesh = new THREE.Mesh(body.build(), mat('vc')); g.add(bodyMesh);
     const glass = new THREE.Mesh(glassB.build(), mat('glass')); g.add(glass);
     const wingL = new THREE.Mesh(wl.build(), mat('vc')), wingR = new THREE.Mesh(wr.build(), mat('vc')); g.add(wingL, wingR);
     for (const p of props) g.add(p); for (const gl of glows) g.add(gl);
-    g.userData = { props, glows, wingL, wingR, body: bodyMesh, lay };
+    g.userData = { props, glows, wingL, wingR, body: bodyMesh, lay, gear: gearMesh };
     return g;
   }
   function turretPos(pl, arc) {
@@ -219,6 +233,7 @@ const Models = (() => {
 
   // ---- ground targets ------------------------------------------------------
   const TEAM_COL = [0x3a6fd8, 0xd83a3a];
+  const RUNWAY = [0, 450, 650, 1000, 1500, 1700, 1800, 1800]; // m, by era
   function aaMount(era, heavy) {
     const b = new Builder(), g = new THREE.Group();
     b.add(cyl(1.6, 1.9, 0.6, 10), 0x6d6a5a, [0, 0.3, 0]); // sandbag ring
@@ -234,7 +249,7 @@ const Models = (() => {
   function base(kind, size, team, era) {
     const b = new Builder(), sc = size === 'small' ? 1 : size === 'medium' ? 1.6 : 2.4, tc = TEAM_COL[team];
     const rnd = mulberry(kind.length * 97 + sc * 13 + team * 7);
-    const R = 45 * sc, aa = [];
+    const R = 45 * sc, aa = []; let runway = null;
     const house = (x, z, w, d, h, c) => { b.add(box(w, h, d), c, [x, h / 2, z]); b.add(box(w * 1.05, 0.5, d * 1.05), 0x5a3a2a, [x, h + 0.25, z]); };
     const flag = (x, z) => { b.add(cyl(0.1, 0.1, 9, 5), 0xcccccc, [x, 4.5, z]); b.add(box(0.05, 1.4, 2.2), tc, [x, 8, z + 1.1]); };
     const water = kind === 'ship' || kind === 'carrier';
@@ -255,7 +270,8 @@ const Models = (() => {
       b.add(box(6, 3, 6), 0x4c5240, [0, 1.5, 0]); b.add(cyl(0.2, 0.2, 8, 5), 0x333333, [0, 7, 0]); b.add(box(5, 3, 0.3), 0x666666, [0, 11, 0]);
       flag(R * 0.3, R * 0.3); for (let i = 0; i < 2 + sc; i++) { const a = i / (2 + sc) * Math.PI * 2 + 0.4; aa.push(new V(Math.cos(a) * R * 0.75, 0, Math.sin(a) * R * 0.75)); }
     } else {
-      if (kind === 'airfield') { const rl = 260 * sc / 1.6; b.add(box(26, 0.3, rl), 0x4a4a48, [-R * 0.6, 0.15, 0]); b.add(box(1, 0.32, rl * 0.9), 0xdddddd, [-R * 0.6, 0.16, 0]);
+      if (kind === 'airfield') { const rl = RUNWAY[era], grass = era <= 2; runway = { x: -R * 0.6, z: 0, len: rl, w: grass ? 60 : 30 };
+        b.add(box(runway.w, 0.3, rl), grass ? 0x6f7d4a : 0x4a4a48, [-R * 0.6, 0.15, 0]); if (!grass) { b.add(box(1, 0.32, rl * 0.9), 0xdddddd, [-R * 0.6, 0.16, 0]); for (const e of [-1, 1]) b.add(box(26, 0.33, 4), 0xdddddd, [-R * 0.6, 0.165, e * (rl / 2 - 12)]); }
         for (let i = 0; i < sc * 1.5; i++) { const hz = (i - sc * 0.6) * 34; b.add(cyl(11, 11, 30, 12, 1), 0x7a7f74, [R * 0.15, 0, hz], [Math.PI / 2, 0, 0], [1, 1, 0.75]); } }
       if (kind === 'factory') { for (let i = 0; i < 2 + sc * 2; i++) { const x = (rnd() - 0.5) * R * 1.4, z = (rnd() - 0.5) * R * 1.4; b.add(box(26, 10, 18), 0x8a6a55, [x, 5, z]); b.add(box(27, 1, 19), 0x555555, [x, 10.5, z]); }
         for (let i = 0; i < 1 + sc; i++) b.add(cyl(1.6, 2.2, 32, 8), 0x7b5040, [(rnd() - 0.5) * R, 16, (rnd() - 0.5) * R]); }
@@ -273,7 +289,7 @@ const Models = (() => {
       for (let i = 0; i < nAA; i++) { const a = i / nAA * Math.PI * 2 + 0.6; aa.push(new V(Math.cos(a) * R * 0.85, 0, Math.sin(a) * R * 0.85)); }
     }
     const g = new THREE.Group(); g.add(new THREE.Mesh(b.build(), mat('vc')));
-    return { group: g, aaSpots: aa, radius: R + 15, water };
+    return { group: g, aaSpots: aa, radius: R + 15, water, runway, flat: runway ? Math.max(R + 15, runway.len * 0.8) : R + 15 };
   }
   function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   function missile(len, r) { const b = new Builder(); b.add(zcyl(r, r, len, 6), 0xdddddd, [0, 0, 0]); b.add(zcyl(0.01, r, r * 3, 6), 0x999999, [0, 0, -len / 2 - r * 1.5]);

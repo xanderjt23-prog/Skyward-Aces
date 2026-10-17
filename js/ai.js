@@ -11,6 +11,16 @@ class BotBrain {
     const P = c.perf, role = c.def.role;
     this.think -= dt; this.missileCd -= dt; this.rocketCd -= dt; this.noiseT -= dt;
     if (this.noiseT <= 0) { this.noiseT = 0.4 + Math.random() * 0.6; const k = (1 - this.skill) * 0.03; this.noise.set((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k); }
+    // Realistic mode take-off: roll down the runway, rotate, climb out, raise the gear
+    if (c.onGround || c.climbOut) {
+      const f = new V3(0, 0, -1).applyQuaternion(c.quat), fh = new V3(f.x, 0, f.z).normalize(), agl = c.pos.y - m.world.groundAt(c.pos.x, c.pos.z);
+      const dir = fh.clone(); dir.y = c.onGround ? (c.speed > P.vs * 1.3 ? 0.22 : 0) : 0.3;
+      Flight.steer(c, dir.normalize(), c.ctl); c.ctl.throttle = 1.1; c.ctl.yaw = 0; if (c.onGround) c.ctl.roll = 0;
+      if (!c.onGround && agl > 35) c.gearDown = false;
+      if (!c.onGround && agl > 150) c.climbOut = false;
+      return;
+    }
+    if (c.gearDown && !c.onGround) c.gearDown = false;
     if (this.think <= 0) { this.think = 0.8 + Math.random() * 0.8; this.choose(); }
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
     let dir = null, throttle = 1, fire = false, keepBank = false;

@@ -13,12 +13,13 @@ const Flight = (() => {
   //  - drag is set so the listed top speed is reached at the altitude the type was fastest at:
   //    low for WW1 / interwar types and subsonic jets, ~5 km for WW2 fighters, ~10 km with afterburner
   const SONIC = 330;
+  const PROP_FV = r => 0.65 + 1.6 * Math.pow(Math.max(0, 1 - r), 2); // propeller thrust vs speed (fraction of vmax): ~2.3x cruise thrust when static
   const wave = M => 1 + 4.5 * Math.min(0.32, Math.max(0, M - 0.9)); // transonic drag rise
   function engine(P, v, rho, throttle) {
     const M = v / SONIC;
     if (!P.jet) {
       // piston engines hold power up to the supercharger's critical altitude, then fade quickly
-      const r = v / P.vmax, fv = Math.max(0.3, 1.25 - 0.45 * r), rc = P.rhoCrit;
+      const r = v / P.vmax, fv = PROP_FV(r), rc = P.rhoCrit;
       const alt = rho >= rc ? Math.pow(rho, 0.45) : Math.pow(rc, 0.45) * Math.pow(rho / rc, 1.6);
       return P.a0 * fv * (throttle > 1 ? 1 + (throttle - 1) : throttle * 0.94) * alt;
     }
@@ -34,7 +35,7 @@ const Flight = (() => {
     const engMul = mods && mods.engine ? 1.07 : 1;
     const P = { vmax, vs, jet, ab: def.ab, mass: m, era: def.era, rhoCrit: [1, 0.8, 0.68, 0.52, 0.52, 0.52, 0.52, 0.52][def.era] };
     if (!jet) {
-      const fv = r => Math.max(0.3, 1.25 - 0.45 * r), rc = 0.55;
+      const fv = PROP_FV, rc = 0.55;
       P.a0 = Math.min(0.9 * G, def.clb * G / (vmax * rc * (fv(rc) - fv(1) * rc * rc)));
     } else {
       // climb is quoted with afterburner where fitted (thrust at ~Mach 0.5)
@@ -69,7 +70,8 @@ const Flight = (() => {
     vhat.copy(c.vel).multiplyScalar(1 / Math.max(v, 0.1));
     // local velocity -> angle of attack and sideslip
     _v.copy(c.vel).applyQuaternion(_q.copy(c.quat).invert());
-    const alpha = Math.atan2(-_v.y, -_v.z), beta = Math.atan2(_v.x, -_v.z);
+    // (standing still on the runway there is no airflow to speak of)
+    const alpha = v < 4 ? 0 : Math.atan2(-_v.y, -_v.z), beta = v < 4 ? 0 : Math.atan2(_v.x, -_v.z);
     c.alpha = alpha; c.beta = beta; c.speed = v;
     const qn = (v / P.vs) * (v / P.vs) * rho; // lift available at max AoA, in g
     const ctrlOk = fx.ctrl > 0, auth = ctrlOk ? 1 : 0;
@@ -121,7 +123,7 @@ const Flight = (() => {
     acc.addScaledVector(tmp, -Math.sin(beta) * qn * G * 0.4);
     // drag: parasitic + induced (lift-dependent) + airbrake from damage / gear
     const ind = P.cI * L * L * Math.min(3, (P.vc * P.vc) / Math.max(v * v, 1)) / Math.max(rho, 0.2);
-    const drag = P.kd * v * v * rho * fx.dragMul * (P.jet ? wave(v / SONIC) : 1) + ind + (stalled ? 0.15 * v * v / (P.vmax * P.vmax) * P.a0 * 3 : 0);
+    const drag = P.kd * v * v * rho * fx.dragMul * (P.jet ? wave(v / SONIC) : 1) * (c.gearDown ? 1.35 : 1) + ind + (stalled ? 0.15 * v * v / (P.vmax * P.vmax) * P.a0 * 3 : 0);
     acc.addScaledVector(vhat, -Math.min(drag, v / dt * 0.5 + 50));
     c.vel.addScaledVector(acc, dt);
     c.pos.addScaledVector(c.vel, dt);

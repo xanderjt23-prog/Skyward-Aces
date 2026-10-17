@@ -39,6 +39,7 @@ const HUD = (() => {
       const sz = { small: 'S', medium: 'M', big: 'L' }[b.size];
       g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(s.x - 7, s.y - 7, 14, 14); text(sz, s.x, s.y + 4, col, 10, 'center', true);
       if (b.objective) text('★', s.x + 12, s.y + 4, '#ffd34d', 12, 'left');
+      if (b.home) text(b.team === (p ? p.team : 0) ? 'HOME AIRFIELD' : 'ENEMY AIRFIELD', s.x, s.y + 20, col, 10, 'center', true);
       const near = Math.max(1800, m.half * 0.22);
       if (d < near) { const w = 70, f = Math.max(0, b.hp / b.max);
         g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(s.x - w / 2, s.y - 22, w, 6); g.fillStyle = f > 0.5 ? '#6ad36a' : f > 0.25 ? '#ffc04d' : '#ff5a4f'; g.fillRect(s.x - w / 2, s.y - 22, w * f, 6);
@@ -91,9 +92,10 @@ const HUD = (() => {
     const ga = p.totalAmmo(); parts.push(`GUNS ${ga.a | 0}`);
     for (const g2 of p.guns) if (g2.pod) parts.push(`POD ${Math.max(0, g2.pod.gunAmmo | 0)}`);
     const nb = p.count('b'), nr = p.count('r'), nm = p.count('m');
-    if (nb) parts.push(`BOMBS ${nb} [Space]`); if (nr) parts.push(`ROCKETS ${nr} [R]`);
-    if (nm) { const st = p.missileStation(); parts.push(`${st.s.name.split(' ')[0]} ×${nm} [F]`); }
-    if (p.def.flares) parts.push(`FLARES ${p.flares} [X]`);
+    if (nb) parts.push(`BOMBS ${nb} [${Input.label(Input.bind('bombs'))}]`); if (nr) parts.push(`ROCKETS ${nr} [${Input.label(Input.bind('rockets'))}]`);
+    if (nm) { const st = p.missileStation(); parts.push(`${st.s.name.split(' ')[0]} ×${nm} [${Input.label(Input.bind('missile'))}]`); }
+    if (p.def.flares) parts.push(`FLARES ${p.flares} [${Input.label(Input.bind('flares'))}]`);
+    if (game.match.cfg.realistic) parts.push(Models.layout(p.def).fixed ? 'GEAR FIXED' : p.gearDown ? 'GEAR ▼ DOWN' : 'GEAR ▲ UP');
     text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
   }
   function round(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
@@ -144,6 +146,25 @@ const HUD = (() => {
     if (p.stalled) w.push(['STALL', '#ffc04d']);
     if (Math.abs(p.pos.x) > m.half || Math.abs(p.pos.z) > m.half) w.push([`OUT OF BOUNDS ${Math.max(0, Math.ceil(20 - game.oobT))}`, '#ffc04d', true]);
     if (p.dm.fx.ctrl === 0) w.push(['PILOT KNOCKED OUT', '#ff3b30']);
+    // Realistic mode: take-off, landing and servicing prompts
+    if (m.cfg.realistic) {
+      const key = a => Input.label(Input.bind(a)), lay = Models.layout(p.def), agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
+      let hint = null;
+      if (p.onGround) {
+        if (p.serviceT > 0 && !p.serviced && p.atHome) hint = `Servicing aircraft… ${Math.floor(p.serviceT / Craft.SERVICE_TIME * 100)}%`;
+        else if (p.speed < 3 && p.atHome && p.serviced) hint = 'Ready — throttle up to take off';
+        else if (p.ctl.throttle < 0.5) hint = `Throttle up (${key('throttleUp')}) to take off — pull up at about ${Math.round(p.perf.vs * 1.3 * 3.6)} km/h`;
+        else if (p.speed < p.perf.vs * 1.3) hint = `Take-off roll… rotate at ${Math.round(p.perf.vs * 1.3 * 3.6)} km/h`;
+        else hint = 'Pull up gently to lift off';
+        if (p.atHome && p.speed > 3 && p.ctl.throttle < 0.2) hint = `Stop on the runway to refuel, rearm and repair (brakes: ${key('brakes')})`;
+      } else {
+        const home = m.bases.find(b => b.home && b.team === p.team && !b.dead && b.runway && b.runway.c.distanceTo(p.pos) < 4000);
+        if (p.gearDown && !lay.fixed && agl > 250) hint = `Raise the landing gear (${key('gear')})`;
+        else if (home && agl < 500 && !p.gearDown && !lay.fixed) hint = `Lower the landing gear (${key('gear')}) to land and service the aircraft`;
+        else if (home && agl < 300) hint = `Land on the runway: gentle sink, wings level, below ${Math.round((p.perf.vs * 1.9 + 15) * 3.6)} km/h`;
+      }
+      if (hint) text(hint, W / 2, H * 0.7, '#cfe6ff', 15, 'center', true);
+    }
     w.forEach(([t, c, blink], i) => { if (blink && Math.floor(m.time * 4) % 2) return; text(t, W / 2, H * 0.3 + i * 26, c, 20, 'center', true); });
     if ((w.some(x => x[0] === 'MISSILE') || w.some(x => x[0] === 'PULL UP'))) Sound.warn(m.time);
   }

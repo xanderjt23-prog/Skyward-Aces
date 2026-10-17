@@ -119,7 +119,18 @@ const Plan = {
       const b = place(0, 'big', water ? 'carrier' : 'airfield', 0.35, 0.5); b.objective = true; b.id = 'T0';
       place(0, 'small', kindFor('small'), 0.2, 0.5); place(0, 'medium', kindFor('medium'), 0.2, 0.6);
     }
-    return { mode, seed, era, map, half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid };
+    // Realistic mode: these teams take off from (and land on) their home airfields
+    const homeTeams = settings.realistic ? (mode === 'destroy' || mode === 'dogfight' ? [0, 1] : [0]) : [];
+    for (const t of homeTeams) {
+      if (mode === 'destroy') { // the big base and one medium base become the team's airfields
+        const big = bases.find(b => b.team === t && b.size === 'big'); if (big) big.kind = 'airfield';
+        if (!bases.some(b => b.team === t && b.size === 'medium' && b.kind === 'airfield')) { const med = bases.find(b => b.team === t && b.size === 'medium'); if (med) med.kind = 'airfield'; }
+      }
+      let homes = bases.filter(b => b.team === t && b.kind === 'airfield');
+      if (!homes.length) homes = [place(t, 'medium', 'airfield', 0.55, 0.8)];
+      homes.forEach(b => b.home = true);
+    }
+    return { mode, seed, era, map, half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid, realistic: !!settings.realistic, homeTeams };
   },
 };
 
@@ -131,7 +142,7 @@ class Match {
     this.spawnAlt = SPAWN_ALT[this.era]; this.patrolAlt = this.spawnAlt; this.ceiling = this.spawnAlt * 2.6 + 1500;
     this.scores = [0, 0]; this.feed = []; this.events = []; this.wave = 0; this.waveT = 6; this.debris = [];
     // world + bases
-    const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.radius, water: bm.water }; });
+    const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.flat, water: bm.water }; });
     this.world = World.create(this.scene, { map: cfg.map, half: cfg.half, seed: cfg.seed, sites });
     this.bases = sites.map((s, i) => this.makeBase(s, i));
     this.combat = new Combat(this);
@@ -160,7 +171,9 @@ class Match {
     // mission targets: raids must be stopped before they flatten them; strike targets are ordinary
     const objMul = !b.objective ? 1 : this.mode === 'survival' ? 3 : !this.mission ? 1 : { intercept: 1, escort: 1, strike: 0.8, sweep: 1 }[this.mission.type];
     const hp = BASE_HP[b.size] * ERA_HP[this.era] * objMul;
-    const base = { id: b.id, idx: i, team: b.team, size: b.size, kind: b.kind, objective: b.objective, pos: new V3(b.x, gy + (b.kind === 'balloon' ? 262 : 0), b.z), radius: b.kind === 'balloon' ? 22 : s.bm.radius, hp, max: hp, dead: false, group: g, aa: [], log: {} };
+    const base = { id: b.id, idx: i, team: b.team, size: b.size, kind: b.kind, objective: b.objective, home: !!b.home, pos: new V3(b.x, gy + (b.kind === 'balloon' ? 262 : 0), b.z), radius: b.kind === 'balloon' ? 22 : s.bm.radius, hp, max: hp, dead: false, group: g, aa: [], log: {} };
+    if (s.bm.runway) { const r = s.bm.runway, rot = g.rotation.y, c = new V3(r.x, 0, r.z).applyAxisAngle(new V3(0, 1, 0), rot).add(g.position);
+      base.runway = { c, dir: new V3(0, 0, -1).applyAxisAngle(new V3(0, 1, 0), rot), len: r.len, w: r.w }; }
     // anti-aircraft defences depend on the era (and on the size of the base)
     // only some small bases are defended
     const unarmed = b.size === 'small' && b.kind !== 'sam' && Models.mulberry(this.cfg.seed + i * 31)() < 0.35;
@@ -186,8 +199,23 @@ class Match {
     const s = team === 0 ? 1 : -1, row = Math.floor(i / 8), col = i % 8;
     return { pos: new V3((col - 3.5) * 140 + (Math.random() - 0.5) * 40, this.spawnAlt + (col % 3) * 60 + row * 30, s * this.half * 0.7 + s * row * 160), heading: team === 0 ? 0 : Math.PI };
   }
+  // Realistic mode: airfields this team can still take off from
+  homes(team) { return this.cfg.realistic && this.cfg.homeTeams.includes(team) ? this.bases.filter(b => b.home && b.team === team && !b.dead && b.runway) : null; }
+  groundTeam(team) { return !!(this.cfg.realistic && this.cfg.homeTeams.includes(team)); }
+  spawnOnRunway(c, i) {
+    const hs = this.homes(c.team); if (!hs || !hs.length) return false;
+    const h = hs[(c.id + (i || 0)) % hs.length], r = h.runway, side = new V3(-r.dir.z, 0, r.dir.x);
+    const lane = ((i || 0) % 3) - 1, row = Math.floor((i || 0) / 3) % Math.max(1, Math.floor(r.len * 0.35 / 30));
+    const p = r.c.clone().addScaledVector(r.dir, -r.len / 2 + 40 + row * 30).addScaledVector(side, lane * r.w * 0.28);
+    const lay = Models.layout(c.def); p.y = this.world.groundAt(p.x, p.z) + lay.gearH;
+    c.spawn(p, Math.atan2(-r.dir.x, -r.dir.z), 0);
+    c.onGround = true; c.gearDown = !lay.fixed; c.ctl.throttle = c.isBot ? 1.1 : 0; c.respawnAt = 0; c.home = h; c.climbOut = c.isBot;
+    return true;
+  }
   spawnCraft(c, i, first) {
     if (i == null) i = Math.floor(Math.random() * 16);
+    // (mission bomber raids still arrive in the air)
+    if (this.groundTeam(c.team) && !(this.mode === 'missions' && c.spec.task === 'bomb') && this.spawnOnRunway(c, i)) return;
     const sp = this.spawnPoint(c.team, i);
     if (this.mission && this.mission.type === 'intercept' && c.team === 0) { sp.pos.z = this.half * 0.25 + Math.floor(i / 8) * 160; sp.pos.y = this.spawnAlt * 1.2 + (i % 3) * 60; }
     if (c.def.role === 'bomber' || c.spec.task === 'bomb') {
@@ -201,6 +229,7 @@ class Match {
   }
   canRespawn(c) {
     if (this.over) return false;
+    if (this.groundTeam(c.team) && !this.homes(c.team).length) return false; // every airfield of this team is destroyed
     if (this.mode === 'destroy') return true;
     return c.lives > 0;
   }
