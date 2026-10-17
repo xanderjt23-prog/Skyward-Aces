@@ -182,7 +182,10 @@ class BotBrain {
   bomberRun(dt) {
     const c = this.c, m = c.match, b = this.ground;
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
-    if (!b || b.dead || c.count('b') === 0) { const home = new V3(c.pos.x, 0, (c.team === 0 ? 1 : -1) * m.half); const dir = home.sub(c.pos); dir.y = 0; return { dir: dir.normalize(), throttle: 0.9 }; }
+    if (!b || b.dead || c.count('b') === 0) {
+      const home = new V3(c.pos.x, 0, (c.team === 0 ? 1 : -1) * m.half);
+      if (m.mode === 'destroy' && Math.abs(home.z - c.pos.z) < 1500 && !c.human) { m.recycle(c); return { dir: new V3(0, 0, -1).applyQuaternion(c.quat), throttle: 0.9 }; }
+      const dir = home.sub(c.pos); dir.y = 0; return { dir: dir.normalize(), throttle: 0.9 }; }
     const impact = BotBrain.impact(c, b.pos.y), miss = Math.hypot(impact.x - b.pos.x, impact.z - b.pos.z);
     if (miss < b.radius * 0.7) { this.dropCd = (this.dropCd || 0) - dt; if (this.dropCd <= 0) { c.dropBomb(); this.dropCd = 0.4; } }
     const rel = b.pos.clone().sub(c.pos); const dir = new V3(rel.x, 0, rel.z).normalize();

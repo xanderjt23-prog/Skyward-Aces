@@ -66,7 +66,10 @@ const Plan = {
       }
       if (settings.fill !== false) for (const t of [0, 1]) {
         const n = size[t] - roster.filter(r => r.team === t).length;
-        for (let i = 0; i < n; i++) { const pl = Plan.pick(botPlanes(era)); roster.push(Plan.bot(nid++, t, pl.id, { groundChance: mode === 'destroy' ? 0.35 : 0, extra: mode === 'dogfight' ? { lives: respawns + 1 } : {} })); }
+        for (let i = 0; i < n; i++) {
+          // in Destroy about a quarter of the bots fly bombers and attack aircraft against the bases
+          const striker = mode === 'destroy' && Math.random() < 0.25, pl = Plan.pick(botPlanes(era, null, striker ? 'ground' : undefined));
+          roster.push(Plan.bot(nid++, t, pl.id, { groundChance: mode === 'destroy' ? 0.25 : 0, extra: mode === 'dogfight' ? { lives: respawns + 1 } : {} })); }
       }
     } else if (mode === 'missions') {
       for (const h of hum) { h.team = 0; h.lives = 3; roster.push(h); }
@@ -235,6 +238,8 @@ class Match {
       if (d.m.position.y < this.world.groundAt(d.m.position.x, d.m.position.z) || d.t < 0) { this.scene.remove(d.m); return false; } if (Math.random() < 0.3) FX.puff('smoke', d.m.position); return true; });
     for (const b of this.bases) for (const a of b.aa) if (a.target && a.hp > 0 && a.mount.userData.turret) a.mount.userData.turret.lookAt(a.target.pos.x, a.mount.position.y + 1, a.target.pos.z);
   }
+  // a bot bomber that has gone home empty lands off-map and comes back rearmed (no death)
+  recycle(c) { c.alive = false; c.wreck = false; c.model.visible = false; c.respawnAt = this.time + 12; }
   spawnDebris(c, mesh) {
     const m = Models.debris(mesh); m.position.copy(c.pos); m.quaternion.copy(c.quat); this.scene.add(m);
     const side = mesh === c.model.userData.wingL ? -1 : 1, right = new V3(side * 8, 3, 0).applyQuaternion(c.quat);
@@ -251,7 +256,7 @@ class Match {
     const att = info.attacker, aid = att && !att.isAA ? att.id : 'aa';
     let sum = 0; for (const h of hits) sum += h.dmg;
     if (att && !att.isAA && att.stats) att.stats.damage += sum;
-    if (att === this.player) { this.hitMarker = this.time; Sound.hit(); }
+    if (att === this.player) this.hitMarker = this.time;
     if (c.local) this.applyHits(c, hits, Object.assign({}, info, { attacker: aid }));
     else this.send({ t: 'hit', to: c.id, h: hits.map(x => [x.ci, Math.round(x.dmg * 10) / 10]), a: aid, f: info.fire, p: info.pen, c: info.cal, b: info.fromBehind ? 1 : 0, k: info.kind }, c);
   }
@@ -261,7 +266,7 @@ class Match {
     Damage.apply(c.dm, hits, { attacker: info.attacker, time: this.time, fire: info.fire, pen: info.pen, cal: info.cal, fromBehind: info.fromBehind, kind: info.kind });
     c.lastHitT = this.time; c.lastAttacker = info.attacker;
     if (c.dm.fires > wasFire) this.creditFire(info.attacker);
-    if (c === this.player) this.hurtT = this.time;
+    if (c === this.player) { this.hurtT = this.time; Sound.hit((info.cal || 8) > 15 || info.kind === 'missile' || info.kind === 'flak'); }
     c.processDamageEvents();
   }
   creditFire(aid) { const a = this.byId[aid]; if (a) { a.stats.fires++; if (a !== this.player && this.net && this.isHost && !a.local) this.send({ t: 'stat', id: aid, k: 'fires' }, a); } }
@@ -275,7 +280,7 @@ class Match {
   }
   onCrash(c, sea) {
     FX.explosion(c.pos, 1.5, true); if (sea) FX.puff('splash', c.pos, null, 4);
-    if (this.cameraPos) Sound.boom(1.5, this.cameraPos.distanceTo(c.pos));
+    Sound.boom(1.6, c.pos);
     const wasWreck = c.wreck;
     c.alive = false; c.wreck = false; c.model.visible = false;
     if (!wasWreck) this.reportDeath(c, 'crash');
@@ -322,11 +327,12 @@ class Match {
       if (this.mode === 'destroy' && this.isHost) this.scores[k.team] += 3;
       if (this.mode === 'dogfight' && this.isHost) this.scores[k.team] += 1;
     }
-    for (const a of d.assists || []) if (this.byId[a]) this.byId[a].stats.assists++;
+    // assists: personal score and rewards only - they never count towards the team score
+    for (const a of d.assists || []) if (this.byId[a]) { this.byId[a].stats.assists++; this.byId[a].stats.score += 1; }
     const how = { crew: 'crew killed', explode: 'destroyed', crash: 'crashed', 'crash-near': 'crashed' }[d.how] || d.how;
     this.feed.push({ t: this.time, text: k ? `${k.name} (${k.def.name}) ⟶ ${v.name} (${v.def.name}) · ${how}` : `${v.name} ${how}`, team: k ? k.team : v.team, me: k === this.player || v === this.player });
     if (k === this.player) this.events.push({ t: this.time, e: 'kill', text: `+3  ${v.def.name} ${how}` });
-    for (const a of d.assists || []) if (this.byId[a] === this.player) this.events.push({ t: this.time, e: 'assist', text: `Assist: ${v.def.name}` });
+    for (const a of d.assists || []) if (this.byId[a] === this.player) this.events.push({ t: this.time, e: 'assist', text: `+1  Assist: ${v.def.short}` });
   }
   // ---- ground damage (bases & AA); host applies
   groundHit(p, dmg, rad, owner, team, kind) {
@@ -345,7 +351,7 @@ class Match {
   destroyBase(b, fromNet) {
     if (b.dead) return; b.dead = true; b.hp = 0;
     FX.explosion(b.pos, 3, true); for (let i = 0; i < 4; i++) FX.explosion(b.pos.clone().add(new V3((Math.random() - 0.5) * b.radius, 0, (Math.random() - 0.5) * b.radius)), 1.5, true);
-    if (this.cameraPos) Sound.boom(2, this.cameraPos.distanceTo(b.pos));
+    Sound.boom(2.5, b.pos);
     b.group.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0x333333); } });
     b.group.scale.y = 0.35;
     for (const a of b.aa) { a.hp = 0; a.mount.visible = false; }
@@ -395,6 +401,7 @@ class Match {
             const tof = d / spec[1], lead = t.pos.clone().addScaledVector(t.vel, tof);
             const dir = lead.sub(a.pos).normalize(); dir.y += 9.81 * tof * tof * 0.5 / d; const e = spec[3] * (1 + d / R);
             dir.add(new V3((Math.random() - 0.5) * e, (Math.random() - 0.5) * e, (Math.random() - 0.5) * e)).normalize();
+            Sound.fire('aa' + b.idx + ':' + b.aa.indexOf(a), { rpm: spec[0], cal: spec[4] }, 1, a.pos, false);
             this.combat.bullet(a.pos, dir.multiplyScalar(spec[1]), a, { dmg: spec[2], pen: 1, fire: 1, he: spec[4] >= 20 ? 1.3 : 0, struct: 1, cal: spec[4] }, Math.random() < 0.5 ? [1, 0.6, 0.3] : null, R / spec[1] + 0.3, !this.isHost);
           }
         } else if (a.cd < 0) a.cd = 0;

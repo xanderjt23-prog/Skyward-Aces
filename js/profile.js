@@ -8,7 +8,7 @@ const Profile = (() => {
   let p = null;
   function fresh() {
     const owned = {}; for (const pl of PLANE_LIST) if (pl.starter) owned[pl.id] = true;
-    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1 } };
+    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {} } };
   }
   function load() {
     try { const s = localStorage.getItem(KEY); if (s) p = JSON.parse(s); } catch (e) { p = null; }
@@ -108,8 +108,9 @@ const Profile = (() => {
   // ---- end-of-battle rewards. r: { kills, assists, bases:{small,medium,big}, damage, deaths, won, era, mode, survivedWaves, missionWon }
   function rewards(r) {
     const mul = ERAS[r.era].xpMul;
-    const perf = r.kills * 180 + r.assists * 60 + r.basePoints * 90 + Math.round(r.damage * 0.25) + (r.score || 0) * 20 + (r.waves || 0) * 120;
-    const base = 150 + Math.round(Math.min(r.minutes, 30) * 25);
+    const perf = r.kills * 180 + r.assists * 90 + r.basePoints * 90 + Math.round(r.damage * 0.25) + (r.score || 0) * 20 + (r.waves || 0) * 120;
+    // the participation reward is only paid for staying to the end of the battle: leaving early earns just what you did
+    const base = r.left ? 0 : 150 + Math.round(Math.min(r.minutes, 30) * 25);
     const winB = r.won ? 1.35 : 1;
     const xp = Math.round((base + perf) * mul * winB);
     const coins = Math.round((base * 1.6 + perf * 1.4) * mul * winB);

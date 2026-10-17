@@ -132,24 +132,42 @@ const Flight = (() => {
 
   // ---- autopilot: point the nose along a world direction. Returns {pitch, roll, yaw}.
   const loc = new V3();
+  // Two regimes, blended by how far off the nose the aim is:
+  //  - gentle (aim within ~50 deg): bank in proportion to the heading error, push/pull the nose with the elevator,
+  //    fine-tune with rudder. Small mouse moves give small, smooth corrections - never a roll.
+  //  - aggressive (aim far off / behind): roll the aim over the canopy and pull hard.
+  const wdir = new V3(), hf = new V3(), ht = new V3();
   function steer(c, dir, out, opt) {
     out = out || {}; opt = opt || {};
-    loc.copy(dir).normalize().applyQuaternion(_q.copy(c.quat).invert());
+    wdir.copy(dir).normalize();
+    loc.copy(wdir).applyQuaternion(_q.copy(c.quat).invert());
     const off = Math.acos(Math.max(-1, Math.min(1, -loc.z)));
-    const rollErr = Math.atan2(loc.x, loc.y);
     axes(c);
-    const bank = Math.atan2(right.y, up.y); // >0: right wing up
-    // far from the aim: roll the aim point over the canopy and pull. Close to it: level the wings and fine-tune with elevator and rudder
-    const near = Math.max(0, Math.min(1, 1 - (off - 0.015) / 0.07));
-    const rollLevel = Math.max(-1, Math.min(1, bank * 1.8));
-    const rollChase = Math.max(-1, Math.min(1, rollErr * 2.2));
-    let roll = rollChase * (1 - near) + (opt.keepBank ? rollChase * 0.5 : rollLevel) * near;
+    const phi = Math.atan2(-right.y, up.y); // current bank, >0 = right wing down
     const pv = Math.atan2(loc.y, -loc.z), hv = Math.atan2(loc.x, -loc.z);
-    let pitch = pv * 14 * near + off * 3.5 * Math.max(0.12, Math.cos(rollErr)) * (1 - near);
-    if (near <= 0.5 && Math.abs(rollErr) > 2.4 && off > 1.0 && opt.allowPush) pitch = -0.4;
-    let yaw = hv * 20 * near;
-    // a sideways error near the nose is also taken out with a little bank
-    roll += Math.max(-0.4, Math.min(0.4, hv * 12)) * near;
+    const near = Math.max(0, Math.min(1, 1 - (off - 0.015) / 0.07));
+    // gentle regime, in world terms
+    hf.set(fwd.x, 0, fwd.z); ht.set(wdir.x, 0, wdir.z);
+    let gentleOk = hf.lengthSq() > 0.02 && ht.lengthSq() > 0.02 && loc.z < 0;
+    let gRoll = 0, gPitch = 0;
+    if (gentleOk) {
+      hf.normalize(); ht.normalize();
+      const psi = Math.atan2(hf.x * ht.z - hf.z * ht.x, hf.dot(ht)); // heading error, >0 = aim to the right
+      const maxBank = 1.4; // ~80 deg
+      const want = Math.max(-maxBank, Math.min(maxBank, psi * 8));
+      let dphi = want - phi; if (dphi > Math.PI) dphi -= 2 * Math.PI; if (dphi < -Math.PI) dphi += 2 * Math.PI;
+      gRoll = Math.max(-1, Math.min(1, dphi * 2.2));
+      gPitch = Math.max(-0.6, Math.min(1, pv * (6 + 8 * near)));
+    }
+    // aggressive regime
+    const rollErr = Math.atan2(loc.x, loc.y);
+    const aRoll = Math.max(-1, Math.min(1, rollErr * 2.2));
+    let aPitch = Math.min(1, off * 3.5 * Math.max(0.12, Math.cos(rollErr)));
+    if (Math.abs(rollErr) > 2.4 && off > 1.0 && opt.allowPush) aPitch = -0.4;
+    const w = gentleOk ? Math.max(0, Math.min(1, (off - 0.85) / 0.4)) : 1;
+    let roll = gRoll * (1 - w) + aRoll * w, pitch = gPitch * (1 - w) + aPitch * w;
+    if (opt.keepBank && w < 1) roll = roll * 0.5 + aRoll * 0.5;
+    const yaw = hv * 20 * near;
     out.pitch = Math.max(-1, Math.min(1, pitch)); out.roll = Math.max(-1, Math.min(1, roll)); out.yaw = Math.max(-1, Math.min(1, yaw));
     out.off = off; return out;
   }

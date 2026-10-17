@@ -5,6 +5,7 @@
 const HUD = (() => {
   let cv, g, W = 0, H = 0, dpr = 1;
   const _v = new THREE.Vector3();
+  const LEAD_RANGE = [0, 350, 500, 800, 1100, 1400, 1800, 2200]; // m, by era
   function init() { cv = document.getElementById('hud'); g = cv.getContext('2d'); resize(); window.addEventListener('resize', resize); }
   function resize() { dpr = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
   function proj(p, cam) { _v.copy(p).project(cam); if (_v.z > 1) return null; return { x: (_v.x * 0.5 + 0.5) * W, y: (-_v.y * 0.5 + 0.5) * H, behind: _v.z > 1 }; }
@@ -47,16 +48,23 @@ const HUD = (() => {
     if (p && p.alive && !p.wreck) {
       // nose reticle (where the guns converge) and mouse-aim circle
       const conv = CONV[p.def.era];
-      const ns = proj(p.pos.clone().addScaledVector(fwd, conv), cam);
-      if (ns) { g.strokeStyle = COL.white; g.lineWidth = 2; g.beginPath(); g.moveTo(ns.x - 14, ns.y); g.lineTo(ns.x - 5, ns.y); g.moveTo(ns.x + 5, ns.y); g.lineTo(ns.x + 14, ns.y); g.moveTo(ns.x, ns.y + 5); g.lineTo(ns.x, ns.y + 12); g.stroke(); ring(ns.x, ns.y, 2, COL.white, 2); }
-      if (game.mouseAim) { const as = proj(cam.position.clone().addScaledVector(game.aimDir, 2000), cam); if (as) ring(as.x, as.y, 9, 'rgba(255,255,255,0.75)', 1.5); }
-      // gun lead indicator on the target
+      const ns = proj(p.pos.clone().addScaledVector(fwd, conv), cam), cc = Profile.get().settings.cross || '#ffffff';
+      // drawn twice: a dark outline first so the reticle shows on snow, cloud and sea alike
+      if (ns) for (const [col, w] of [['rgba(0,0,0,0.65)', 4], [cc, 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(ns.x - 14, ns.y); g.lineTo(ns.x - 5, ns.y); g.moveTo(ns.x + 5, ns.y); g.lineTo(ns.x + 14, ns.y); g.moveTo(ns.x, ns.y + 5); g.lineTo(ns.x, ns.y + 12); g.stroke(); ring(ns.x, ns.y, 2, col, w); }
+      if (game.mouseAim) { const as = proj(cam.position.clone().addScaledVector(game.aimDir, 2000), cam); if (as) { ring(as.x, as.y, 9, 'rgba(0,0,0,0.55)', 3.5); ring(as.x, as.y, 9, cc, 1.5); } }
+      // gun lead indicator: shown from a range that depends on the aircraft's gunsight (fixed sights in WW1, radar-ranging gunsights on jets)
       const t = game.target;
       if (t && t.alive) {
         const gun = p.guns[0], ms = gun ? gun.g.ms : 800, d = t.pos.distanceTo(p.pos);
         // bullets inherit our velocity, so lead by the relative velocity and lift for the drop
-        if (d < 1500) { const tof = d / ms, lp = t.pos.clone().addScaledVector(t.vel.clone().sub(p.vel), tof).add(new THREE.Vector3(0, 4.9 * tof * tof, 0)); const ls = proj(lp, cam);
+        if (d < LEAD_RANGE[p.def.era]) { const tof = d / ms, lp = t.pos.clone().addScaledVector(t.vel.clone().sub(p.vel), tof).add(new THREE.Vector3(0, 4.9 * tof * tof, 0)); const ls = proj(lp, cam);
           if (ls) { ring(ls.x, ls.y, 6, COL.enemy, 2); g.beginPath(); g.moveTo(ls.x - 9, ls.y); g.lineTo(ls.x + 9, ls.y); g.moveTo(ls.x, ls.y - 9); g.lineTo(ls.x, ls.y + 9); g.strokeStyle = COL.enemy; g.lineWidth = 1; g.stroke(); } }
+      }
+      // bomb sight: where bombs released now would hit
+      if (p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) {
+        const ip = p.bombImpact(), bs = ip && proj(ip, cam);
+        if (bs) { for (const [col, w] of [['rgba(0,0,0,0.6)', 4], ['#ffd34d', 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(bs.x, bs.y - 10); g.lineTo(bs.x + 10, bs.y); g.lineTo(bs.x, bs.y + 10); g.lineTo(bs.x - 10, bs.y); g.closePath(); g.stroke(); }
+          text('BOMBS', bs.x, bs.y + 24, '#ffd34d', 10, 'center', true); }
       }
       // missile seeker
       if (game.seeker) { const ss = proj(game.seeker.pos, cam); if (ss) { g.strokeStyle = game.locked ? '#ff3b30' : '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.arc(ss.x, ss.y, 18, 0, Math.PI * 2); g.stroke(); if (game.locked) text('LOCK', ss.x, ss.y - 24, '#ff3b30', 11, 'center', true); } }

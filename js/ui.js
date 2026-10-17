@@ -13,14 +13,22 @@ const UI = (() => {
       missions: { mode, mission: null, fill: true }, survival: { mode, respawns: 3, time: 0, map: '', fill: true } }[mode];
   }
   const P = () => Profile.get();
-  // nation marking drawn in CSS (flag emoji don't render on Windows)
+  // national flags as small inline SVGs (flag emoji don't render on Windows)
+  let flagN = 0;
   function flag(n) {
-    const N = NATIONS[n], h = c => '#' + c.toString(16).padStart(6, '0');
-    if (n === 'ger') return `<i class="nat" style="background:#fff;box-shadow:inset 0 0 0 4px #fff"><b style="position:absolute;inset:3px 6px;background:#111"></b><b style="position:absolute;inset:6px 3px;background:#111"></b></i>`;
-    if (n === 'jpn') return `<i class="nat" style="background:radial-gradient(circle, #c8102e 0 45%, #fff 47%)"></i>`;
-    if (n === 'ussr') return `<i class="nat" style="background:#fff;color:#c11;font-style:normal;font-size:12px;line-height:16px;text-align:center">★</i>`;
-    if (n === 'usa') return `<i class="nat" style="background:radial-gradient(circle, #fff 0 22%, #1c2f6e 24%);"></i>`;
-    return `<i class="nat" style="background:radial-gradient(circle, ${h(N.roundel[0])} 0 30%, ${h(N.roundel[1])} 32% 62%, ${h(N.roundel[2])} 64%)"></i>`;
+    const box = inner => `<svg class="flag" viewBox="0 0 60 40" width="24" height="16" aria-label="${NATIONS[n].name} flag">${inner}</svg>`;
+    if (n === 'usa') {
+      let st = ''; for (let i = 0; i < 13; i++) st += `<rect y="${i * 40 / 13}" width="60" height="${40 / 13 + 0.05}" fill="${i % 2 ? '#fff' : '#b22234'}"/>`;
+      let stars = ''; for (let r = 0; r < 5; r++) for (let c = 0; c < 6; c++) stars += `<circle cx="${2.5 + c * 4.4 + (r % 2) * 2.2}" cy="${2.4 + r * 4.2}" r="0.9" fill="#fff"/>`;
+      return box(st + `<rect width="26" height="21.5" fill="#3c3b6e"/>` + stars);
+    }
+    if (n === 'ger') return box('<rect width="60" height="13.4" fill="#000"/><rect y="13.3" width="60" height="13.4" fill="#dd0000"/><rect y="26.6" width="60" height="13.4" fill="#ffce00"/>');
+    if (n === 'uk') { const id = 'uj' + (++flagN);
+      return box(`<clipPath id="${id}"><path d="M30,20 h30 v20 z v20 h-30 z h-30 v-20 z v-20 h30 z"/></clipPath><rect width="60" height="40" fill="#012169"/><path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" stroke-width="8"/><path d="M0,0 L60,40 M60,0 L0,40" clip-path="url(#${id})" stroke="#c8102e" stroke-width="4"/><path d="M30,0 v40 M0,20 h60" stroke="#fff" stroke-width="12"/><path d="M30,0 v40 M0,20 h60" stroke="#c8102e" stroke-width="7"/>`); }
+    if (n === 'ussr') return box('<rect width="60" height="40" fill="#cc0000"/><path d="M10,3 l1.2,3.6 h3.8 l-3.1,2.2 1.2,3.6 -3.1,-2.2 -3.1,2.2 1.2,-3.6 -3.1,-2.2 h3.8 z" fill="none" stroke="#ffd700" stroke-width="0.8"/><path d="M7,22 l7,-7 m-3,-1 l4,4" stroke="#ffd700" stroke-width="1.8" stroke-linecap="round"/><path d="M6.5,17 a6,6 0 1 0 9,-3" fill="none" stroke="#ffd700" stroke-width="1.6"/>');
+    if (n === 'jpn') return box('<rect width="60" height="40" fill="#fff"/><circle cx="30" cy="20" r="12" fill="#bc002d"/>');
+    if (n === 'fra') return box('<rect width="20" height="40" fill="#0055a4"/><rect x="20" width="20" height="40" fill="#fff"/><rect x="40" width="20" height="40" fill="#ef4135"/>');
+    return '';
   }
   const an = w => (/^[AEIOU]/i.test(w) ? 'an ' : 'a ') + w;
   const cur = () => PLANES[P().selected];
@@ -58,7 +66,7 @@ const UI = (() => {
     const tur = pl.turrets.map(([g, n, arc]) => `${n}× ${GUNS[g].name} (${arc})`).join('<br>');
     const hp = pl.hp.map(st => `${esc(st[0])}: ${st[3]}× ${st[1].split('').map(k => KIND_NAMES[k]).join('/')} ≤${st[2]} kg`).join('<br>') || 'None';
     const eng = `${pl.eng}× ${pl.kind === 'jet' ? (pl.ab ? 'turbojet with afterburner' : 'turbojet') : 'piston'}`;
-    const rows = [['Era', `${ERAS[pl.era].name} (${pl.year})`], ['Role', pl.role], ['Top speed', `${pl.spd} km/h`], ['Climb rate', `${pl.clb} m/s`], ['Turn time', `${pl.turn} s`], ['Roll rate', `${pl.roll} °/s`],
+    const rows = [['Type', esc(pl.type)], ['Era', `${ERAS[pl.era].name} (${pl.year})`], ['Top speed', `${pl.spd} km/h`], ['Climb rate', `${pl.clb} m/s`], ['Turn time', `${pl.turn} s`], ['Roll rate', `${pl.roll} °/s`],
       ['G limit', `${pl.g} G`], ['Weight', `${fmt(pl.mass)} kg`], ['Span / length', `${pl.span} / ${pl.len} m`], ['Engines', eng], ['Crew', pl.crew.join(', ')], ['Guns', guns]];
     if (tur) rows.push(['Defensive guns', tur]);
     rows.push(['Hardpoints', hp], ['Max payload', `${fmt(pl.payload)} kg`]);
@@ -77,7 +85,7 @@ const UI = (() => {
       const list = planesOf(hangarNation).filter(x => x.era === e); if (!list.length) continue;
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}</small></div><div class="planes">`;
       for (const pl of list) { const owned = p.owned[pl.id], flying = p.selected === pl.id;
-        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
+        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><img class="thumb" data-thumb="${pl.id}" alt=""><div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
       h += `</div></div>`;
     }
     const pl = PLANES[hangarSel], owned = p.owned[pl.id];
@@ -86,7 +94,7 @@ const UI = (() => {
     side += owned ? (p.selected === pl.id ? `<button disabled>Selected</button>` : `<button class="primary" id="h-select">Fly this aircraft</button>`) + ` <button id="h-mods">Modifications</button>` : `<button id="h-research">Research (${fmt(pl.cost)} XP)</button>`;
     side += `</div></div>`;
     $('#side').innerHTML = side; $('#side').classList.remove('hidden'); $('#panel').classList.add('narrow'); Game.menuView = 'side';
-    body(h); bindTabs(n => { hangarNation = n; hangarSel = null; renderHangar(); });
+    body(h); Thumbs.fill($('#panel-body')); bindTabs(n => { hangarNation = n; hangarSel = null; renderHangar(); });
     $$('[data-pid]').forEach(el => el.onclick = () => { hangarSel = el.dataset.pid; Game.showPlane(hangarSel); renderHangar(); });
     if ($('#h-select')) $('#h-select').onclick = () => { p.selected = pl.id; Profile.save(); refresh(); renderHangar(); };
     if ($('#h-mods')) $('#h-mods').onclick = () => { modsPlane = pl.id; open('mods'); };
@@ -104,12 +112,12 @@ const UI = (() => {
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}${reach ? '' : ' · locked: own ' + an(ERAS[e - 1].name) + ' aircraft of this nation first'}</small></div><div class="planes">`;
       for (const pl of list) {
         const owned = p.owned[pl.id], c = Profile.canResearch(pl.id);
-        h += `<div class="pc ${owned ? 'owned' : reach ? '' : 'locked'}" data-rid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><div class="y">${pl.year} · ${owned ? 'Owned' : fmt(pl.cost) + ' XP'}</div>
+        h += `<div class="pc ${owned ? 'owned' : reach ? '' : 'locked'}" data-rid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><img class="thumb" data-thumb="${pl.id}" alt=""><div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${owned ? 'Owned' : fmt(pl.cost) + ' XP'}</div>
           <div style="margin-top:8px">${owned ? '<span class="pill ok">Owned</span>' : c.ok ? `<button class="primary" data-buy="${pl.id}">Research</button>` : `<span class="small muted">${esc(c.why)}</span>`}</div></div>`;
       }
       h += `</div></div>`;
     }
-    body(h); bindTabs(n => { researchNation = n; renderResearch(); });
+    body(h); Thumbs.fill($('#panel-body')); bindTabs(n => { researchNation = n; renderResearch(); });
     $$('[data-rid]').forEach(el => el.onclick = e => { if (e.target.dataset.buy) return; Game.showPlane(el.dataset.rid); });
     $$('[data-buy]').forEach(b => b.onclick = () => { const r = Profile.research(b.dataset.buy); if (r.ok) { Profile.checkAchievements(); toastMenu(`${PLANES[b.dataset.buy].name} researched!`); refresh(); renderResearch(); } else toastMenu(r.why); });
   }
@@ -192,13 +200,28 @@ const UI = (() => {
       <div class="field"><label>Mouse sensitivity: <span id="pf-sv">${st.sens.toFixed(2)}</span></label><input type="range" id="pf-sens" min="0.3" max="2.5" step="0.05" value="${st.sens}"></div>
       <div class="field"><label>Volume</label><input type="range" id="pf-vol" min="0" max="1" step="0.05" value="${st.volume}"></div>
       <div class="field"><label><input type="checkbox" id="pf-inv" ${st.invert ? 'checked' : ''}> Invert mouse Y</label></div>
-      <h3 style="margin-top:18px">Controls</h3><div class="small muted" style="line-height:1.8">Mouse: aim (the aircraft follows) · LMB: guns · RMB (hold): look around<br>W / S: throttle (hold W at 100% for WEP or afterburner)<br>A / D: roll · Q / E: rudder · Arrows: keyboard stick<br>Space: bombs · R: rockets · F: missile · X: flares<br>C: camera · Tab: scoreboard · Esc: pause</div>
+      <div class="field"><label>Crosshair colour</label><div class="row"><input type="color" id="pf-cross" value="${st.cross || '#ffffff'}"><span class="small muted">Pick a colour that stands out against snow, sea or sky.</span></div></div>
+      <h3 style="margin-top:18px">Controls</h3><p class="small muted">Mouse moves the aim circle and the aircraft follows it. Click a binding, then press a key or mouse button (Esc cancels).</p>
+      <div id="binds">${Input.ACTIONS.map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
+      <button id="pf-binds-reset" style="margin-top:8px">Reset controls to defaults</button><br>
       <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>`);
     $('#pf-save').onclick = () => { const v = $('#pf-name').value.trim().slice(0, 18); if (v) { p.name = v; Profile.save(); refresh(); toastMenu('Saved'); } };
     $('#pf-sens').oninput = e => { st.sens = +e.target.value; $('#pf-sv').textContent = st.sens.toFixed(2); Profile.save(); };
     $('#pf-vol').oninput = e => { st.volume = +e.target.value; Sound.setVolume(st.volume); Profile.save(); };
     $('#pf-inv').onchange = e => { st.invert = e.target.checked; Profile.save(); };
+    $('#pf-cross').oninput = e => { st.cross = e.target.value; Profile.save(); };
+    $('#pf-binds-reset').onclick = () => { Input.reset(); renderProfile(); };
+    $$('[data-bind]').forEach(b => b.onclick = () => captureBind(b));
     $('#pf-reset').onclick = () => { if (confirm('Reset all progress? This cannot be undone.')) { Profile.reset(); refresh(); renderProfile(); Game.showPlane(P().selected); } };
+  }
+  // wait for the next key / mouse button and bind it to the action
+  let capturing = false;
+  function captureBind(btn) {
+    if (capturing) return; capturing = true; const act = btn.dataset.bind; btn.textContent = 'Press a key…'; btn.classList.add('sel');
+    const done = code => { capturing = false; removeEventListener('keydown', onKey, true); removeEventListener('mousedown', onMouse, true); if (code) Input.setBind(act, code); renderProfile(); };
+    const onKey = e => { e.preventDefault(); e.stopPropagation(); done(e.code === 'Escape' ? null : e.code); };
+    const onMouse = e => { if (e.target === btn && e.button === 0) return; e.preventDefault(); e.stopPropagation(); done('Mouse' + e.button); };
+    setTimeout(() => { addEventListener('keydown', onKey, true); addEventListener('mousedown', onMouse, true); }, 0);
   }
   // ---------------------------------------------------------------- play
   const MODE_INFO = {
@@ -407,6 +430,7 @@ const UI = (() => {
   }
   function pause(show) {
     const m = Game.match; if (show && m && m.player && !m.player.alive) { Game.paused = false; return; }
+    if (show) $('#pause .controls').innerHTML = `<div><b>Mouse</b>: aim — the aircraft flies towards the circle · <kbd>Esc</kbd> pause</div>` + Input.ACTIONS.map(([id, name]) => `<span style="display:inline-block;min-width:46%"><kbd>${esc(Input.label(Input.bind(id)))}</kbd> ${name}</span>`).join(' ') + `<div class="small">Change these in Profile → Controls.</div>`;
     $('#pause').classList.toggle('hidden', !show);
   }
   function showResults(m, info) {
@@ -432,5 +456,5 @@ const UI = (() => {
     };
   }
   window.addEventListener('DOMContentLoaded', init);
-  return { refresh, open, close, enterBattle, battleTick, tryRespawn, scoreboard, pause, showResults, toast, get game() { return Game; }, get lobby() { return lobby; } };
+  return { get capturing() { return capturing; }, refresh, open, close, enterBattle, battleTick, tryRespawn, scoreboard, pause, showResults, toast, get game() { return Game; }, get lobby() { return lobby; } };
 })();

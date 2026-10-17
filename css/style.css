@@ -125,3 +125,10 @@ tr.me td { color: var(--accent2); }
   .split { grid-template-columns: 1fr; } .grid.c4, .grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pmeta { display: none; } .brand { font-size: 18px; }
 }
+
+button.bind { min-width: 120px; padding: 3px 10px; font-size: 14px; }
+#binds .stat { align-items: center; }
+input[type=color] { width: 54px; height: 32px; padding: 2px; }
+svg.flag { display: inline-block; vertical-align: -3px; margin-right: 4px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); }
+.pc img.thumb { display: block; width: 100%; height: 86px; object-fit: contain; margin: 4px 0 2px; }
+.pc .ty { font-size: 11px; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.05em; }

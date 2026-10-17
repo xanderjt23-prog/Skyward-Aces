@@ -5,10 +5,11 @@
 const Game = (() => {
   let renderer, scene, camera, menuScene, menuCam, menuPlane = null, clock;
   const G = {
-    match: null, running: false, paused: false, aimDir: new THREE.Vector3(0, 0, -1), mouseAim: true, keys: {}, mouse: { l: false, r: false },
+    match: null, running: false, paused: false, aimDir: new THREE.Vector3(0, 0, -1), mouseAim: true,
     camMode: 'chase', camDist: 1, freeLook: { yaw: 0, pitch: 0 }, target: null, seeker: null, locked: false, lockT: 0, oobT: 0, endT: 0, net: false,
   };
   let yaw = 0, pitch = 0;
+  const BASE_FOV = 65;
   function init() {
     renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); renderer.setSize(innerWidth, innerHeight);
@@ -59,7 +60,7 @@ const Game = (() => {
     G.match = new Match(cfg, { scene, isHost: opt.isHost !== false, net: opt.net, myPeer: opt.myPeer || 'H', playerId: opt.playerId });
     G.running = true; G.paused = false; G.endT = 0; G.target = null; G.oobT = 0; G.camMode = 'chase'; G.resultShown = false;
     const p = G.match.player; G.aimDir.set(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-G.aimDir.x, -G.aimDir.z); pitch = 0;
-    Sound.resume(); Sound.engineStart(p.def.kind === 'jet');
+    Sound.resume(); Sound.engineStart(p.def);
     camera.position.copy(p.pos).add(new THREE.Vector3(0, 10, 30));
     UI.enterBattle(G.match);
     requestLock();
@@ -68,39 +69,50 @@ const Game = (() => {
   function aimReset() { const p = G.match && G.match.player; if (!p) return; const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); G.aimDir.copy(f); }
   function stopMatch() {
     if (G.match) { G.match.dispose(); G.match = null; }
-    G.running = false; Sound.engineStop(); Sound.lockTone(0);
+    G.running = false; Sound.stopAll();
   }
   function requestLock() { const c = document.getElementById('view'); if (c.requestPointerLock) try { const r = c.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
   // ---- input
   function bindInput() {
-    addEventListener('keydown', e => {
-      if (!G.running) return; if (e.target && e.target.tagName === 'INPUT') return;
-      G.keys[e.code] = true;
-      const m = G.match, p = m && m.player;
-      if (e.code === 'Tab') { e.preventDefault(); UI.scoreboard(true); }
-      if (!p) return;
-      if (e.code === 'KeyC') G.camMode = G.camMode === 'chase' ? 'nose' : 'chase';
-      if (p.alive && !p.wreck) {
-        if (e.code === 'Space') { e.preventDefault(); p.dropBomb(); }
-        if (e.code === 'KeyR') p.fireRockets();
-        if (e.code === 'KeyF') { if (G.locked && G.seeker) { if (p.fireMissile(G.seeker)) { G.lockT = 0; G.locked = false; } } else UI.toast('No missile lock'); }
-        if (e.code === 'KeyX') p.dropFlares();
-      } else if (e.code === 'Space' || e.code === 'Enter') UI.tryRespawn();
-    });
-    addEventListener('keyup', e => { G.keys[e.code] = false; if (e.code === 'Tab') UI.scoreboard(false); });
     const view = document.getElementById('view');
-    view.addEventListener('mousedown', e => { if (!G.running) return; if (document.pointerLockElement !== view) { requestLock(); return; }
-      const pp = G.match && G.match.player; if (pp && !pp.alive && e.button === 0) { UI.tryRespawn(); return; } if (e.button === 0) G.mouse.l = true; if (e.button === 2) G.mouse.r = true; });
-    addEventListener('mouseup', e => { if (e.button === 0) G.mouse.l = false; if (e.button === 2) { G.mouse.r = false; G.freeLook.yaw = G.freeLook.pitch = 0; } });
+    // a key or mouse button went down: holds are read each frame, presses act now
+    function press(code, e) {
+      Input.keys[code] = true;
+      const m = G.match, p = m && m.player;
+      for (const act of Input.actionsFor(code)) {
+        if (e && (act === 'scoreboard' || act === 'bombs')) e.preventDefault();
+        if (act === 'scoreboard') UI.scoreboard(true);
+        if (!p) continue;
+        if (act === 'camera') G.camMode = G.camMode === 'chase' ? 'nose' : 'chase';
+        if (p.alive && !p.wreck) {
+          if (act === 'bombs') p.dropBomb();
+          if (act === 'rockets') p.fireRockets();
+          if (act === 'missile') { if (G.locked && G.seeker) { if (p.fireMissile(G.seeker)) { G.lockT = 0; G.locked = false; } } else UI.toast('No missile lock'); }
+          if (act === 'flares') p.dropFlares();
+          if (act === 'gear') p.toggleGear && p.toggleGear();
+        }
+      }
+      if (p && !p.alive && (code === 'Space' || code === 'Enter' || code === 'Mouse0')) UI.tryRespawn();
+    }
+    function release(code) { Input.keys[code] = false; if (Input.actionsFor(code).includes('scoreboard')) UI.scoreboard(false); if (Input.actionsFor(code).includes('freeLook')) G.freeLook.yaw = G.freeLook.pitch = 0; }
+    addEventListener('keydown', e => {
+      if (!G.running || UI.capturing) return; if (e.target && e.target.tagName === 'INPUT') return;
+      if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
+      if (!e.repeat) press(e.code, e);
+    });
+    addEventListener('keyup', e => release(e.code));
+    view.addEventListener('mousedown', e => { if (!G.running) return; if (document.pointerLockElement !== view) { requestLock(); return; } press('Mouse' + e.button, e); });
+    addEventListener('mouseup', e => release('Mouse' + e.button));
     view.addEventListener('contextmenu', e => e.preventDefault());
     addEventListener('mousemove', e => {
       if (!G.running || document.pointerLockElement !== view) return;
-      const s = 0.0022 * Profile.get().settings.sens, inv = Profile.get().settings.invert ? -1 : 1;
-      if (G.mouse.r) { G.freeLook.yaw -= e.movementX * s; G.freeLook.pitch = Math.max(-1.3, Math.min(1.3, G.freeLook.pitch - e.movementY * s)); return; }
+      // zooming in lowers the mouse speed with the field of view
+      const st = Profile.get().settings, s = 0.0022 * st.sens * (camera.fov / BASE_FOV), inv = st.invert ? -1 : 1;
+      if (Input.down('freeLook')) { G.freeLook.yaw -= e.movementX * s; G.freeLook.pitch = Math.max(-1.3, Math.min(1.3, G.freeLook.pitch - e.movementY * s)); return; }
       yaw -= e.movementX * s; pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * s * inv));
     });
     addEventListener('wheel', e => { if (G.running) G.camDist = Math.max(0.6, Math.min(2.5, G.camDist * (e.deltaY > 0 ? 1.1 : 0.9))); }, { passive: true });
-    document.addEventListener('pointerlockchange', () => { if (!G.running || !G.match || G.match.over) return; const locked = document.pointerLockElement === view; G.paused = !locked; UI.pause(!locked); });
+    document.addEventListener('pointerlockchange', () => { if (!G.running || !G.match || G.match.over) return; const locked = document.pointerLockElement === view; if (!locked) for (const k in Input.keys) Input.keys[k] = false; G.paused = !locked; UI.pause(!locked); });
   }
   // ---- per frame
   function update(dt) {
@@ -109,28 +121,31 @@ const Game = (() => {
     else if (p) { p.setTrigger(false); }
     m.cameraPos = camera.position;
     m.update(dt);
-    if (p) { Sound.engineSet(p.ctl.throttle, p.speed ? p.speed / p.perf.vmax : 0, p.alive && !p.wreck && p.fuel > 0); }
+    Sound.setListener(camera.position); Sound.tick(); Sound.flyby(m.crafts, p);
+    if (p) Sound.engineSet(p);
     UI.battleTick(m, dt);
     if (m.over && !G.resultShown) { G.endT += dt; if (G.endT > 2.5) { G.resultShown = true; finish(false); } }
   }
   function controlPlayer(dt, p) {
-    const k = G.keys, m = G.match;
+    const m = G.match;
     G.aimDir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     Flight.steer(p, G.aimDir, p.ctl, { allowPush: false });
     // keyboard overrides (and keyboard-only flying)
-    if (k.KeyA) p.ctl.roll = -1; if (k.KeyD) p.ctl.roll = 1;
-    if (k.KeyQ) p.ctl.yaw = -1; if (k.KeyE) p.ctl.yaw = 1;
-    if (k.ArrowUp) p.ctl.pitch = -1; if (k.ArrowDown) p.ctl.pitch = 1; if (k.ArrowLeft) p.ctl.roll = -1; if (k.ArrowRight) p.ctl.roll = 1;
+    const I = Input.down;
+    if (I('rollLeft')) p.ctl.roll = -1; if (I('rollRight')) p.ctl.roll = 1;
+    if (I('yawLeft')) p.ctl.yaw = -1; if (I('yawRight')) p.ctl.yaw = 1;
+    if (I('pitchDown')) p.ctl.pitch = -1; if (I('pitchUp')) p.ctl.pitch = 1;
     // keyboard stick moves the aim with the aircraft so mouse aim doesn't fight it
-    if (k.KeyA || k.KeyD || k.ArrowUp || k.ArrowDown || k.ArrowLeft || k.ArrowRight || k.KeyQ || k.KeyE) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); }
-    // throttle: hold W past 100% for WEP / afterburner
-    if (k.KeyW || k.ShiftLeft) { if (p.ctl.throttle < 1) p.ctl.throttle = Math.min(1, p.ctl.throttle + dt * 0.6); else { G.wepT = (G.wepT || 0) + dt; if (G.wepT > 0.25) p.ctl.throttle = 1.1; } }
+    if (I('rollLeft') || I('rollRight') || I('pitchUp') || I('pitchDown') || I('yawLeft') || I('yawRight')) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); }
+    // throttle: hold past 100% for WEP / afterburner
+    if (I('throttleUp')) { if (p.ctl.throttle < 1) p.ctl.throttle = Math.min(1, p.ctl.throttle + dt * 0.6); else { G.wepT = (G.wepT || 0) + dt; if (G.wepT > 0.25) p.ctl.throttle = 1.1; } }
     else { G.wepT = 0; if (p.ctl.throttle > 1) p.ctl.throttle = 1; }
-    if (k.KeyS || k.ControlLeft) p.ctl.throttle = Math.max(0, Math.min(1, p.ctl.throttle) - dt * 0.6);
-    if (G.mouse.l) p.setTrigger(true);
+    if (I('throttleDown')) p.ctl.throttle = Math.max(0, Math.min(1, p.ctl.throttle) - dt * 0.6);
+    p.brakes = I('brakes');
+    if (I('fire')) p.setTrigger(true);
     // target for the lead indicator: the enemy closest to the aim
     let best = null, bs = 0.2;
-    for (const c of m.crafts) { if (!c.alive || c.team === p.team || c.wreck) continue; const to = c.pos.clone().sub(p.pos), d = to.length(); if (d > 3000) continue; const a = Math.acos(Math.max(-1, Math.min(1, to.dot(G.aimDir) / d))) + (c === G.target ? -0.05 : 0); if (a < bs) { bs = a; best = c; } }
+    for (const c of m.crafts) { if (!c.alive || c.team === p.team || c.wreck) continue; const to = c.pos.clone().sub(p.pos), d = to.length(); if (d > 3500) continue; const a = Math.acos(Math.max(-1, Math.min(1, to.dot(G.aimDir) / d))) + (c === G.target ? -0.05 : 0); if (a < bs) { bs = a; best = c; } }
     G.target = best;
     // missile seeker and lock tone
     const st = p.missileStation();
@@ -152,11 +167,11 @@ const Game = (() => {
       if (G.camMode === 'nose') {
         p.model.userData.body.visible = false; p.model.children[1].visible = false;
         _off.set(0, lay.fr * 1.7, lay.cockZ - 0.6).applyQuaternion(p.quat); camera.position.copy(p.pos).add(_off);
-        camera.quaternion.copy(p.quat); if (G.mouse.r) { camera.rotateY(G.freeLook.yaw); camera.rotateX(G.freeLook.pitch); }
+        camera.quaternion.copy(p.quat); if (Input.down('freeLook')) { camera.rotateY(G.freeLook.yaw); camera.rotateX(G.freeLook.pitch); }
       } else {
         p.model.userData.body.visible = true; p.model.children[1].visible = true;
         let dir = G.aimDir.clone();
-        if (G.mouse.r) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), G.freeLook.yaw).applyAxisAngle(new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), G.freeLook.pitch);
+        if (Input.down('freeLook')) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), G.freeLook.yaw).applyAxisAngle(new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), G.freeLook.pitch);
         camera.position.copy(p.pos).addScaledVector(dir, -dist).add(_look.set(0, dist * 0.2, 0));
         const gy = m.world.groundAt(camera.position.x, camera.position.z) + 3; if (camera.position.y < gy) camera.position.y = gy;
         camera.up.set(0, 1, 0); camera.lookAt(camera.position.clone().add(dir));
@@ -171,6 +186,8 @@ const Game = (() => {
       camera.position.set(G.deathPos.x + Math.cos(t) * r, Math.max(G.deathPos.y + 40, m.world.groundAt(G.deathPos.x, G.deathPos.z) + 40), G.deathPos.z + Math.sin(t) * r);
       camera.lookAt(G.deathPos);
     }
+    const wantFov = p && p.alive && Input.down('zoom') ? BASE_FOV * 0.5 : BASE_FOV;
+    if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov += (wantFov - camera.fov) * 0.2; camera.updateProjectionMatrix(); }
     FX.update(1 / 60, camera, innerHeight);
     renderer.render(scene, camera);
     HUD.draw(G);
@@ -181,11 +198,11 @@ const Game = (() => {
     const p = m.player, r = m.result || { winner: -2, reason: 'Left the battle', scores: m.scores };
     const won = !left && (m.mode === 'survival' ? m.wave >= 5 : r.winner === p.team);
     const s = p.stats;
-    const reward = Profile.applyBattle({ kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,
+    const reward = Profile.applyBattle({ left: !!left, kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,
       minutes: m.time / 60, waves: m.mode === 'survival' ? Math.max(0, m.wave - 1) : 0, score: 0, nation: p.def.nation, plane: p.def.id,
       basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills });
     document.exitPointerLock && document.exitPointerLock();
-    Sound.engineStop(); Sound.lockTone(0);
+    Sound.stopAll();
     UI.showResults(m, { won, left, reward, reason: r.reason });
   }
   function leave() {

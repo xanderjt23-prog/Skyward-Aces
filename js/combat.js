@@ -97,7 +97,7 @@ class Combat {
     // ---- flak shells: burst at the fuse time
     this.shells = this.shells.filter(s => {
       s.t -= dt; s.v.y -= 9.81 * dt; s.p.addScaledVector(s.v, dt);
-      if (s.t <= 0) { FX.puff('flak', s.p); if (m.cameraPos) { const d = m.cameraPos.distanceTo(s.p); if (d < 2500) Sound.boom(0.4, d); }
+      if (s.t <= 0) { FX.puff('flak', s.p); Sound.flak(s.p);
         this.explode(s.p, 0, 0, s.dmg, s.rad, null, s.team, s.real, 'flak', false, s.owner); return false; }
       return true;
     });
@@ -150,7 +150,7 @@ class Combat {
   // explosion: ground damage (bases) and air blast (aircraft hit boxes)
   explode(p, groundDmg, groundRad, airDmg, airRad, owner, team, real, kind, onGround, aaOwner) {
     const m = this.m, cd = m.cameraPos ? m.cameraPos.distanceTo(p) : 0;
-    if (kind !== 'flak') { FX.explosion(p, Math.max(0.4, Math.min(3, (groundRad || airRad) / 18)), onGround); Sound.boom(Math.min(2, groundRad / 25 + 0.4), cd); }
+    if (kind !== 'flak') { FX.explosion(p, Math.max(0.4, Math.min(3, (groundRad || airRad) / 18)), onGround); Sound.boom(Math.min(2.5, Math.max(groundRad, airRad) / 22 + 0.3), p); }
     if (onGround && p.y < 1.5) FX.puff('splash', p, null, 3);
     if (!real) return;
     if (groundDmg > 0) m.groundHit(p, groundDmg, groundRad, owner, team, kind);
@@ -163,19 +163,19 @@ class Combat {
     }
   }
   bomb(p, v, owner, s) {
-    const mesh = Models.bomb(s.mass); this.m.scene.add(mesh);
+    const mesh = Models.bomb(s.mass); this.m.scene.add(mesh); if (owner === this.m.player) Sound.clunk();
     const bm = { p: p.clone(), v: v.clone(), owner, team: owner.team, s, mesh, real: owner.local };
     if (s.guided) { const b = this.m.nearestEnemyBase(owner.team, p, 4000); if (b) bm.target = b.pos.clone(); }
     this.bombs.push(bm);
     if (owner.local && this.m.net) this.m.sendFx({ k: 'b', id: owner.id, s: Object.keys(STORES).find(k => STORES[k] === s), p: [p.x, p.y, p.z], v: [v.x, v.y, v.z] });
   }
   rocket(p, dir, v, owner, s) {
-    const mesh = Models.missile(1.6, 0.06); this.m.scene.add(mesh);
+    const mesh = Models.missile(1.6, 0.06); this.m.scene.add(mesh); Sound.launch(p, 'rocket');
     this.rockets.push({ p: p.clone(), prev: p.clone(), v: v.clone().addScaledVector(dir, 40), dir: dir.clone(), owner, team: owner.team, s, life: 6, t: 0, mesh, real: owner.local });
     if (owner.local && this.m.net) this.m.sendFx({ k: 'r', id: owner.id, s: Object.keys(STORES).find(k => STORES[k] === s), p: [p.x, p.y, p.z], d: [dir.x, dir.y, dir.z], v: [v.x, v.y, v.z] });
   }
   missile(p, v, owner, s, target, sid) {
-    const mesh = Models.missile(2.8, 0.09); this.m.scene.add(mesh);
+    const mesh = Models.missile(2.8, 0.09); this.m.scene.add(mesh); Sound.launch(p, 'missile');
     const dir = new V3(0, 0, -1).applyQuaternion(owner.quat || new THREE.Quaternion());
     if (owner.isAA) dir.copy(target.pos).sub(p).normalize().add(new V3(0, 0.3, 0)).normalize();
     const ms = { p: p.clone(), prev: p.clone(), v: v.clone().addScaledVector(dir, 30), dir, owner, team: owner.team, s, target, life: s.life, t: 0, mesh, real: owner.isAA ? this.m.isHost : owner.local };

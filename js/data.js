@@ -66,6 +66,7 @@ const GUNS = {
   gsh30:    { name: '30 mm GSh-30-1', cal: 30, rpm: 1500, ms: 860, dmg: 160, ammo: 150, he: true },
   bk27:     { name: '27 mm Mauser BK-27', cal: 27, rpm: 1700, ms: 1025, dmg: 120, ammo: 150, he: true },
   giat30:   { name: '30 mm GIAT 30M791', cal: 30, rpm: 2500, ms: 1025, dmg: 160, ammo: 125, he: true },
+  gau8:     { name: '30 mm GAU-8/A Avenger', cal: 30, rpm: 3900, ms: 1010, dmg: 170, ammo: 1150, he: true },
   // gun-pod guns
   gau13:    { name: '30 mm GAU-13/A', cal: 30, rpm: 2400, ms: 1013, dmg: 160, ammo: 353, he: true },
 };

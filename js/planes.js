@@ -206,13 +206,15 @@ const MAKERS = ['North American', 'Focke-Wulf', 'Messerschmitt', 'Lockheed Marti
 for (const p of PLANE_LIST) { let n = p.name; for (const mk of MAKERS) if (n.startsWith(mk + ' ')) { n = n.slice(mk.length + 1); break; } p.short = n.replace(/ \((USAS|Luftwaffe|NVA|JASDF|Imperial Russian|Ko 3)\)/, ''); }
 const planesOf = (nation, includeAI) => PLANE_LIST.filter(p => p.nation === nation && (includeAI || !p.aiOnly)).sort((a, b) => a.era - b.era || a.year - b.year);
 // fighters of an era (falling back to the nearest era that has any) for bots
+// bots: fighters by default, bombers / attack aircraft for role 'ground', or an exact role
+const FIGHTER = p => p.role === 'fighter';
 function botPlanes(era, nation, role) {
-  const pool = r => PLANE_LIST.filter(p => (!nation || p.nation === nation) && (role ? p.role === role : !p.aiOnly));
-  for (let d = 0; d <= 6; d++) for (const e of [era - d, era + d]) { const l = pool().filter(p => p.era === e); if (l.length) return l; }
-  return nation ? botPlanes(era, null, role) : PLANE_LIST.filter(p => !p.aiOnly);
+  const ok = p => !p.aiOnly && (role ? (role === 'ground' ? p.role === 'attack' || p.role === 'bomber' : p.role === role) : FIGHTER(p));
+  for (let d = 0; d <= 6; d++) for (const e of [era - d, era + d]) { const l = PLANE_LIST.filter(p => (!nation || p.nation === nation) && p.era === e && ok(p)); if (l.length) return l; }
+  return nation ? botPlanes(era, null, role) : PLANE_LIST.filter(FIGHTER);
 }
 function bomberPlanes(era, nation) {
-  const all = PLANE_LIST.filter(p => p.aiOnly && (p.role === 'bomber' || p.role === 'attack'));
+  const all = PLANE_LIST.filter(p => p.role === 'bomber' || p.role === 'attack');
   let best = null, bd = 99; for (const p of all) { const d = Math.abs(p.era - era) * 10 + (nation && p.nation !== nation ? 3 : 0); if (d < bd) { bd = d; best = p; } }
   return all.filter(p => p.era === best.era && (!nation || p.nation === nation || best.nation !== nation));
 }

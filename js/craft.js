@@ -119,10 +119,10 @@ class Craft {
       // every 2nd-5th round is a tracer, depending on the belt
       const tr = g.belt.tracer > 0 && (Math.random() < 0.35 * g.belt.tracer + (g.bundle > 1 ? 0.3 : 0));
       this.match.combat.bullet(p, v, this, g.shell, tr ? g.col : null, g.g.ms > 900 ? 2.2 : 2.6);
-      if (this.match.player === this) Sound.gun(g.g.cal, 0);
       if (g.pod ? g.pod.gunAmmo <= 0 : g.ammo <= 0) break;
     }
     if (g.cd < -0.1) g.cd = 0;
+    Sound.fire(this.id + ':' + this.guns.indexOf(g), g.g, g.bar.length, this.pos, this === this.match.player);
     this.firingGuns = this.match.time;
   }
   setTrigger(on) { if (on) for (const g of this.guns) g.firing = true; }
@@ -147,6 +147,7 @@ class Craft {
         this.match.combat.bullet(wp, dir.multiplyScalar(t.g.ms).add(this.vel), this, t.shell, Math.random() < 0.4 ? [1, 0.8, 0.5] : null, 1.6);
         t.ammo--;
       }
+      Sound.fire(this.id + ':t' + t.arc, t.g, t.n, wp, false);
     } else if (t.cd < 0) t.cd = 0;
     this.firingTurret = m.time;
   }
@@ -167,6 +168,12 @@ class Craft {
       const agl = this.pos.y - this.match.world.groundAt(this.pos.x, this.pos.z), sc = 1.5 + agl * (this.def.role === 'bomber' ? 0.004 : 0.0015), v = this.vel.clone().add(new V3((Math.random() - 0.5) * sc, 0, (Math.random() - 0.5) * sc));
       this.match.combat.bomb(this.pos.clone().add(off), v, this, st.s); }
     st.n -= n; this.releaseMass(st, n); return true;
+  }
+  // where a bomb released now would land (same ballistics as Combat's bombs), or null
+  bombImpact() {
+    const p = this.pos.clone(), v = this.vel.clone(), w = this.match.world;
+    for (let i = 0; i < 600; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); const gy = w.groundAt(p.x, p.z); if (p.y <= gy) { p.y = gy; return p; } }
+    return null;
   }
   fireRockets() {
     const st = this.stationsOf('r')[0]; if (!st || this.dm.destroyed) return false;
@@ -272,6 +279,7 @@ class Craft {
     // remote guns: show cosmetic tracers while the owner's trigger is down
     if (t - (this.firingGuns || -9) < 0.2 && this.guns) for (const g of this.guns) { g.cd -= dt; if (g.cd <= 0) { g.cd = g.interval * 2;
       const b = g.bar[Math.floor(Math.random() * g.bar.length)], p = b.p.clone().applyQuaternion(this.quat).add(this.pos);
-      this.match.combat.bullet(p, b.dir.clone().applyQuaternion(this.quat).multiplyScalar(g.g.ms).add(this.vel), this, g.shell, Math.random() < 0.5 ? g.col : null, 2, true); } }
+      this.match.combat.bullet(p, b.dir.clone().applyQuaternion(this.quat).multiplyScalar(g.g.ms).add(this.vel), this, g.shell, Math.random() < 0.5 ? g.col : null, 2, true); }
+      Sound.fire(this.id + ':' + this.guns.indexOf(g), g.g, g.bar.length, this.pos, false); }
   }
 }
