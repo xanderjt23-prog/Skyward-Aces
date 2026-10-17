@@ -21,17 +21,19 @@ const PILOT_NAMES = {
 // ---- host-side match planning (bots, bases): produces the config every machine builds the same match from
 const Plan = {
   botLoadout(pl, task) {
+    if (task === 'intercept' || task === 'escort') task = 'air';
     const belts = {}; for (const g of Profile.gunsOf(pl)) { const opts = beltsForGun(g, pl.era); belts[g] = opts.includes('hei') ? 'hei' : opts.includes('api') ? 'api' : opts[Math.floor(Math.random() * opts.length)]; }
     const stores = pl.hp.map(() => null); let kg = 0;
     const want = task === 'air' ? 'm' : null;
     pl.hp.forEach((st, i) => {
       const opts = Object.keys(STORES).filter(id => storeAllowed(pl, id, st));
+      // candidates of a kind, newest and heaviest first; take the first that still fits the payload
+      const fit = k => opts.filter(id => STORES[id].kind === k).sort((a, b) => STORES[b].eras[0] - STORES[a].eras[0] || STORES[b].mass - STORES[a].mass).find(id => kg + STORES[id].mass * st[3] <= pl.payload);
       let pick = null;
-      const by = k => opts.filter(id => STORES[id].kind === k).sort((a, b) => STORES[b].eras[0] - STORES[a].eras[0] || STORES[b].mass - STORES[a].mass)[0];
-      if (st[1].includes('m')) pick = by('m');
-      if (!pick && task !== 'air') pick = Math.random() < 0.6 ? by('b') || by('r') : by('r') || by('b');
-      if (!pick && task === 'air' && Math.random() < 0.3) pick = by('g');
-      if (pick && kg + STORES[pick].mass * st[3] <= pl.payload) { stores[i] = pick; kg += STORES[pick].mass * st[3]; }
+      if (st[1].includes('m')) pick = fit('m');
+      if (!pick && task !== 'air') pick = Math.random() < 0.6 ? fit('b') || fit('r') : fit('r') || fit('b');
+      if (!pick && task === 'air' && Math.random() < 0.3) pick = fit('g');
+      if (pick) { stores[i] = pick; kg += STORES[pick].mass * st[3]; }
     });
     const mods = {}; for (const k of ['engine', 'airframe', 'armor', 'sealing']) if (Math.random() < 0.4 && pl.era >= MODS[k].minEra) mods[k] = true;
     if (pl.flares) mods.flares = Math.random() < 0.5;
@@ -69,10 +71,14 @@ const Plan = {
     } else if (mode === 'missions') {
       for (const h of hum) { h.team = 0; h.lives = 3; roster.push(h); }
       const allyN = Math.max(0, mission.allies + 1 - hum.length);
-      const allyTask = mission.type === 'intercept' ? 'intercept' : mission.type === 'strike' ? null : 'air';
-      for (let i = 0; i < allyN; i++) { const pl = Plan.pick(botPlanes(mission.era, mission.nation)); roster.push(Plan.bot(nid++, 0, pl.id, { task: mission.type === 'strike' && i % 2 ? 'ground' : allyTask, extra: { lives: 1 } })); }
+      // allies: on intercepts half go for the bombers and half cover them; on escorts they stay with the bombers
+      for (let i = 0; i < allyN; i++) { const pl = Plan.pick(botPlanes(mission.era, mission.nation));
+        const task = mission.type === 'strike' ? (i % 2 ? 'ground' : 'air') : mission.type === 'intercept' ? (i % 2 ? 'air' : 'intercept') : mission.type === 'escort' ? (i % 3 === 2 ? 'air' : 'escort') : 'air';
+        roster.push(Plan.bot(nid++, 0, pl.id, { task, extra: { lives: 1 } })); }
+      if (mission.type === 'strike') { const att = bomberPlanes(mission.era, mission.nation).filter(p => p.role === 'attack' || p.role === 'bomber');
+        for (let i = 0; i < 3 && att.length; i++) roster.push(Plan.bot(nid++, 0, Plan.pick(att).id, { task: 'bomb', skill: 0.6, extra: { lives: 1, targetBase: 'T1' } })); }
       const scale = Math.max(1, hum.length * 0.7);
-      for (let i = 0; i < Math.round(mission.enemies * scale); i++) { const pl = Plan.pick(botPlanes(mission.era, mission.enemy)); roster.push(Plan.bot(nid++, 1, pl.id, { extra: { lives: 1 } })); }
+      for (let i = 0; i < Math.round(mission.enemies * scale); i++) { const pl = Plan.pick(botPlanes(mission.era, mission.enemy)); roster.push(Plan.bot(nid++, 1, pl.id, { task: mission.type === 'intercept' ? 'escort' : 'air', extra: { lives: 1 } })); }
       if (mission.bombers) { const bt = mission.type === 'intercept' ? 1 : 0;
         for (let i = 0; i < Math.round(mission.bomberCount * (bt ? scale : 1)); i++) roster.push(Plan.bot(nid++, bt, mission.bombers[0], { task: 'bomb', skill: 0.6, extra: { lives: 1, targetBase: bt ? 'T0' : 'T1' } })); }
     } else if (mode === 'survival') {
@@ -129,6 +135,11 @@ class Match {
     this.crafts = []; this.byId = {};
     for (const r of cfg.roster) this.addCraft(r);
     this.player = this.crafts.find(c => c.id === opt.playerId) || null;
+    // a raid's target is as strong as ~a third of the raid's bomb load: an intact raid flattens it, a broken-up raid can't
+    for (const b of this.bases) if (b.objective && (b.id === 'T0' || b.id === 'T1') && this.mission && (this.mission.type === 'intercept' || this.mission.type === 'escort')) {
+      let pot = 0; for (const r of cfg.roster) if (r.task === 'bomb' && r.targetBase === b.id) { const pl = PLANES[r.plane]; pl.hp.forEach((st, i) => { const id = r.loadout.stores[i]; if (id && STORES[id].kind === 'b') pot += STORES[id].dmg * st[3]; }); }
+      if (pot > 0) b.hp = b.max = Math.round(pot * 0.33);
+    }
     this.nextId = cfg.nid || 1000;
     this.snapT = 0; this.stateT = 0; this.baseSnapT = 0;
     // initial spawns (each machine spawns the aircraft it owns)
@@ -143,7 +154,9 @@ class Match {
   makeBase(s, i) {
     const b = s.b, g = s.bm.group, gy = s.water ? 0 : this.world.groundAt(b.x, b.z);
     g.position.set(b.x, gy, b.z); g.rotation.y = (i * 1.7) % (Math.PI * 2); this.scene.add(g);
-    const hp = BASE_HP[b.size] * ERA_HP[this.era];
+    // mission targets: raids must be stopped before they flatten them; strike targets are ordinary
+    const objMul = !b.objective ? 1 : this.mode === 'survival' ? 3 : !this.mission ? 1 : { intercept: 1, escort: 1, strike: 0.8, sweep: 1 }[this.mission.type];
+    const hp = BASE_HP[b.size] * ERA_HP[this.era] * objMul;
     const base = { id: b.id, idx: i, team: b.team, size: b.size, kind: b.kind, objective: b.objective, pos: new V3(b.x, gy + (b.kind === 'balloon' ? 262 : 0), b.z), radius: b.kind === 'balloon' ? 22 : s.bm.radius, hp, max: hp, dead: false, group: g, aa: [], log: {} };
     // anti-aircraft defences depend on the era (and on the size of the base)
     // only some small bases are defended
@@ -173,7 +186,12 @@ class Match {
   spawnCraft(c, i, first) {
     if (i == null) i = Math.floor(Math.random() * 16);
     const sp = this.spawnPoint(c.team, i);
-    if (c.def.role === 'bomber') sp.pos.y = this.spawnAlt * 1.3 + (i % 4) * 40;
+    if (this.mission && this.mission.type === 'intercept' && c.team === 0) { sp.pos.z = this.half * 0.25 + Math.floor(i / 8) * 160; sp.pos.y = this.spawnAlt * 1.2 + (i % 3) * 60; }
+    if (c.def.role === 'bomber' || c.spec.task === 'bomb') {
+      sp.pos.y = this.spawnAlt * 1.3 + (i % 4) * 40;
+      // raids start far out, giving the defenders time to climb and intercept
+      if (first) sp.pos.z = (c.team === 0 ? 1 : -1) * this.half * (this.mode === 'missions' ? 1.6 : 1.0) + (c.team === 0 ? 1 : -1) * Math.floor(i / 8) * 160;
+    }
     c.spawn(sp.pos, sp.heading, c.perf ? c.perf.vmax * 0.7 : PLANES[c.def.id].spd / 3.6 * 0.7);
     c.vel.setLength(c.perf.vmax * 0.72);
     c.respawnAt = 0;
@@ -401,11 +419,18 @@ class Match {
       if (humansOut) return this.end(1, 'All pilots lost');
       if (this.time > this.cfg.time) return this.end(1, 'Out of time');
       if (ms.type === 'sweep' && enemiesLeft === 0) return this.end(0, 'Airspace cleared');
-      if (ms.type === 'intercept') { if (myBase && myBase.dead) return this.end(1, 'The target was destroyed'); if (!this.crafts.some(c => c.team === 1 && c.spec.task === 'bomb' && (c.alive && !c.wreck))) return this.end(0, 'Bombers stopped'); }
+      const raid = t => this.crafts.filter(c => c.team === t && c.spec.task === 'bomb' && c.alive && !c.wreck);
+      if (ms.type === 'intercept') {
+        if (myBase && myBase.dead) return this.end(1, 'The target was destroyed');
+        const left = raid(1);
+        if (!left.length) return this.end(0, 'Bombers stopped');
+        if (this.time > 30 && left.every(c => c.count('b') === 0) && !this.combat.bombs.some(bm => bm.team === 1)) return this.end(0, 'The raid turned back — target saved');
+      }
       if (ms.type === 'strike' || ms.type === 'escort') {
         const objs = this.bases.filter(b => b.team === 1 && b.objective);
         if (objs.length && objs.every(b => b.dead)) return this.end(0, 'Targets destroyed');
-        if (ms.type === 'escort' && !this.crafts.some(c => c.team === 0 && c.spec.task === 'bomb' && c.alive && !c.wreck) && this.time > 5) return this.end(1, 'The bombers were lost');
+        if (ms.type === 'escort' && !raid(0).length && this.time > 5) return this.end(1, 'The bombers were lost');
+        if (ms.type === 'escort' && this.time > 30 && raid(0).every(c => c.count('b') === 0) && !this.combat.bombs.some(bm => bm.team === 0) && objs.some(b => !b.dead)) return this.end(1, 'The bombs are gone and the target still stands');
       }
     }
     if (this.mode === 'survival') {

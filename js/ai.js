@@ -50,6 +50,12 @@ class BotBrain {
       if (this.mode === 'bomber') { const r = this.bomberRun(dt); dir = r.dir; throttle = r.throttle; }
       else if (this.mode === 'ground' && this.ground) { const r = this.groundRun(dt); dir = r.dir; throttle = r.throttle; }
       else if (this.target && this.target.alive) { const r = this.dogfight(dt, fwd); dir = r.dir; throttle = r.throttle; fire = r.fire; keepBank = r.keepBank; }
+      else if (this.protect && this.protect.alive) { // hold station above and behind the bombers
+        const b = this.protect, bf = new V3(0, 0, -1).applyQuaternion(b.quat), side = (c.id % 2 ? 1 : -1) * (120 + (c.id % 5) * 60);
+        const slot = b.pos.clone().addScaledVector(bf, -250).add(new V3(bf.z * side, 250 + (c.id % 3) * 80, -bf.x * side));
+        dir = slot.clone().addScaledVector(b.vel, 3).sub(c.pos); const d = dir.length(); dir.normalize();
+        throttle = d > 800 ? 1.05 : Math.max(0.35, Math.min(1, b.speed / c.perf.vmax + (d - 200) / 1500));
+      }
       else { // patrol towards the enemy side at a sensible altitude
         const goal = this.patrolPoint || (this.patrolPoint = new V3((Math.random() - 0.5) * m.half, 0, (c.team === 0 ? -1 : 1) * m.half * 0.2));
         dir = goal.clone().sub(c.pos); dir.y = (m.patrolAlt - c.pos.y) * 0.4; dir.normalize(); throttle = 0.9;
@@ -80,6 +86,23 @@ class BotBrain {
       }
     }
     this.mode = 'air';
+    // escorts stay with their bombers and only engage fighters that come close to them
+    if (c.spec.task === 'escort') {
+      const flock = m.crafts.filter(e => e.alive && !e.wreck && e.team === c.team && (e.spec.task === 'bomb' || e.def.role === 'bomber'));
+      if (flock.length) {
+        this.protect = flock.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a));
+        const threat = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && flock.some(b => b.pos.distanceTo(e.pos) < 2200) || (e.alive && e.team !== c.team && m.time - c.lastHitT < 3 && e.pos.distanceTo(c.pos) < 800));
+        this.target = threat.length ? threat.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a)) : null;
+        return;
+      }
+      this.protect = null;
+    }
+    // interceptors go for the bombers, unless a fighter is on their tail
+    if (c.spec.task === 'intercept') {
+      const bombers = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && (e.spec.task === 'bomb' || e.def.role === 'bomber'));
+      const jumped = m.time - c.lastHitT < 4 || m.crafts.some(e => e.alive && e.team !== c.team && e.ai && e.ai.target === c && e.pos.distanceTo(c.pos) < 600);
+      if (bombers.length && !jumped) { this.target = bombers.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a)); return; }
+    }
     // fighter: pick the most convenient enemy (distance, angle, low altitude penalty), prefer bombers when escorting/intercepting
     let best = null, bs = Infinity;
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);

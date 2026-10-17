@@ -44,10 +44,11 @@ const UI = (() => {
   }
   function open(name) {
     panel = name; $('#panel').classList.remove('hidden');
+    $('#side').classList.add('hidden'); $('#panel').classList.remove('narrow'); Game.menuView = 'default';
     $$('#mainmenu button').forEach(b => b.classList.toggle('sel', b.dataset.panel === name));
     ({ play: renderPlay, hangar: renderHangar, achievements: renderAch, mods: renderMods, research: renderResearch, profile: renderProfile })[name]();
   }
-  function close() { panel = null; $('#panel').classList.add('hidden'); $$('#mainmenu button').forEach(b => b.classList.remove('sel')); Game.showPlane(P().selected); }
+  function close() { panel = null; $('#panel').classList.add('hidden'); $('#side').classList.add('hidden'); $('#panel').classList.remove('narrow'); Game.menuView = 'default'; $$('#mainmenu button').forEach(b => b.classList.remove('sel')); Game.showPlane(P().selected); }
   const body = html => { $('#panel-body').innerHTML = html; };
   function toastMenu(t) { const el = $('#toast'); el.textContent = t; el.style.opacity = 1; el.style.zIndex = 30; clearTimeout(toastMenu.t); toastMenu.t = setTimeout(() => el.style.opacity = 0, 3500); }
 
@@ -71,7 +72,7 @@ const UI = (() => {
   function renderHangar() {
     hangarNation = hangarNation || cur().nation; const p = P();
     if (!hangarSel || PLANES[hangarSel].nation !== hangarNation) hangarSel = PLANES[p.selected].nation === hangarNation ? p.selected : planesOf(hangarNation)[0].id;
-    let h = `<h2>Hangar</h2>${nationTabs(hangarNation)}<div class="split"><div>`;
+    let h = `<h2>Hangar</h2>${nationTabs(hangarNation)}<div>`;
     for (let e = 1; e <= MAX_ERA; e++) {
       const list = planesOf(hangarNation).filter(x => x.era === e); if (!list.length) continue;
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}</small></div><div class="planes">`;
@@ -80,9 +81,11 @@ const UI = (() => {
       h += `</div></div>`;
     }
     const pl = PLANES[hangarSel], owned = p.owned[pl.id];
-    h += `</div><div class="stats-box card"><h3>${esc(pl.name)}</h3><p class="muted small">${esc(pl.desc || '')}</p>${planeStats(pl)}<div class="row" style="margin-top:12px">`;
-    h += owned ? (p.selected === pl.id ? `<button disabled>Selected</button>` : `<button class="primary" id="h-select">Fly this aircraft</button>`) + ` <button id="h-mods">Modifications</button>` : `<button id="h-research">Research (${fmt(pl.cost)} XP)</button>`;
-    h += `</div></div></div>`;
+    h += `</div>`;
+    let side = `<div class="card"><h3>${esc(pl.name)}</h3><p class="muted small">${esc(pl.desc || '')}</p>${planeStats(pl)}<div class="row" style="margin-top:12px">`;
+    side += owned ? (p.selected === pl.id ? `<button disabled>Selected</button>` : `<button class="primary" id="h-select">Fly this aircraft</button>`) + ` <button id="h-mods">Modifications</button>` : `<button id="h-research">Research (${fmt(pl.cost)} XP)</button>`;
+    side += `</div></div>`;
+    $('#side').innerHTML = side; $('#side').classList.remove('hidden'); $('#panel').classList.add('narrow'); Game.menuView = 'side';
     body(h); bindTabs(n => { hangarNation = n; hangarSel = null; renderHangar(); });
     $$('[data-pid]').forEach(el => el.onclick = () => { hangarSel = el.dataset.pid; Game.showPlane(hangarSel); renderHangar(); });
     if ($('#h-select')) $('#h-select').onclick = () => { p.selected = pl.id; Profile.save(); refresh(); renderHangar(); };

@@ -29,7 +29,7 @@ const Damage = (() => {
       else if (role === 'rio' || role === 'wso') p = new V3(0, fr * 0.45, cockZ + 1.3);
       else { const t = def.turrets[crewPos.filter(c => c.role === 'gunner').length] || [0, 0, 'rear']; p = Models.turretPos(def, t[2]).clone(); p.y *= 0.8; }
       crewPos.push({ role, p });
-      add('crew' + i, 'crew', p.x, p.y, p.z, 0.35, 0.5, 0.45, 22, 0.6, { role, turret: role === 'gunner' ? crewPos.filter(c => c.role === 'gunner').length - 1 : -1 });
+      add('crew' + i, 'crew', p.x, p.y, p.z, 0.35, 0.5, 0.45, 30, 0.6, { role, turret: role === 'gunner' ? crewPos.filter(c => c.role === 'gunner').length - 1 : -1 });
     });
     // ammunition
     const wingGuns = def.guns.some(g => g[2] === 'wing');
@@ -80,14 +80,15 @@ const Damage = (() => {
     if (inner) { hits.push({ ci: inner.i, dmg: shell.dmg * 0.85 }); if (outer) hits.push({ ci: outer.i, dmg: shell.dmg * 0.2 }); }
     else hits.push({ ci: list[0].i, dmg: shell.dmg });
     // high explosive: fragments reach neighbouring components
+    // (crew sit behind structure and armour, so fragments hurt them less)
     if (shell.he > 0) dm.comps.forEach((c, i) => { if (hits.some(h => h.ci === i)) return;
-      const cl = new V3().copy(point).clamp(c.lo, c.hi), dd = cl.distanceTo(point); if (dd < shell.he) hits.push({ ci: i, dmg: shell.dmg * 0.45 * (1 - dd / shell.he) }); });
+      const cl = new V3().copy(point).clamp(c.lo, c.hi), dd = cl.distanceTo(point); if (dd < shell.he) hits.push({ ci: i, dmg: shell.dmg * (c.type === 'crew' ? 0.12 : 0.35) * (1 - dd / shell.he) }); });
     return { t, hits, point };
   }
   // proximity blast (missile / flak / rocket) at a local point
   function blast(dm, point, dmg, radius) {
     const hits = [];
-    dm.comps.forEach((c, i) => { const cl = new V3().copy(point).clamp(c.lo, c.hi), dd = cl.distanceTo(point); if (dd < radius) hits.push({ ci: i, dmg: dmg * Math.pow(1 - dd / radius, 1.3) }); });
+    dm.comps.forEach((c, i) => { const cl = new V3().copy(point).clamp(c.lo, c.hi), dd = cl.distanceTo(point); if (dd < radius) hits.push({ ci: i, dmg: dmg * Math.pow(1 - dd / radius, 1.3) * (c.type === 'crew' ? 0.35 : 1) }); });
     return hits;
   }
   // apply a list of hits (done by the aircraft's owner). info: { attacker, time, fire (chance mult), pen, fromBehind, kind }

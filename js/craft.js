@@ -61,7 +61,7 @@ class Craft {
       const simRpm = Math.min(g.rpm, 1500), bundle = g.rpm / simRpm;
       const ammo = pod ? 0 : g.ammo * n;
       out.push({ gid, g, belt: b, beltId, bar, interval: 60 / simRpm, bundle, cd: 0, ammo, max: ammo, next: 0, pod: pod || null,
-        shell: { dmg: g.dmg * b.dmg * bundle, pen: b.pen, fire: b.fire, he: g.he ? (0.5 + g.cal / 25) * b.he : 0, struct: b.struct, cal: g.cal },
+        shell: { dmg: g.dmg * b.dmg * bundle, pen: b.pen, fire: b.fire, he: g.he ? (0.3 + g.cal / 40) * Math.sqrt(b.he) : 0, struct: b.struct, cal: g.cal },
         col: g.cal >= 20 ? [1, 0.55, 0.25] : [1, 0.85, 0.5] });
     };
     for (const [gid, n, mount] of d.guns) mk(gid, n, mount, this.lo.belts[gid] || 'std');
@@ -73,7 +73,7 @@ class Craft {
     return d.turrets.map(([gid, n, arc], i) => {
       const g = GUNS[gid]; const crew = this.dm.comps.find(c => c.type === 'crew' && c.turret === i);
       return { gid, g, n, arc, pos: Models.turretPos(d, arc), cd: 0, ammo: g.ammo * n * 2, crew, target: null, retarget: 0, burst: 0,
-        shell: { dmg: g.dmg, pen: 1, fire: 1, he: g.he ? 0.5 + g.cal / 25 : 0, struct: 1, cal: g.cal } };
+        shell: { dmg: g.dmg, pen: 1, fire: 1, he: g.he ? 0.3 + g.cal / 40 : 0, struct: 1, cal: g.cal } };
     });
   }
   // ---- per-frame simulation (local crafts only)
@@ -142,7 +142,7 @@ class Craft {
       while (t.cd <= 0) {
         t.cd += 60 / t.g.rpm / t.n;
         const tof = d / t.g.ms, lead = tg.pos.clone().addScaledVector(tg.vel.clone().sub(this.vel), tof);
-        const err = 0.012 + d / 900 * 0.015;
+        const err = 0.03 + d / 900 * 0.035; // gunners in a bouncing turret are far from perfect
         const dir = lead.sub(wp).normalize().add(new V3((Math.random() - 0.5) * err, (Math.random() - 0.5) * err, (Math.random() - 0.5) * err)).normalize();
         this.match.combat.bullet(wp, dir.multiplyScalar(t.g.ms).add(this.vel), this, t.shell, Math.random() < 0.4 ? [1, 0.8, 0.5] : null, 1.6);
         t.ammo--;
@@ -163,7 +163,9 @@ class Craft {
     const st = this.stationsOf('b').sort((a, b) => b.s.mass - a.s.mass)[0]; if (!st || this.dm.destroyed) return false;
     const n = Math.min(st.n, st.pylons >= 2 ? 2 : 1);
     for (let i = 0; i < n; i++) { const lay = Models.layout(this.def); const off = new V3(n > 1 ? (i ? 1 : -1) * Math.min(3, lay.S * 0.2) : 0, -lay.fr - 0.5, 0).applyQuaternion(this.quat);
-      this.match.combat.bomb(this.pos.clone().add(off), this.vel.clone(), this, st.s); }
+      // bombs tumble and scatter a little on release (more from high altitude level bombers)
+      const agl = this.pos.y - this.match.world.groundAt(this.pos.x, this.pos.z), sc = 1.5 + agl * (this.def.role === 'bomber' ? 0.004 : 0.0015), v = this.vel.clone().add(new V3((Math.random() - 0.5) * sc, 0, (Math.random() - 0.5) * sc));
+      this.match.combat.bomb(this.pos.clone().add(off), v, this, st.s); }
     st.n -= n; this.releaseMass(st, n); return true;
   }
   fireRockets() {

@@ -44,7 +44,11 @@ const Game = (() => {
       menuPlane.rotation.y += dt * 0.25; menuPlane.position.y = Math.sin(performance.now() / 1400) * menuPlane.userData.r * 0.02;
       for (const p of menuPlane.userData.props) p.rotation.z += dt * 30;
       // keep the aircraft in the right part of the screen, clear of the menus
-      menuCam.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.12, innerHeight * 0.02, innerWidth, innerHeight);
+      // in the hangar the aircraft sits above the stats column on the right (smaller), elsewhere right of the menus
+      const side = G.menuView === 'side' && innerWidth > 900, r = menuPlane.userData.r * (side ? 2.4 : 1);
+      menuCam.position.set(r * 0.95, r * 0.32, r * 1.05); menuCam.lookAt(0, -menuPlane.userData.r * 0.05, 0);
+      if (side) menuCam.setViewOffset(innerWidth, innerHeight, innerWidth * (0.5 - 0.84), innerHeight * (0.5 - 0.19), innerWidth, innerHeight);
+      else menuCam.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.12, innerHeight * 0.02, innerWidth, innerHeight);
       renderer.render(menuScene, menuCam);
     }
   }
