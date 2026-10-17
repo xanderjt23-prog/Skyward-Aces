@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skyward Aces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+<canvas id="hud"></canvas>
+
+<!-- ===== out of battle ===== -->
+<div id="menu-ui">
+  <header id="topbar">
+    <div class="brand">SKYWARD <span>ACES</span></div>
+    <div class="tb-right">
+      <div class="cur" title="Research XP (spending it does not lower your level)"><i class="ico xp">XP</i><b id="tb-xp">0</b></div>
+      <div class="cur" title="Coins (for modifications)"><i class="ico coin">◎</i><b id="tb-coins">0</b></div>
+      <button id="tb-profile" class="profile-btn">
+        <span class="avatar" id="tb-avatar">P</span>
+        <span class="pmeta"><b id="tb-name">Pilot</b><small>Level <span id="tb-level">1</span></small><span class="lvlbar"><i id="tb-lvlfill"></i></span></span>
+      </button>
+    </div>
+  </header>
+  <div id="current-plane"></div>
+  <nav id="mainmenu">
+    <button data-panel="play" class="primary">▶ Play</button>
+    <button data-panel="hangar">Hangar</button>
+    <button data-panel="achievements">Achievements</button>
+    <button data-panel="mods">Modifications</button>
+    <button data-panel="research">Research</button>
+  </nav>
+  <section id="panel" class="hidden"><button class="close" id="panel-close">✕</button><div id="panel-body"></div></section>
+</div>
+
+<!-- ===== in battle ===== -->
+<div id="battle-ui" class="hidden">
+  <div id="feed"></div>
+  <div id="msgs"></div>
+  <div id="toast"></div>
+  <div id="respawn" class="hidden"></div>
+  <div id="scoreboard" class="hidden"></div>
+  <div id="pause" class="hidden">
+    <div class="card">
+      <h2>Paused</h2>
+      <p class="muted" id="pause-note">Click Resume to recapture the mouse.</p>
+      <button id="pause-resume" class="primary">Resume</button>
+      <button id="pause-leave" class="danger">Leave battle</button>
+      <div class="controls">
+        <div><kbd>Mouse</kbd> aim (the aircraft follows) · <kbd>LMB</kbd> guns · <kbd>RMB</kbd> hold to look around · <kbd>Wheel</kbd> zoom</div>
+        <div><kbd>W</kbd>/<kbd>S</kbd> throttle (hold <kbd>W</kbd> at 100% for WEP / afterburner) · <kbd>A</kbd>/<kbd>D</kbd> roll · <kbd>Q</kbd>/<kbd>E</kbd> rudder · arrows: keyboard stick</div>
+        <div><kbd>Space</kbd> bombs · <kbd>R</kbd> rockets · <kbd>F</kbd> missile (wait for the lock tone) · <kbd>X</kbd> flares · <kbd>C</kbd> camera · <kbd>Tab</kbd> scores</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="results" class="hidden"></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/planes.js"></script>
+<script src="js/missions.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/models.js"></script>
+<script src="js/world.js"></script>
+<script src="js/flight.js"></script>
+<script src="js/damage.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/craft.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/match.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/netconfig.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

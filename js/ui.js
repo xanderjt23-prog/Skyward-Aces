@@ -1,0 +1,433 @@
+// ============================================================================
+// Menus and battle overlays.
+// ============================================================================
+const UI = (() => {
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => Math.round(n).toLocaleString();
+  let panel = null, hangarNation = null, hangarSel = null, researchNation = null, modsPlane = null, modsTab = 'ammo';
+  const play = { step: 'type', sp: true, mode: 'destroy', settings: defaults('destroy') };
+  let lobby = null; // multiplayer lobby state
+  function defaults(mode) {
+    return { destroy: { mode, teamSize: [12, 12], time: 600, map: '', fill: true }, dogfight: { mode, teamSize: [4, 4], respawns: 3, time: 900, map: '', fill: true },
+      missions: { mode, mission: null, fill: true }, survival: { mode, respawns: 3, time: 0, map: '', fill: true } }[mode];
+  }
+  const P = () => Profile.get();
+  // nation marking drawn in CSS (flag emoji don't render on Windows)
+  function flag(n) {
+    const N = NATIONS[n], h = c => '#' + c.toString(16).padStart(6, '0');
+    if (n === 'ger') return `<i class="nat" style="background:#fff;box-shadow:inset 0 0 0 4px #fff"><b style="position:absolute;inset:3px 6px;background:#111"></b><b style="position:absolute;inset:6px 3px;background:#111"></b></i>`;
+    if (n === 'jpn') return `<i class="nat" style="background:radial-gradient(circle, #c8102e 0 45%, #fff 47%)"></i>`;
+    if (n === 'ussr') return `<i class="nat" style="background:#fff;color:#c11;font-style:normal;font-size:12px;line-height:16px;text-align:center">★</i>`;
+    if (n === 'usa') return `<i class="nat" style="background:radial-gradient(circle, #fff 0 22%, #1c2f6e 24%);"></i>`;
+    return `<i class="nat" style="background:radial-gradient(circle, ${h(N.roundel[0])} 0 30%, ${h(N.roundel[1])} 32% 62%, ${h(N.roundel[2])} 64%)"></i>`;
+  }
+  const an = w => (/^[AEIOU]/i.test(w) ? 'an ' : 'a ') + w;
+  const cur = () => PLANES[P().selected];
+
+  function init() {
+    Game.init(); HUD.init();
+    $$('#mainmenu button').forEach(b => b.onclick = () => open(b.dataset.panel));
+    $('#panel-close').onclick = close; $('#tb-profile').onclick = () => open('profile');
+    $('#pause-resume').onclick = () => { Game.requestLock(); };
+    $('#pause-leave').onclick = () => { $('#pause').classList.add('hidden'); Game.leave(); };
+    Net.on('message', onNet); Net.on('join', () => {}); Net.on('leave', onLeave); Net.on('closed', onClosed); Net.on('error', e => { toastMenu(e); if (lobby && !lobby.started) { lobby = null; play.step = 'mp'; if (panel === 'play') renderPlay(); } });
+    Net.on('joinFailed', e => toastMenu(e));
+    refresh(); Game.showPlane(P().selected);
+  }
+  function refresh() {
+    const p = P(), li = Profile.levelInfo();
+    $('#tb-xp').textContent = fmt(p.xp); $('#tb-coins').textContent = fmt(p.coins); $('#tb-name').textContent = p.name; $('#tb-avatar').textContent = (p.name[0] || 'P').toUpperCase();
+    $('#tb-level').textContent = li.level; $('#tb-lvlfill').style.width = (li.frac * 100).toFixed(1) + '%';
+    $('#tb-profile').title = `${fmt(li.into)} / ${fmt(li.need)} XP to level ${li.level + 1}`;
+    const pl = cur(); $('#current-plane').innerHTML = `<div class="nm">${esc(pl.name)}</div><div class="sub">${flag(pl.nation)} ${NATIONS[pl.nation].name} · ${ERAS[pl.era].name} · ${pl.year}</div>`;
+  }
+  function open(name) {
+    panel = name; $('#panel').classList.remove('hidden');
+    $$('#mainmenu button').forEach(b => b.classList.toggle('sel', b.dataset.panel === name));
+    ({ play: renderPlay, hangar: renderHangar, achievements: renderAch, mods: renderMods, research: renderResearch, profile: renderProfile })[name]();
+  }
+  function close() { panel = null; $('#panel').classList.add('hidden'); $$('#mainmenu button').forEach(b => b.classList.remove('sel')); Game.showPlane(P().selected); }
+  const body = html => { $('#panel-body').innerHTML = html; };
+  function toastMenu(t) { const el = $('#toast'); el.textContent = t; el.style.opacity = 1; el.style.zIndex = 30; clearTimeout(toastMenu.t); toastMenu.t = setTimeout(() => el.style.opacity = 0, 3500); }
+
+  // ---------------------------------------------------------------- stats text
+  function planeStats(pl) {
+    const guns = pl.guns.map(([g, n]) => `${n}× ${GUNS[g].name}`).join('<br>') || '—';
+    const tur = pl.turrets.map(([g, n, arc]) => `${n}× ${GUNS[g].name} (${arc})`).join('<br>');
+    const hp = pl.hp.map(st => `${esc(st[0])}: ${st[3]}× ${st[1].split('').map(k => KIND_NAMES[k]).join('/')} ≤${st[2]} kg`).join('<br>') || 'None';
+    const eng = `${pl.eng}× ${pl.kind === 'jet' ? (pl.ab ? 'turbojet with afterburner' : 'turbojet') : 'piston'}`;
+    const rows = [['Era', `${ERAS[pl.era].name} (${pl.year})`], ['Role', pl.role], ['Top speed', `${pl.spd} km/h`], ['Climb rate', `${pl.clb} m/s`], ['Turn time', `${pl.turn} s`], ['Roll rate', `${pl.roll} °/s`],
+      ['G limit', `${pl.g} G`], ['Weight', `${fmt(pl.mass)} kg`], ['Span / length', `${pl.span} / ${pl.len} m`], ['Engines', eng], ['Crew', pl.crew.join(', ')], ['Guns', guns]];
+    if (tur) rows.push(['Defensive guns', tur]);
+    rows.push(['Hardpoints', hp], ['Max payload', `${fmt(pl.payload)} kg`]);
+    if (pl.radar) rows.push(['Radar', 'Yes']); if (pl.flares) rows.push(['Countermeasures', `${pl.flares} flares`]);
+    return rows.map(([a, b]) => `<div class="stat"><span>${a}</span><span style="text-align:right">${b}</span></div>`).join('');
+  }
+  function nationTabs(sel, cb) { return `<div class="tabs">${NATION_ORDER.map(n => `<button class="tab ${n === sel ? 'sel' : ''}" data-nat="${n}">${flag(n)} ${NATIONS[n].name}</button>`).join('')}</div>`; }
+  function bindTabs(cb) { $$('[data-nat]').forEach(b => b.onclick = () => cb(b.dataset.nat)); }
+
+  // ---------------------------------------------------------------- hangar
+  function renderHangar() {
+    hangarNation = hangarNation || cur().nation; const p = P();
+    if (!hangarSel || PLANES[hangarSel].nation !== hangarNation) hangarSel = PLANES[p.selected].nation === hangarNation ? p.selected : planesOf(hangarNation)[0].id;
+    let h = `<h2>Hangar</h2>${nationTabs(hangarNation)}<div class="split"><div>`;
+    for (let e = 1; e <= MAX_ERA; e++) {
+      const list = planesOf(hangarNation).filter(x => x.era === e); if (!list.length) continue;
+      h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}</small></div><div class="planes">`;
+      for (const pl of list) { const owned = p.owned[pl.id], flying = p.selected === pl.id;
+        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
+      h += `</div></div>`;
+    }
+    const pl = PLANES[hangarSel], owned = p.owned[pl.id];
+    h += `</div><div class="stats-box card"><h3>${esc(pl.name)}</h3><p class="muted small">${esc(pl.desc || '')}</p>${planeStats(pl)}<div class="row" style="margin-top:12px">`;
+    h += owned ? (p.selected === pl.id ? `<button disabled>Selected</button>` : `<button class="primary" id="h-select">Fly this aircraft</button>`) + ` <button id="h-mods">Modifications</button>` : `<button id="h-research">Research (${fmt(pl.cost)} XP)</button>`;
+    h += `</div></div></div>`;
+    body(h); bindTabs(n => { hangarNation = n; hangarSel = null; renderHangar(); });
+    $$('[data-pid]').forEach(el => el.onclick = () => { hangarSel = el.dataset.pid; Game.showPlane(hangarSel); renderHangar(); });
+    if ($('#h-select')) $('#h-select').onclick = () => { p.selected = pl.id; Profile.save(); refresh(); renderHangar(); };
+    if ($('#h-mods')) $('#h-mods').onclick = () => { modsPlane = pl.id; open('mods'); };
+    if ($('#h-research')) $('#h-research').onclick = () => { researchNation = pl.nation; open('research'); };
+    Game.showPlane(hangarSel);
+  }
+  // ---------------------------------------------------------------- research
+  function renderResearch() {
+    researchNation = researchNation || cur().nation; const p = P(), me = Profile.maxEra(researchNation);
+    let h = `<h2>Research</h2><p class="muted">Spend XP on new aircraft. Spending XP never lowers your level. In each nation you can research aircraft up to <b>one era above</b> the newest era you own there.</p>${nationTabs(researchNation)}`;
+    h += `<div class="row" style="margin-bottom:12px"><span class="pill">Available XP: <b>${fmt(p.xp)}</b></span><span class="pill">Newest ${NATIONS[researchNation].name} era owned: <b>${me ? ERAS[me].name : '—'}</b></span></div>`;
+    for (let e = 1; e <= MAX_ERA; e++) {
+      const list = planesOf(researchNation).filter(x => x.era === e); if (!list.length) continue;
+      const reach = e <= me + 1;
+      h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}${reach ? '' : ' · locked: own ' + an(ERAS[e - 1].name) + ' aircraft of this nation first'}</small></div><div class="planes">`;
+      for (const pl of list) {
+        const owned = p.owned[pl.id], c = Profile.canResearch(pl.id);
+        h += `<div class="pc ${owned ? 'owned' : reach ? '' : 'locked'}" data-rid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><div class="y">${pl.year} · ${owned ? 'Owned' : fmt(pl.cost) + ' XP'}</div>
+          <div style="margin-top:8px">${owned ? '<span class="pill ok">Owned</span>' : c.ok ? `<button class="primary" data-buy="${pl.id}">Research</button>` : `<span class="small muted">${esc(c.why)}</span>`}</div></div>`;
+      }
+      h += `</div></div>`;
+    }
+    body(h); bindTabs(n => { researchNation = n; renderResearch(); });
+    $$('[data-rid]').forEach(el => el.onclick = e => { if (e.target.dataset.buy) return; Game.showPlane(el.dataset.rid); });
+    $$('[data-buy]').forEach(b => b.onclick = () => { const r = Profile.research(b.dataset.buy); if (r.ok) { Profile.checkAchievements(); toastMenu(`${PLANES[b.dataset.buy].name} researched!`); refresh(); renderResearch(); } else toastMenu(r.why); });
+  }
+  // ---------------------------------------------------------------- modifications
+  function renderMods() {
+    const p = P(); modsPlane = modsPlane && p.owned[modsPlane] ? modsPlane : p.selected;
+    const pl = PLANES[modsPlane], m = Profile.modsOf(pl.id);
+    let h = `<h2>Modifications</h2><div class="row" style="margin-bottom:12px"><select id="mods-plane">${Object.keys(p.owned).map(id => PLANES[id]).filter(Boolean).sort((a, b) => a.nation.localeCompare(b.nation) || a.era - b.era).map(x => `<option value="${x.id}" ${x.id === pl.id ? 'selected' : ''}>${esc(x.name)} (${ERAS[x.era].name})</option>`).join('')}</select>
+      <span class="pill">Coins: <b>${fmt(p.coins)}</b></span></div>
+      <div class="tabs">${[['ammo', 'Gun ammunition'], ['loadout', 'Ordnance & loadout'], ['upg', 'Airframe upgrades']].map(([k, n]) => `<button class="tab ${modsTab === k ? 'sel' : ''}" data-mt="${k}">${n}</button>`).join('')}</div>`;
+    if (modsTab === 'ammo') {
+      for (const gid of Profile.gunsOf(pl)) {
+        const sel = Profile.loadoutFor(pl.id).belts[gid];
+        h += `<div class="card" style="margin-bottom:10px"><h3>${GUNS[gid].name}</h3>`;
+        for (const b of beltsForGun(gid, pl.era)) {
+          const own = Profile.hasBelt(pl.id, gid, b), price = beltPrice(b, pl.era);
+          h += `<div class="shop-item"><div><b>${BELTS[b].name}</b> <div class="d">${BELTS[b].desc}</div></div><div>${sel === b ? '<span class="pill ok">Equipped</span>' : own ? `<button data-belt="${gid}|${b}">Equip</button>` : `<button class="primary" data-buybelt="${gid}|${b}">Buy ◎${fmt(price)}</button>`}</div></div>`;
+        }
+        h += `</div>`;
+      }
+      if (!pl.guns.length) h += `<p class="muted">This aircraft has no forward guns.</p>`;
+    } else if (modsTab === 'loadout') {
+      const kg = Profile.loadoutMass(pl.id);
+      h += `<div class="card" style="margin-bottom:12px"><div class="row sp"><h3 style="margin:0">Loadout</h3><span>Payload <b>${fmt(kg)}</b> / ${fmt(pl.payload)} kg</span></div><div class="bar"><i style="width:${pl.payload ? Math.min(100, kg / pl.payload * 100) : 0}%"></i></div>`;
+      if (!pl.hp.length) h += `<p class="muted">This aircraft has no hardpoints: it cannot carry bombs, rockets, missiles or gun pods.</p>`;
+      pl.hp.forEach((st, i) => {
+        const opts = Object.keys(STORES).filter(id => storeAllowed(pl, id, st));
+        const kinds = st[1].split('').map(k => KIND_NAMES[k]).join(', ');
+        h += `<div class="lo-row"><div><b>${esc(st[0])}</b><div class="small muted">${st[3]} pylon${st[3] > 1 ? 's' : ''} · ${kinds} · ≤${st[2]} kg each</div></div><div><select data-st="${i}"><option value="">— empty —</option>${opts.map(id => `<option value="${id}" ${m.loadout[i] === id ? 'selected' : ''} ${m.stores[id] ? '' : 'disabled'}>${esc(STORES[id].name)} · ${STORES[id].mass * st[3]} kg${m.stores[id] ? '' : ' (not bought)'}</option>`).join('')}</select></div></div>`;
+      });
+      h += `</div><h3>Ordnance for this aircraft</h3><p class="muted small">Only weapons that fit this aircraft's hardpoints, era and nation are listed. Buy them once, then fit them above.</p>`;
+      const avail = storesFor(pl);
+      for (const k of ['b', 'r', 'm', 'g']) {
+        const l = avail.filter(id => STORES[id].kind === k); if (!l.length) continue;
+        h += `<div class="card" style="margin-bottom:10px"><h3>${KIND_NAMES[k]}</h3>`;
+        for (const id of l) { const s = STORES[id]; let d = `${s.mass} kg`;
+          if (k === 'b') d += ` · blast ${s.rad} m${s.guided ? ' · laser guided' : ''}`; if (k === 'r') d += ` · ${s.count} rockets`;
+          if (k === 'm') d += ` · ${s.seek === 'ir' ? 'infrared' + (s.rear ? ', rear aspect' : ', all aspect') : s.seek === 'sarh' ? 'semi-active radar' : 'active radar'} · ${(s.range / 1000).toFixed(1)} km · ${s.g} G`;
+          if (k === 'g') d += ` · ${s.guns}× ${GUNS[s.gun].name}`;
+          h += `<div class="shop-item"><div><b>${esc(s.name)}</b><div class="d">${d}</div></div><div>${m.stores[id] ? '<span class="pill ok">Owned</span>' : `<button class="primary" data-buystore="${id}">Buy ◎${fmt(s.price)}</button>`}</div></div>`; }
+        h += `</div>`;
+      }
+      if (!avail.length && pl.hp.length) h += `<p class="muted">No ordnance of this era fits.</p>`;
+    } else {
+      for (const k of Profile.upgradesFor(pl)) {
+        const mo = MODS[k], own = m.upg[k], on = m.inst[k];
+        h += `<div class="shop-item"><div><b>${mo.name}</b><div class="d">${mo.desc}</div></div><div>${own ? `<button data-toggle="${k}" class="${on ? 'sel' : ''}">${on ? 'Installed — remove' : 'Removed — install'}</button>` : `<button class="primary" data-buyupg="${k}">Buy ◎${fmt(mo.price(pl.era))}</button>`}</div></div>`;
+      }
+    }
+    body(h);
+    $('#mods-plane').onchange = e => { modsPlane = e.target.value; Game.showPlane(modsPlane); renderMods(); };
+    $$('[data-mt]').forEach(b => b.onclick = () => { modsTab = b.dataset.mt; renderMods(); });
+    const after = ok => { if (!ok) toastMenu('Not enough coins'); Profile.checkAchievements(); refresh(); renderMods(); };
+    $$('[data-buybelt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.buybelt.split('|'); after(Profile.buyBelt(pl.id, g, k)); });
+    $$('[data-belt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.belt.split('|'); Profile.selectBelt(pl.id, g, k); renderMods(); });
+    $$('[data-buystore]').forEach(b => b.onclick = () => after(Profile.buyStore(pl.id, b.dataset.buystore)));
+    $$('[data-buyupg]').forEach(b => b.onclick = () => after(Profile.buyUpgrade(pl.id, b.dataset.buyupg)));
+    $$('[data-toggle]').forEach(b => b.onclick = () => { Profile.toggleUpgrade(pl.id, b.dataset.toggle); renderMods(); });
+    $$('[data-st]').forEach(s => s.onchange = () => { const r = Profile.setStation(pl.id, +s.dataset.st, s.value || null); if (!r.ok) toastMenu(r.why); renderMods(); });
+    Game.showPlane(pl.id);
+  }
+  // ---------------------------------------------------------------- achievements & profile
+  function renderAch() {
+    const p = P(); const done = ACHIEVEMENTS.filter(a => p.ach[a.id]).length;
+    let h = `<h2>Achievements</h2><p class="muted">${done} / ${ACHIEVEMENTS.length} unlocked</p><div class="grid c2">`;
+    for (const a of ACHIEVEMENTS) { const pr = Profile.progress(a), got = !!p.ach[a.id], val = Math.min(a.goal, Math.floor(p.stats[a.stat] || 0));
+      h += `<div class="card ach ${got ? 'done' : ''}"><div class="ic">${a.icon}</div><div style="flex:1"><div class="t">${a.name}</div><div class="small muted">${a.desc}</div><div class="bar"><i style="width:${pr * 100}%"></i></div><div class="small muted">${got ? 'Unlocked ' + new Date(p.ach[a.id]).toLocaleDateString() : fmt(val) + ' / ' + fmt(a.goal)}</div></div></div>`; }
+    body(h + '</div>');
+  }
+  function renderProfile() {
+    const p = P(), s = p.stats, li = Profile.levelInfo();
+    const kd = (s.kills || 0) / Math.max(1, s.deaths || 0), fav = Object.entries(s.planeUse || {}).sort((a, b) => b[1] - a[1])[0];
+    const rows = [['Level', li.level], ['XP to next level', `${fmt(li.into)} / ${fmt(li.need)}`], ['Total XP earned', fmt(p.totalXp)], ['Battles', fmt(s.battles || 0)], ['Victories', fmt(s.wins || 0)], ['Win rate', ((s.wins || 0) / Math.max(1, s.battles || 0) * 100).toFixed(0) + '%'],
+      ['Aircraft shot down', fmt(s.kills || 0)], ['Times shot down', fmt(s.deaths || 0)], ['K/D ratio', kd.toFixed(2)], ['Assists', fmt(s.assists || 0)], ['Bases destroyed', fmt(s.bases || 0)], ['Missions completed', fmt(s.missions || 0)],
+      ['Flight time', `${Math.floor((s.flightTime || 0) / 3600)} h ${Math.floor((s.flightTime || 0) % 3600 / 60)} min`], ['Aircraft owned', Object.keys(p.owned).length], ['Favourite aircraft', fav && PLANES[fav[0]] ? PLANES[fav[0]].name : '—'], ['Achievements', `${Object.keys(p.ach).length} / ${ACHIEVEMENTS.length}`], ['Coins earned', fmt(s.coinsEarned || 0)]];
+    const st = p.settings;
+    body(`<h2>Pilot profile</h2><div class="split"><div class="card"><div class="field"><label>Username</label><div class="row"><input id="pf-name" maxlength="18" value="${esc(p.name)}"><button id="pf-save">Save</button></div></div>
+      ${rows.map(([a, b]) => `<div class="stat"><span>${a}</span><span>${b}</span></div>`).join('')}</div>
+      <div class="card"><h3>Settings</h3>
+      <div class="field"><label>Mouse sensitivity: <span id="pf-sv">${st.sens.toFixed(2)}</span></label><input type="range" id="pf-sens" min="0.3" max="2.5" step="0.05" value="${st.sens}"></div>
+      <div class="field"><label>Volume</label><input type="range" id="pf-vol" min="0" max="1" step="0.05" value="${st.volume}"></div>
+      <div class="field"><label><input type="checkbox" id="pf-inv" ${st.invert ? 'checked' : ''}> Invert mouse Y</label></div>
+      <h3 style="margin-top:18px">Controls</h3><div class="small muted" style="line-height:1.8">Mouse: aim (the aircraft follows) · LMB: guns · RMB (hold): look around<br>W / S: throttle (hold W at 100% for WEP or afterburner)<br>A / D: roll · Q / E: rudder · Arrows: keyboard stick<br>Space: bombs · R: rockets · F: missile · X: flares<br>C: camera · Tab: scoreboard · Esc: pause</div>
+      <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>`);
+    $('#pf-save').onclick = () => { const v = $('#pf-name').value.trim().slice(0, 18); if (v) { p.name = v; Profile.save(); refresh(); toastMenu('Saved'); } };
+    $('#pf-sens').oninput = e => { st.sens = +e.target.value; $('#pf-sv').textContent = st.sens.toFixed(2); Profile.save(); };
+    $('#pf-vol').oninput = e => { st.volume = +e.target.value; Sound.setVolume(st.volume); Profile.save(); };
+    $('#pf-inv').onchange = e => { st.invert = e.target.checked; Profile.save(); };
+    $('#pf-reset').onclick = () => { if (confirm('Reset all progress? This cannot be undone.')) { Profile.reset(); refresh(); renderProfile(); Game.showPlane(P().selected); } };
+  }
+  // ---------------------------------------------------------------- play
+  const MODE_INFO = {
+    destroy: { ic: '💥', desc: 'Two teams of up to 60. Kills score 3, bases 2 / 3 / 5. Most points when the time runs out wins.' },
+    dogfight: { ic: '🤺', desc: '1v1 up to 8v8 with a set number of respawns. The last team flying wins.' },
+    missions: { ic: '📜', desc: 'Historical missions for your aircraft\'s nation and era.' },
+    survival: { ic: '🌊', desc: 'Co-op: hold out against ever-larger waves of enemy aircraft and bombers.' },
+  };
+  const MAPS_OPT = [['', 'Random'], ...Object.entries(World.MAPS).map(([k, v]) => [k, v.name])];
+  function settingsForm(s, editable) {
+    const dis = editable ? '' : 'disabled';
+    const sel = (id, opts, v) => `<select id="${id}" ${dis}>${opts.map(([k, n]) => `<option value="${k}" ${String(k) === String(v) ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+    let h = '';
+    if (s.mode === 'destroy') {
+      h += `<div class="grid c2"><div class="field"><label>Team 1 (blue) size: <b id="sz0v">${s.teamSize[0]}</b></label><input type="range" id="sz0" min="1" max="60" value="${s.teamSize[0]}" ${dis}></div>
+        <div class="field"><label>Team 2 (red) size: <b id="sz1v">${s.teamSize[1]}</b></label><input type="range" id="sz1" min="1" max="60" value="${s.teamSize[1]}" ${dis}></div></div>
+        <div class="grid c2"><div class="field"><label>Match length</label>${sel('s-time', [2, 3, 5, 10, 15, 20, 30, 45, 60].map(x => [x * 60, x + ' minutes']), s.time)}</div><div class="field"><label>Map</label>${sel('s-map', MAPS_OPT, s.map)}</div></div>`;
+    } else if (s.mode === 'dogfight') {
+      h += `<div class="grid c2"><div class="field"><label>Size</label>${sel('s-size', [1, 2, 3, 4, 5, 6, 7, 8].map(x => [x, `${x} v ${x}`]), s.teamSize[0])}</div>
+        <div class="field"><label>Respawns per pilot: <b id="rsv">${s.respawns}</b></label><input type="range" id="s-resp" min="0" max="12" value="${s.respawns}" ${dis}></div></div>
+        <div class="grid c2"><div class="field"><label>Time limit</label>${sel('s-time', [[0, 'None'], [300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [1200, '20 minutes'], [1800, '30 minutes']], s.time)}</div><div class="field"><label>Map</label>${sel('s-map', MAPS_OPT, s.map)}</div></div>`;
+    } else if (s.mode === 'survival') {
+      h += `<div class="grid c2"><div class="field"><label>Respawns per pilot: <b id="rsv">${s.respawns}</b></label><input type="range" id="s-resp" min="0" max="12" value="${s.respawns}" ${dis}></div><div class="field"><label>Map</label>${sel('s-map', MAPS_OPT, s.map)}</div></div>`;
+    } else {
+      const lead = editable ? cur() : (lobby && lobby.hostPlane ? PLANES[lobby.hostPlane] : cur());
+      const ms = missionsFor(lead); if (!s.mission || !ms.find(x => x.id === s.mission)) s.mission = ms[0] && ms[0].id;
+      h += `<p class="muted small">Missions for ${flag(lead.nation)} ${NATIONS[lead.nation].name}, closest to the ${ERAS[lead.era].name} era of the ${esc(lead.name)} first.</p><div class="grid c2">`;
+      for (const m of ms) h += `<div class="card ${editable ? 'click' : ''} ${s.mission === m.id ? 'sel' : ''}" data-mis="${m.id}"><div class="row sp"><b style="font-family:var(--head);font-size:19px">${esc(m.name)}</b><span class="pill">${ERAS[m.era].name} · ${m.year}</span></div>
+        <div class="small muted" style="margin:6px 0">${esc(m.brief)}</div><span class="pill">${{ sweep: 'Fighter sweep', intercept: 'Intercept bombers', strike: 'Ground strike', escort: 'Bomber escort' }[m.type]}</span> <span class="pill">vs ${NATIONS[m.enemy].name}</span></div>`;
+      h += `</div>`;
+    }
+    return h;
+  }
+  function bindSettings(s, onChange) {
+    const on = (id, ev, f) => { const el = $('#' + id); if (el) el[ev] = e => { f(e.target.value); onChange && onChange(); }; };
+    on('sz0', 'oninput', v => { s.teamSize[0] = +v; $('#sz0v').textContent = v; }); on('sz1', 'oninput', v => { s.teamSize[1] = +v; $('#sz1v').textContent = v; });
+    on('s-time', 'onchange', v => s.time = +v); on('s-map', 'onchange', v => s.map = v);
+    on('s-size', 'onchange', v => s.teamSize = [+v, +v]); on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
+    $$('[data-mis]').forEach(c => c.onclick = () => { s.mission = c.dataset.mis; onChange && onChange(true); });
+  }
+  function modeCards(selMode) {
+    return `<div class="grid c4">${Object.keys(MODE_NAMES).map(k => `<div class="card click mode-card ${selMode === k ? 'sel' : ''}" data-mode="${k}"><div class="ic">${MODE_INFO[k].ic}</div><h3>${MODE_NAMES[k]}</h3><div class="small muted">${MODE_INFO[k].desc}</div></div>`).join('')}</div>`;
+  }
+  function renderPlay() {
+    if (lobby) return renderLobby();
+    const pl = cur();
+    let h = `<h2>Play</h2><p class="muted">Flying: <b>${esc(pl.name)}</b> (${NATIONS[pl.nation].name}, ${ERAS[pl.era].name}). Change it in the Hangar.</p>`;
+    if (play.step === 'type') {
+      h += `<div class="grid c2"><div class="card click mode-card" id="p-sp"><div class="ic">🎯</div><h3>Singleplayer</h3><div class="small muted">Fight alongside and against bots flying aircraft of your era.</div></div>
+        <div class="card click mode-card" id="p-mp"><div class="ic">🌐</div><h3>Multiplayer</h3><div class="small muted">Host a game and share its join code, or join a friend's game with theirs. Empty slots can be filled with bots flying the average era of the human players.</div></div></div>`;
+      body(h); $('#p-sp').onclick = () => { play.sp = true; play.step = 'modes'; renderPlay(); }; $('#p-mp').onclick = () => { play.sp = false; play.step = 'mp'; renderPlay(); }; return;
+    }
+    if (play.step === 'mp') {
+      h += `<div class="grid c2"><div class="card"><h3>Host a game</h3><p class="small muted">You choose the mode and settings, and get a join code to give to the other players.</p><button class="primary" id="mp-host">Generate join code</button></div>
+        <div class="card"><h3>Join a game</h3><p class="small muted">Enter the code the host gave you.</p><div class="row"><input id="join-code" placeholder="e.g. K7Q2XM" maxlength="9" style="text-transform:uppercase;width:160px"><button class="primary" id="mp-join">Join</button></div></div></div>
+        <p class="small muted" style="margin-top:12px">Online play connects the players' browsers directly (WebRTC). Some networks (mobile data, school or office networks) block direct connections; see <code>js/netconfig.js</code> to add a relay server.</p>
+        <button id="p-back">← Back</button>`;
+      body(h); $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
+      $('#mp-host').onclick = hostGame; $('#mp-join').onclick = () => joinGame($('#join-code').value); return;
+    }
+    if (play.step === 'modes') {
+      h += `<h3>Choose a game mode</h3>${modeCards(play.mode)}<div class="card" style="margin-top:14px">${settingsForm(play.settings, true)}</div>
+        <div class="row" style="margin-top:14px"><button id="p-back">← Back</button><button class="primary" id="p-start" style="font-size:20px;padding:10px 30px">Take off</button></div>`;
+      body(h);
+      $$('[data-mode]').forEach(c => c.onclick = () => { play.mode = c.dataset.mode; play.settings = defaults(play.mode); renderPlay(); });
+      bindSettings(play.settings, re => { if (re) renderPlay(); });
+      $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
+      $('#p-start').onclick = startSingle;
+    }
+  }
+  function me() { const p = P(); return { name: p.name, plane: p.selected, loadout: Profile.loadoutFor(p.selected), level: Profile.levelInfo().level }; }
+  function startSingle() {
+    const s = JSON.parse(JSON.stringify(play.settings));
+    const cfg = Plan.build(s, [Object.assign(me(), { owner: 'H', team: 0 })]);
+    const pid = cfg.roster.find(r => r.owner === 'H' && !r.bot).id;
+    launch(cfg, { playerId: pid, isHost: true, net: false });
+  }
+  function launch(cfg, opt) { close(); Game.startMatch(cfg, opt); }
+
+  // ---------------------------------------------------------------- multiplayer lobby
+  function hostGame() {
+    if (!Net.available()) return toastMenu('The networking library could not load (offline?).');
+    lobby = { host: true, code: null, settings: defaults('destroy'), players: [Object.assign(me(), { peer: 'H', team: 0 })], started: false };
+    lobby.settings.fill = true; renderLobby();
+    Net.host(code => { lobby.code = code; renderLobby(); });
+  }
+  function joinGame(code) {
+    if (!Net.available()) return toastMenu('The networking library could not load (offline?).');
+    code = Net.cleanCode(code); if (code.length < 4) return toastMenu('Enter the join code');
+    lobby = { host: false, code, settings: null, players: [], started: false, connecting: true }; renderLobby();
+    Net.join(code, () => { lobby.connecting = false; Net.send(Object.assign({ t: 'hello' }, me())); renderLobby(); });
+  }
+  function lobbySync() { if (!lobby || !lobby.host) return; Net.broadcast({ t: 'lobby', settings: lobby.settings, players: lobby.players, hostPlane: P().selected }); }
+  function renderLobby() {
+    if (panel !== 'play') return;
+    const L = lobby, s = L.settings;
+    let h = `<h2>Multiplayer lobby</h2>`;
+    if (L.host) h += `<div class="card" style="margin-bottom:12px"><div class="row sp"><div><div class="muted small">JOIN CODE — give this to the other players</div><div class="code">${L.code || '······'}</div></div><div class="row"><button id="lb-copy" ${L.code ? '' : 'disabled'}>Copy code</button><button class="danger" id="lb-leave">Close lobby</button></div></div>${L.code ? '' : '<div class="muted small">Contacting the matchmaking server…</div>'}</div>`;
+    else h += `<div class="card" style="margin-bottom:12px"><div class="row sp"><div><div class="muted small">GAME</div><div class="code">${esc(L.code)}</div></div><button class="danger" id="lb-leave">Leave</button></div>${L.connecting ? '<div class="muted">Connecting to the host…</div>' : !s ? '<div class="muted">Waiting for the host…</div>' : ''}</div>`;
+    if (s) {
+      if (L.host) h += `<h3>Game mode</h3>${modeCards(s.mode)}`; else h += `<h3>Mode: ${MODE_NAMES[s.mode]}</h3>`;
+      h += `<div class="card" style="margin:12px 0">${settingsForm(s, L.host)}${L.host ? `<label class="row" style="margin-top:6px"><input type="checkbox" id="fill-bots" ${s.fill ? 'checked' : ''}> Fill empty slots with bots (they fly the average era of the human players)</label>` : `<div class="small muted">${s.fill ? 'Empty slots are filled with bots.' : 'No bots.'}</div>`}</div>`;
+      const teams = s.mode === 'destroy' || s.mode === 'dogfight';
+      h += `<h3>Pilots (${L.players.length})</h3><div class="grid ${teams ? 'c2' : 'c1'}">`;
+      const row = pl => `<div class="pl"><span>${esc(pl.name)} <span class="muted small">Lv ${pl.level}</span></span><span class="small">${esc(PLANES[pl.plane] ? PLANES[pl.plane].name : pl.plane)} · ${PLANES[pl.plane] ? ERAS[PLANES[pl.plane].era].name : ''}${L.host && teams && pl.peer !== 'H' ? ` <button data-mv="${pl.peer}" style="padding:1px 8px;font-size:12px">⇄</button>` : ''}</span></div>`;
+      if (teams) for (const t of [0, 1]) h += `<div><div class="team${t}" style="font-family:var(--head);font-size:18px;margin-bottom:6px">Team ${t + 1} ${s.mode === 'destroy' ? `(${s.teamSize[t]} slots)` : ''}</div>${L.players.filter(p => p.team === t).map(row).join('') || '<div class="muted small">—</div>'}</div>`;
+      else h += `<div>${L.players.map(row).join('')}</div>`;
+      h += `</div>`;
+      if (!L.host && teams) h += `<button id="lb-team" style="margin-top:8px">Switch team</button>`;
+      h += `<div class="row" style="margin-top:10px">${!L.host ? `<button id="lb-plane">Use my selected aircraft (${esc(cur().name)})</button>` : ''}${L.host ? `<button class="primary" id="lobby-start" style="font-size:20px;padding:10px 30px">Start battle</button>` : '<span class="muted">The host will start the battle.</span>'}</div>`;
+    }
+    body(h);
+    $('#lb-leave').onclick = () => { Net.close(); lobby = null; play.step = 'mp'; renderPlay(); };
+    if ($('#lb-copy')) $('#lb-copy').onclick = () => { try { navigator.clipboard.writeText(L.code); toastMenu('Copied'); } catch (e) {} };
+    if (!s) return;
+    if (L.host) {
+      $$('[data-mode]').forEach(c => c.onclick = () => { const fill = s.fill; L.settings = defaults(c.dataset.mode); L.settings.fill = fill; lobbySync(); renderLobby(); });
+      bindSettings(s, re => { lobbySync(); if (re) renderLobby(); });
+      $('#fill-bots').onchange = e => { s.fill = e.target.checked; lobbySync(); };
+      $$('[data-mv]').forEach(b => b.onclick = () => { const p = L.players.find(x => x.peer === b.dataset.mv); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } });
+      $('#lobby-start').onclick = startMulti;
+    } else {
+      if ($('#lb-team')) $('#lb-team').onclick = () => Net.send({ t: 'team' });
+      $('#lb-plane').onclick = () => Net.send(Object.assign({ t: 'hello' }, me()));
+    }
+  }
+  function startMulti() {
+    const L = lobby; if (!L || !L.host) return;
+    const s = JSON.parse(JSON.stringify(L.settings));
+    L.players[0] = Object.assign(L.players[0], me());
+    const humans = L.players.map(p => ({ name: p.name, plane: p.plane, loadout: p.loadout, owner: p.peer, team: p.team, level: p.level }));
+    const cfg = Plan.build(s, humans);
+    L.started = true;
+    Net.broadcast({ t: 'start', cfg });
+    launch(cfg, { playerId: cfg.roster.find(r => r.owner === 'H' && !r.bot).id, isHost: true, net: true, myPeer: 'H' });
+  }
+  function onNet(from, msg) {
+    if (Game.match && Game.running) { Game.match.onNet(from, msg); return; }
+    const L = lobby; if (!L) return;
+    if (L.host) {
+      if (msg.t === 'hello') {
+        let p = L.players.find(x => x.peer === from);
+        const valid = PLANES[msg.plane] && !PLANES[msg.plane].aiOnly;
+        if (!p) { const t0 = L.players.filter(x => x.team === 0).length, t1 = L.players.length - t0; p = { peer: from, team: t1 < t0 ? 1 : 0 }; L.players.push(p); toastMenu(`${msg.name} joined`); }
+        Object.assign(p, { name: String(msg.name || 'Pilot').slice(0, 18), plane: valid ? msg.plane : 'camel', loadout: msg.loadout || { belts: {}, stores: [], mods: {} }, level: msg.level | 0 });
+        lobbySync(); renderLobby();
+      }
+      if (msg.t === 'team') { const p = L.players.find(x => x.peer === from); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } }
+    } else {
+      if (msg.t === 'lobby') { L.settings = msg.settings; L.players = msg.players; L.hostPlane = msg.hostPlane; renderLobby(); }
+      if (msg.t === 'start') { L.started = true; const mine = msg.cfg.roster.find(r => r.owner === Net.myId); if (!mine) return toastMenu('The host did not include you'); launch(msg.cfg, { playerId: mine.id, isHost: false, net: true, myPeer: Net.myId }); }
+    }
+  }
+  function onLeave(peer) {
+    const m = Game.match;
+    if (m && Game.running) { // a player dropped mid-battle: a bot takes over their aircraft
+      for (const c of m.crafts) if (c.spec.owner === peer) { c.spec.owner = 'H'; c.local = true; c.isBot = true; c.name += ' (bot)'; c.ai = new BotBrain(c, 0.6); if (c.alive && !c.dm) c.remoteSpawn(); if (c.alive && c.dm) c.perf = Flight.perf(c.def, c.lo.mods, c.def.mass); c.fuel = c.fuel || 1; c.endurance = c.endurance || 1200; c.stations = c.stations || []; c.flares = c.flares || 0; }
+      toastBattle('A player left — a bot took over their aircraft'); return;
+    }
+    if (lobby && lobby.host) { const p = lobby.players.find(x => x.peer === peer); lobby.players = lobby.players.filter(x => x.peer !== peer); if (p) toastMenu(`${p.name} left`); lobbySync(); renderLobby(); }
+  }
+  function onClosed(why) {
+    if (Game.match && Game.running && !Game.match.over) { toastBattle(why); Game.match.over = true; Game.match.result = { winner: -2, reason: 'The host left the game' }; return; }
+    if (lobby) { toastMenu(why); lobby = null; play.step = 'mp'; if (panel === 'play') renderPlay(); }
+  }
+
+  // ---------------------------------------------------------------- battle overlays
+  let feedN = 0, evN = 0;
+  function enterBattle(m) {
+    $('#menu-ui').classList.add('hidden'); $('#battle-ui').classList.remove('hidden'); $('#results').classList.add('hidden');
+    $('#feed').innerHTML = ''; $('#msgs').innerHTML = ''; feedN = 0; evN = 0; $('#pause').classList.add('hidden'); $('#respawn').classList.add('hidden');
+    $('#pause-note').textContent = m.net ? 'Multiplayer: the battle keeps going while paused.' : 'Click Resume to recapture the mouse.';
+    if (m.mode === 'missions') msg(m.mission.name + ': ' + m.mission.brief.split('.')[0] + '.');
+    else msg(MODE_NAMES[m.mode] + (m.mode === 'destroy' ? ' — destroy enemy aircraft and bases' : m.mode === 'dogfight' ? ' — last team flying wins' : ' — survive the waves'));
+  }
+  function msg(t) { const d = document.createElement('div'); d.textContent = t; $('#msgs').appendChild(d); setTimeout(() => d.remove(), 2300); }
+  function toastBattle(t) { msg(t); }
+  function toast(t) { const el = $('#toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.opacity = 0, 1400); }
+  const EV_TEXT = { fire: 'You are on fire!', engine: 'Engine knocked out', wingL: 'Left wing torn off!', wingR: 'Right wing torn off!', tailH: 'Tailplane shot away', tailV: 'Fin shot away', pilot: 'Pilot hit!', crew: 'Crewman killed', extinguished: 'Fire out' };
+  function battleTick(m, dt) {
+    while (feedN < m.feed.length) { const f = m.feed[feedN++]; const d = document.createElement('div'); d.textContent = f.text; d.className = (f.me ? 'me ' : '') + 'team' + (m.player && f.team === m.player.team ? 0 : 1); $('#feed').prepend(d); setTimeout(() => d.remove(), 9000); }
+    while ($('#feed').children.length > 7) $('#feed').lastChild.remove();
+    while (evN < m.events.length) { const e = m.events[evN++]; if (e.text) msg(e.text); else if (EV_TEXT[e.e]) msg(EV_TEXT[e.e]); }
+    // respawn panel
+    const p = m.player, rp = $('#respawn');
+    if (p && !p.alive && p.everSpawned && !m.over) {
+      const can = m.canRespawn(p), wait = Math.max(0, Math.ceil(p.respawnAt - m.time));
+      const lives = p.lives === Infinity ? '' : `<div class="muted">Respawns left: ${Math.max(0, p.lives)}</div>`;
+      const html = `<h2>Shot down</h2>${lives}${can ? (wait > 0 ? `<div>Respawn in ${wait}…</div>` : `<div><b>Click</b> or press <kbd>Space</kbd> to take off again</div>`) : '<div class="muted">Out of respawns — spectating</div><button id="rs-leave" style="margin-top:8px">Leave battle</button>'}`;
+      if (rp.dataset.h !== html) { rp.innerHTML = html; rp.dataset.h = html; const lb = $('#rs-leave'); if (lb) lb.onclick = () => Game.leave(); }
+      rp.classList.remove('hidden');
+    } else rp.classList.add('hidden');
+    if (!$('#scoreboard').classList.contains('hidden')) scoreboard(true);
+  }
+  function tryRespawn() {
+    const m = Game.match, p = m && m.player; if (!p || p.alive || m.over) return;
+    if (m.canRespawn(p) && m.time >= p.respawnAt) { m.spawnCraft(p); Game.aimReset && Game.aimReset(); }
+  }
+  function scoreboard(show) {
+    const sb = $('#scoreboard'); if (!show) { sb.classList.add('hidden'); return; }
+    const m = Game.match; if (!m) return; sb.classList.remove('hidden');
+    const my = m.player ? m.player.team : 0;
+    const table = t => { const l = m.crafts.filter(c => c.team === t).sort((a, b) => b.stats.score - a.stats.score);
+      return `<table><tr><th>Pilot</th><th>Aircraft</th><th>Kills</th><th>Deaths</th><th>Bases</th><th>Score</th></tr>${l.map(c => `<tr class="${c === m.player ? 'me' : ''}"><td>${esc(c.name)}${c.isBot ? ' <span class="muted small">bot</span>' : ''}${c.alive ? '' : ' ✝'}</td><td>${esc(c.def.name)}</td><td>${c.stats.kills}</td><td>${c.stats.deaths}</td><td>${c.stats.bases}</td><td>${c.stats.score}</td></tr>`).join('')}</table>`; };
+    sb.innerHTML = `<div class="grid c2"><div><h3 class="team0">Your team ${m.mode === 'destroy' || m.mode === 'dogfight' ? '· ' + m.scores[my] : ''}</h3>${table(my)}</div><div><h3 class="team1">Enemy ${m.mode === 'destroy' || m.mode === 'dogfight' ? '· ' + m.scores[1 - my] : ''}</h3>${table(1 - my)}</div></div>`;
+  }
+  function pause(show) {
+    const m = Game.match; if (show && m && m.player && !m.player.alive) { Game.paused = false; return; }
+    $('#pause').classList.toggle('hidden', !show);
+  }
+  function showResults(m, info) {
+    const p = m.player, r = m.result || {}, s = p.stats, rw = info.reward;
+    const title = info.left ? 'LEFT BATTLE' : m.mode === 'survival' ? `WAVE ${Math.max(0, m.wave - 1)} SURVIVED` : r.winner === -1 ? 'DRAW' : info.won ? 'VICTORY' : 'DEFEAT';
+    const cls = info.won ? 'win' : info.left || r.winner === -1 ? '' : 'loss';
+    const my = p.team;
+    const table = t => { const l = m.crafts.filter(c => c.team === t).sort((a, b) => b.stats.score - a.stats.score);
+      return `<table><tr><th>Pilot</th><th>Aircraft</th><th>K</th><th>D</th><th>Bases</th><th>Score</th></tr>${l.slice(0, 20).map(c => `<tr class="${c === p ? 'me' : ''}"><td>${esc(c.name)}</td><td>${esc(c.def.name)}</td><td>${c.stats.kills}</td><td>${c.stats.deaths}</td><td>${c.stats.bases}</td><td>${c.stats.score}</td></tr>`).join('')}${l.length > 20 ? `<tr><td colspan="6" class="muted">+${l.length - 20} more</td></tr>` : ''}</table>`; };
+    const teams = m.mode === 'destroy' || m.mode === 'dogfight';
+    $('#results').innerHTML = `<div class="card"><div class="big-result ${cls}">${title}</div><div class="muted">${esc(info.reason || r.reason || '')}${teams ? ` · ${m.scores[my]} – ${m.scores[1 - my]}` : ''}</div>
+      <div class="rewards"><div class="card"><span class="muted small">XP EARNED</span><b>+${fmt(rw.xp)}</b></div><div class="card"><span class="muted small">COINS EARNED</span><b>+${fmt(rw.coins)}</b></div><div class="card"><span class="muted small">ERA BONUS</span><b>×${ERAS[p.def.era].xpMul}</b></div></div>
+      ${rw.levelUp ? `<h3>🎉 Level up! You are now level ${rw.levelUp}</h3>` : ''}
+      ${rw.achievements.length ? `<h3>Achievements unlocked</h3><div class="row">${rw.achievements.map(a => `<span class="pill ok">${a.icon} ${a.name}</span>`).join(' ')}</div>` : ''}
+      <div class="row" style="margin:12px 0"><span class="pill">Kills ${s.kills}</span><span class="pill">Assists ${s.assists}</span><span class="pill">Deaths ${s.deaths}</span><span class="pill">Bases ${s.bases}</span><span class="pill">Damage dealt ${fmt(s.damage)}</span>${m.mode === 'survival' ? `<span class="pill">Waves ${Math.max(0, m.wave - 1)}</span>` : ''}</div>
+      ${teams ? `<div class="grid c2"><div><h3 class="team0">Your team</h3>${table(my)}</div><div><h3 class="team1">Enemy team</h3>${table(1 - my)}</div></div>` : table(my)}
+      <div class="row" style="margin-top:16px"><button class="primary" id="res-ok" style="font-size:20px;padding:10px 30px">Continue</button></div></div>`;
+    $('#results').classList.remove('hidden'); $('#pause').classList.add('hidden');
+    $('#res-ok').onclick = () => {
+      $('#results').classList.add('hidden'); Game.stopMatch();
+      if (m.net) { Net.close(); lobby = null; play.step = 'mp'; }
+      $('#battle-ui').classList.add('hidden'); $('#menu-ui').classList.remove('hidden'); HUD.clear(); refresh(); Game.showPlane(P().selected);
+    };
+  }
+  window.addEventListener('DOMContentLoaded', init);
+  return { refresh, open, close, enterBattle, battleTick, tryRespawn, scoreboard, pause, showResults, toast, get game() { return Game; }, get lobby() { return lobby; } };
+})();

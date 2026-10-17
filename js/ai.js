@@ -1,0 +1,175 @@
+// ============================================================================
+// Bot pilots. Each bot flies with the same autopilot as the player's mouse
+// aim. Priorities: don't hit the ground > stay in bounds > evade missiles /
+// attackers > the job (fighter sweep, ground attack, bomber run, escort).
+// ============================================================================
+class BotBrain {
+  constructor(craft, skill) { this.c = craft; this.skill = skill == null ? 0.5 + Math.random() * 0.4 : skill; this.reset(); }
+  reset() { this.target = null; this.ground = null; this.think = 0; this.jinkT = 0; this.jink = new V3(); this.burst = 0; this.mode = 'air'; this.lockT = 0; this.missileCd = 4 + Math.random() * 4; this.rocketCd = 0; this.pullOut = 0; this.noise = new V3(); this.noiseT = 0; this.bombRun = false; }
+  update(dt) {
+    const c = this.c, m = c.match; if (!c.alive || c.dm.destroyed || !c.dm.fx.ctrl) return;
+    const P = c.perf, role = c.def.role;
+    this.think -= dt; this.missileCd -= dt; this.rocketCd -= dt; this.noiseT -= dt;
+    if (this.noiseT <= 0) { this.noiseT = 0.4 + Math.random() * 0.6; const k = (1 - this.skill) * 0.03; this.noise.set((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k); }
+    if (this.think <= 0) { this.think = 0.8 + Math.random() * 0.8; this.choose(); }
+    const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
+    let dir = null, throttle = 1, fire = false, keepBank = false;
+    // ---- terrain avoidance: look ahead along the velocity
+    // height needed to pull out of the current descent at a moderate G, plus a margin
+    const pullG = Math.max(1, Math.min(P.gMax * 0.6, 3.5, (c.speed / P.vs) * (c.speed / P.vs) * 0.5) - 1);
+    const sink = Math.max(0, -c.vel.y), need = sink * sink / (2 * 9.81 * pullG) + sink * 1.8;
+    const agl = c.pos.y - m.world.groundAt(c.pos.x, c.pos.z);
+    const look = Math.max(2.5, c.speed / 60);
+    const ahead = c.pos.clone().addScaledVector(c.vel, look), gAhead = Math.max(m.world.groundAt(ahead.x, ahead.z), m.world.groundAt(c.pos.x, c.pos.z));
+    const minAlt = (this.mode === 'ground' ? 50 : 150) + need;
+    const low = ahead.y < gAhead + minAlt || c.pos.y - gAhead < need + 60;
+    if (low || this.pullOut > 0) {
+      if (low) this.pullOut = 1.5; else this.pullOut -= dt;
+      dir = new V3(fwd.x, 0, fwd.z).normalize(); dir.y = 0.9; dir.normalize(); throttle = 1.1;
+    }
+    // ---- bounds
+    const H = m.half * 0.92;
+    if (!dir && (Math.abs(c.pos.x) > H || Math.abs(c.pos.z) > H)) { dir = new V3(-c.pos.x, 0, -c.pos.z).normalize(); dir.y = 0.1; }
+    // ---- altitude ceiling (keeps bots in the fight)
+    if (!dir && c.pos.y > m.ceiling) { dir = fwd.clone(); dir.y = -0.3; dir.normalize(); }
+    // ---- missile evasion
+    if (!dir && c.missileWarn > 0.5 && this.skill > 0.3) {
+      const ms = m.combat.missiles.find(x => x.target === c && !x.decoy);
+      if (ms && ms.p.distanceTo(c.pos) < 3500) {
+        if (c.flares > 0 && Math.random() < dt * 6) c.dropFlares();
+        const away = c.pos.clone().sub(ms.p).normalize(); const perp = new V3().crossVectors(away, new V3(0, 1, 0)).normalize();
+        dir = perp.multiplyScalar(Math.sign(perp.dot(fwd)) || 1).add(new V3(0, -0.15, 0)).normalize(); throttle = 0.6; keepBank = true;
+      }
+    }
+    // ---- being shot at: jink
+    if (!dir && m.time - c.lastHitT < 1.5 && this.skill > 0.35 && this.mode !== 'bomber') {
+      this.jinkT -= dt; if (this.jinkT <= 0) { this.jinkT = 0.7 + Math.random(); this.jink.set(Math.random() - 0.5, (Math.random() - 0.4) * 0.6, Math.random() - 0.5).normalize(); }
+      dir = fwd.clone().add(this.jink.clone().multiplyScalar(1.4)).normalize(); keepBank = true;
+    }
+    if (!dir) {
+      if (this.mode === 'bomber') { const r = this.bomberRun(dt); dir = r.dir; throttle = r.throttle; }
+      else if (this.mode === 'ground' && this.ground) { const r = this.groundRun(dt); dir = r.dir; throttle = r.throttle; }
+      else if (this.target && this.target.alive) { const r = this.dogfight(dt, fwd); dir = r.dir; throttle = r.throttle; fire = r.fire; keepBank = r.keepBank; }
+      else { // patrol towards the enemy side at a sensible altitude
+        const goal = this.patrolPoint || (this.patrolPoint = new V3((Math.random() - 0.5) * m.half, 0, (c.team === 0 ? -1 : 1) * m.half * 0.2));
+        dir = goal.clone().sub(c.pos); dir.y = (m.patrolAlt - c.pos.y) * 0.4; dir.normalize(); throttle = 0.9;
+        if (Math.hypot(goal.x - c.pos.x, goal.z - c.pos.z) < 600) this.patrolPoint = null;
+      }
+    }
+    // don't dive steeply near the ground, and don't overspeed in a dive
+    if (this.pullOut <= 0) { const minY = agl < 500 ? -0.2 : agl < 1500 ? -0.45 : -0.8; if (dir.y < minY) { dir = dir.clone(); dir.y = minY; dir.normalize(); } }
+    if (c.speed > P.vmax * 1.05 && c.vel.y < -20) throttle = Math.min(throttle, 0.3);
+    Flight.steer(c, dir, c.ctl, { keepBank, allowPush: false });
+    // rookies over-control
+    c.ctl.pitch = Math.max(-1, Math.min(1, c.ctl.pitch * (0.75 + this.skill * 0.35)));
+    c.ctl.throttle = c.def.ab ? throttle : Math.min(throttle, 1.1);
+    if (fire) c.setTrigger(true);
+    // avoid stalling: unload when slow
+    if (c.speed < P.vs * 1.35 && c.ctl.pitch > 0.2) { c.ctl.pitch = 0.2; c.ctl.throttle = 1.1; }
+  }
+  choose() {
+    const c = this.c, m = c.match, role = c.def.role;
+    if (role === 'bomber' || c.spec.task === 'bomb') { this.mode = 'bomber'; this.ground = this.ground && !this.ground.dead ? this.ground : m.taskTarget(c); return; }
+    // ground attack when carrying ordnance (or an attacker), and there is something to hit
+    const hasOrd = c.count('b') + c.count('r') > 0;
+    if ((hasOrd || role === 'attack' || c.spec.task === 'ground') && m.hasEnemyBases(c.team)) {
+      // stick with an attack run unless jumped by a fighter
+      const threat = m.nearestEnemy(c, 700), stay = this.mode === 'ground' && this.ground && !this.ground.dead && m.time - c.lastHitT > 3;
+      if (stay || !threat || role === 'attack' || (this.mode !== 'air' && Math.random() < 0.7)) {
+        this.mode = 'ground'; if (!this.ground || this.ground.dead) this.ground = m.taskTarget(c) || m.nearestEnemyBase(c.team, c.pos); if (this.ground) return;
+      }
+    }
+    this.mode = 'air';
+    // fighter: pick the most convenient enemy (distance, angle, low altitude penalty), prefer bombers when escorting/intercepting
+    let best = null, bs = Infinity;
+    const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
+    for (const e of m.crafts) {
+      if (!e.alive || e.team === c.team || e.dm.destroyed) continue;
+      const to = e.pos.clone().sub(c.pos), d = to.length(); const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(fwd) / d)));
+      let s = d + ang * 600 + (e === this.target ? -500 : 0);
+      if (e.def.role === 'bomber' && c.spec.task === 'intercept') s -= 2500;
+      if (m.attackersOf && m.attackersOf(e) > 2) s += 800; // don't all chase the same target
+      if (s < bs) { bs = s; best = e; }
+    }
+    this.target = best;
+  }
+  dogfight(dt, fwd) {
+    const c = this.c, t = this.target, m = c.match;
+    const rel = t.pos.clone().sub(c.pos), d = rel.length();
+    const g = c.guns.find(x => x.ammo > 0 || (x.pod && x.pod.gunAmmo > 0)) || c.guns[0];
+    // bullets inherit our own velocity: lead by the relative velocity, and lift for the drop
+    const ms = g ? g.g.ms : 800, tof = d / ms;
+    const lead = t.pos.clone().addScaledVector(t.vel.clone().sub(c.vel), tof * (0.85 + this.skill * 0.2)).add(new V3(0, 9.81 * tof * tof * 0.5, 0));
+    const dir = (d > 1800 ? t.pos.clone().sub(c.pos) : lead.sub(c.pos)).normalize().add(this.noise).normalize();
+    // energy: climb above a far target, use the throttle to avoid overshooting a close one
+    if (d > 2500) dir.y += Math.max(-0.2, Math.min(0.25, (t.pos.y + 300 - c.pos.y) / 3000));
+    let throttle = d > 1500 ? 1.1 : 1;
+    const closing = -rel.clone().normalize().dot(t.vel.clone().sub(c.vel));
+    if (d < 350 && closing > 40 && fwd.dot(rel.clone().normalize()) > 0.8) throttle = 0.4;
+    // fire when the nose is on the lead point
+    const off = Math.acos(Math.max(-1, Math.min(1, fwd.dot(dir))));
+    const range = c.def.era <= 2 ? 450 : c.def.era <= 4 ? 700 : 1000;
+    let fire = false;
+    if (d < range && off < 0.025 + (1 - this.skill) * 0.03 + 6 / d) { this.burst = 0.3 + Math.random() * 0.6; }
+    // snap shots: close behind the target, spray while pulling lead
+    else if (d < 350 && off < 0.12 && this.burst <= 0 && Math.random() < dt * 3) this.burst = 0.25;
+    if (this.burst > 0) { this.burst -= dt; fire = d < range * 1.2; }
+    // missiles
+    const st = c.missileStation();
+    if (st && this.missileCd <= 0 && d < st.s.range * 0.75 && d > 400) {
+      const seen = c.seekerTarget(st);
+      if (seen === t) { this.lockT += dt * 3; if (this.lockT > 1.2) { c.fireMissile(t); this.missileCd = 6 + Math.random() * 6; this.lockT = 0; } } else this.lockT = 0;
+    }
+    // rockets at bombers (R4M-style)
+    if (this.rocketCd <= 0 && c.count('r') > 0 && t.def.role === 'bomber' && d < 700 && off < 0.04) { c.fireRockets(); this.rocketCd = 1.5; }
+    return { dir, throttle, fire, keepBank: off > 0.2 };
+  }
+  // dive on a base: rockets and guns on the way in, bombs at the computed release point
+  groundRun(dt) {
+    const c = this.c, m = c.match, b = this.ground;
+    if (b.dead) { this.ground = null; this.think = 0; return { dir: new V3(0, 0.3, -1).applyQuaternion(c.quat).normalize(), throttle: 1 }; }
+    const tp = b.pos.clone(); tp.y += 3;
+    const rel = tp.clone().sub(c.pos), hd = Math.hypot(rel.x, rel.z), alt = c.pos.y - b.pos.y;
+    const hasBombs = c.count('b') > 0, hasRockets = c.count('r') > 0;
+    let dir, throttle = 1;
+    const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
+    if (this.egress > 0) { this.egress -= dt; dir = fwd.clone(); dir.y = 0.35; return { dir: dir.normalize(), throttle: 1.1 }; }
+    if (hasBombs && !hasRockets && c.def.role !== 'attack') {
+      // level / shallow bombing run: aim for the release point
+      const impact = BotBrain.impact(c, b.pos.y), miss = Math.hypot(impact.x - b.pos.x, impact.z - b.pos.z);
+      const wantAlt = b.pos.y + Math.max(250, Math.min(700, c.speed * 4));
+      dir = new V3(rel.x, 0, rel.z).normalize(); dir.y = (wantAlt - c.pos.y) / 1500;
+      if (miss < b.radius * 0.55 && alt > 40) { c.dropBomb(); if (c.count('b') === 0) this.egress = 6; }
+      else if (hd < 200) this.egress = 3;
+      return { dir: dir.normalize(), throttle };
+    }
+    // dive attack: rockets / guns
+    if (hd > 2200) { dir = new V3(rel.x, 0, rel.z).normalize(); dir.y = (b.pos.y + 700 - c.pos.y) / 2000; return { dir: dir.normalize(), throttle: 1 }; }
+    dir = rel.clone().normalize();
+    const off = Math.acos(Math.max(-1, Math.min(1, fwd.dot(dir)))), d = rel.length();
+    if (d < 1000 && off < 0.05) {
+      if (hasRockets && this.rocketCd <= 0) { c.fireRockets(); this.rocketCd = 0.35; }
+      else c.setTrigger(true);
+      if (hasBombs && alt < 300 && hd < 300) c.dropBomb();
+    }
+    if (d < 380 || alt < 120) this.egress = 3.5;
+    return { dir, throttle: 0.8 };
+  }
+  // bombers: fly at altitude to the target, drop everything, go home
+  bomberRun(dt) {
+    const c = this.c, m = c.match, b = this.ground;
+    const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
+    if (!b || b.dead || c.count('b') === 0) { const home = new V3(c.pos.x, 0, (c.team === 0 ? 1 : -1) * m.half); const dir = home.sub(c.pos); dir.y = 0; return { dir: dir.normalize(), throttle: 0.9 }; }
+    const impact = BotBrain.impact(c, b.pos.y), miss = Math.hypot(impact.x - b.pos.x, impact.z - b.pos.z);
+    if (miss < b.radius * 0.7) { this.dropCd = (this.dropCd || 0) - dt; if (this.dropCd <= 0) { c.dropBomb(); this.dropCd = 0.4; } }
+    const rel = b.pos.clone().sub(c.pos); const dir = new V3(rel.x, 0, rel.z).normalize();
+    dir.y = ((this.cruise || (this.cruise = c.pos.y)) - c.pos.y) / 800;
+    return { dir: dir.normalize(), throttle: 0.95 };
+  }
+  // where a bomb released now would land (same drag as Combat's bombs)
+  static impact(c, groundY) {
+    const p = c.pos.clone(), v = c.vel.clone();
+    for (let i = 0; i < 400 && p.y > groundY; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); }
+    return p;
+  }
+}
