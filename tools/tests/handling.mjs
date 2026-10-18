@@ -16,6 +16,12 @@ export default async function (t) {
     const o = await run(8, 15);
     console.log(pl, 'aim step  off:', f(o, 'off'), '| bank:', f(o, 'bank'));
   }
+  // 1b. small corrections must not roll the plane over: aim 5 / 10 / 25 / 90 deg right, report the steepest bank
+  for (const pl of ['p51d', 'f16c']) for (const deg of [5, 10, 25, 90]) {
+    await start(pl); await t.eval(`(() => { const p = Game.match.player, a = Flight.axes(p), y = Math.atan2(-a.fwd.x, -a.fwd.z); Game.setAim(y - ${deg} / 57.3, Math.asin(a.fwd.y)); return 1; })()`);
+    const o = await run(6, 6); const mb = Math.max(...o.map(x => Math.abs(x.bank)));
+    console.log(pl, 'aim', deg, 'deg right: max bank', mb.toFixed(0), '| off:', f(o.filter((x, i) => i % 5 === 0), 'off'));
+  }
   // 2. keyboard roll: hold D for 1.2 s then release; the bank should be held and the view should not jump
   await start('p51d');
   await t.eval("Input.keys.KeyD = true; 1"); const r1 = await run(1.2, 6); await t.eval("Input.keys.KeyD = false; 1"); const r2 = await run(6, 15);

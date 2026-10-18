@@ -42,7 +42,7 @@ const Damage = (() => {
       add(sd < 0 ? 'wingL' : 'wingR', 'wing', sd * (x0 + x1) / 2, (wingY - thick + yTop) / 2, wingZ + sweep * 0.5, (x1 - x0) / 2, (yTop - wingY + thick) / 2, chord / 2 + sweep * 0.5 + 0.2, 230 * s * (lay.bi ? 1.25 : 1), 1.6, { side: sd, ail: 1 });
     }
     const tailBase = (def.shape === 'jet_d' || def.shape === 'jet_dc') ? L * 0.2 : chord, hsSpan = S * (jet ? 0.22 : 0.18), hsChord = tailBase * (jet ? 0.55 : 0.6), finH = Math.max(1, S * (jet ? 0.17 : 0.13));
-    const noHT = def.shape === 'jet_d' || def.shape === 'jet_dc';
+    const noHT = !lay.hasStab;
     if (!noHT) add('tailH', 'tailH', 0, def.tTail ? finH : 0, tailZ, hsSpan + fr * 0.2, 0.3, hsChord * 0.6 + 0.2, 140 * s, 0.9);
     add('tailV', 'tailV', 0, finH / 2 + fr * 0.4, tailZ, def.shape === 'jet_tt' ? fr * 1.3 : 0.35, finH / 2 + 0.2, hsChord * 0.7, 120 * s, 0.7);
     add('fuselage', 'fuselage', 0, 0, 0, fr * 1.05, fr * 1.05, L / 2, 380 * s, 1.5);

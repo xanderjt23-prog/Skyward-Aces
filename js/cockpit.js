@@ -63,12 +63,15 @@ const Cockpit = (() => {
       bar(0.3, 0, -0.18, -0.55, 0, 0, 0.012); // sight post
     } else {
       // canopy framing
-      const fw = st === 'bomber' ? 0.75 : 0.36, fz = st === 'modern' ? -0.85 : -0.6;
-      if (st !== 'modern') { for (const s of [-1, 1]) bar(0.55, s * fw, 0.02, fz, -0.35, s * 0.25, 0.022); bar(fw * 2, 0, 0.27, fz - 0.05, 0, Math.PI / 2, 0.022); }
-      for (const s of [-1, 1]) bar(1.4, s * (fw + 0.12), -0.22, -0.05, Math.PI / 2, 0, 0.02); // canopy rails
-      if (st === 'ww2' || st === 'bomber') { bar(fw * 2.1, 0, 0.33, -0.05, 0, Math.PI / 2, 0.022); bar(fw * 2.1, 0, 0.3, 0.35, 0, Math.PI / 2, 0.022); }
+      // open-cockpit monoplanes (P-26, I-16, TB-3...) only have a small windscreen: no roof, no rails
+      const open = typeof look === 'function' && look(def).has('open');
+      const fw = st === 'bomber' ? 0.75 : open ? 0.26 : 0.36, fz = st === 'modern' ? -0.85 : -0.6;
+      if (open) { for (const s of [-1, 1]) bar(0.22, s * fw, -0.16, fz, -0.4, s * 0.2, 0.014); bar(fw * 2, 0, -0.06, fz - 0.04, 0, Math.PI / 2, 0.014); }
+      else if (st !== 'modern') { for (const s of [-1, 1]) bar(0.55, s * fw, 0.02, fz, -0.35, s * 0.25, 0.022); bar(fw * 2, 0, 0.27, fz - 0.05, 0, Math.PI / 2, 0.022); }
+      if (!open) for (const s of [-1, 1]) bar(1.4, s * (fw + 0.12), -0.22, -0.05, Math.PI / 2, 0, 0.02); // canopy rails
+      if ((st === 'ww2' || st === 'bomber') && !open) { bar(fw * 2.1, 0, 0.33, -0.05, 0, Math.PI / 2, 0.022); bar(fw * 2.1, 0, 0.3, 0.35, 0, Math.PI / 2, 0.022); }
       if (st === 'bomber') { bar(0.6, 0, 0.02, -0.62, -0.35, 0); for (const s of [-1, 1]) bar(0.5, s * 0.95, 0, -0.2, 0, 0, 0.04); }
-      const ws = new THREE.Mesh(new THREE.PlaneGeometry(fw * 1.9, 0.55), glassMat); ws.position.set(0, 0.03, fz); ws.rotation.x = -0.35; grp.add(ws);
+      const ws = new THREE.Mesh(new THREE.PlaneGeometry(fw * 1.9, open ? 0.22 : 0.55), glassMat); ws.position.set(0, open ? -0.16 : 0.03, fz); ws.rotation.x = -0.35; grp.add(ws);
       // gunsight: reflector glass with a glowing reticle (WW2 / early jets) or a HUD combiner (modern)
       if (st !== 'bomber') {
         const sc = document.createElement('canvas'); sc.width = sc.height = 256; const g = sc.getContext('2d');

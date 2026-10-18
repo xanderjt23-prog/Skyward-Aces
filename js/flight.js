@@ -184,6 +184,43 @@ const Flight = (() => {
       gRoll = Math.max(-1, Math.min(1, dphi * 2.6 / Math.max(lim.p, 0.3)));
       gPitch = Math.max(-0.5, Math.min(1, (pv * 2.8 + ffq) / Math.max(lim.q, 0.05)));
     }
+    if (opt.pilot && gentleOk) {
+      // the player's instructor flies like a pilot: the bank follows how far (and how fast) the aim is off to the side,
+      // so a small correction is a shallow bank and only a big turn is flown on its side or rolled over
+      const psi = Math.atan2(hf.x * ht.z - hf.z * ht.x, hf.dot(ht));
+      const ev = Math.asin(Math.max(-1, Math.min(1, wdir.y))) - Math.asin(Math.max(-1, Math.min(1, fwd.y)));
+      // coordinated-turn bank for an aim that keeps swinging sideways (a turning target): tan(bank) = V * rate / g
+      let wh = 0; if (c._hdgPrev !== undefined && now > c._hdgT && now - c._hdgT < 0.2) { let d = Math.atan2(-wdir.x, -wdir.z) - c._hdgPrev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; wh = -d / (now - c._hdgT); }
+      if (now !== c._hdgT) { c._hdgPrev = Math.atan2(-wdir.x, -wdir.z); c._hdgT = now; }
+      // only an aim that keeps swinging the same way (a turning target, a long mouse sweep) earns this bank: a quick flick does not
+      const dtA = Math.min(0.1, Math.max(0, now - (c._whT || now))); c._whT = now; wh = Math.max(-1, Math.min(1, wh));
+      c._whF = (c._whF || 0) + (wh - (c._whF || 0)) * (1 - Math.exp(-dtA / 0.15));
+      c._whS = (c._whS || 0) + (wh - (c._whS || 0)) * (1 - Math.exp(-dtA / 0.8));
+      const swinging = Math.abs(c._whF) > 0.02 && Math.sign(c._whF) === Math.sign(c._whS);
+      c._swT = swinging ? (c._swT || 0) + dtA : 0;
+      const sus = Math.max(0, Math.min(1, (c._swT - 0.3) / 0.5));
+      c._wh = swinging ? Math.sign(c._whF) * Math.min(Math.abs(c._whF), Math.abs(c._whS)) * sus : 0;
+      const phiFF = Math.atan((c.speed || 0) * c._wh / 9.81);
+      const k = 0.32 / Math.max(1, Math.min(2, (c.speed || 0) / 180));
+      // while the aim is close, the nose sitting a little above it must not wind the bank up (pulling in a bank lifts the nose)
+      const evMin = off < 0.3 ? -0.4 * k : off > 0.7 ? -9 : -0.4 * k - (off - 0.3) * 20;
+      let phiC = Math.atan2(psi, Math.max(evMin, ev) + k);
+      if (Math.abs(phiC) > 2.8 && Math.abs(psi) < 0.05) phiC = Math.abs(phiC) * (Math.sign(phi) || 1); // straight down: roll whichever way is shorter
+      const phiD = Math.max(-2.6, Math.min(2.6, phiC + phiFF * Math.max(0, Math.cos(phiC))));
+      let dphi = phiD - phi; if (dphi > Math.PI) dphi -= 2 * Math.PI; if (dphi < -Math.PI) dphi += 2 * Math.PI;
+      let roll = Math.max(-1, Math.min(1, dphi * 2.6 / Math.max(lim.p, 0.3)));
+      let pitch = Math.max(-0.5, Math.min(1, (pv * 2.8 + ffq) / Math.max(lim.q, 0.05)));
+      if (pitch < 0 && off > 0.2 && Math.abs(dphi) > 0.5) pitch = Math.max(pitch, -0.1); // no negative G while still rolling into a big turn
+      // chasing a turning target (the aim keeps sweeping and is well off the nose): roll the aim over the canopy and pull, as a pilot would
+      const wb = sus * Math.max(0, Math.min(1, (off - 0.1) / 0.15));
+      if (wb > 0) {
+        const rollErr = Math.atan2(loc.x, loc.y);
+        roll = roll * (1 - wb) + Math.max(-1, Math.min(1, rollErr * 2.6 / Math.max(lim.p, 0.3))) * wb;
+        pitch = pitch * (1 - wb) + Math.min(1, off * 2.8 / Math.max(lim.q, 0.05) * Math.max(0.1, Math.cos(rollErr))) * wb;
+      }
+      let yaw = Math.max(-1, Math.min(1, (hv * 2.5 + ffr * 0.5) / Math.max(lim.r, 0.05))) * near;
+      return finish(c, P, out, pitch, roll, yaw, off);
+    }
     const rollErr = Math.atan2(loc.x, loc.y);
     const aRoll = Math.max(-1, Math.min(1, rollErr * 2.6 / Math.max(lim.p, 0.3)));
     let aPitch = Math.min(1, off * 2.8 / Math.max(lim.q, 0.05) * Math.max(0.1, Math.cos(rollErr)));
@@ -192,7 +229,10 @@ const Flight = (() => {
     const w = gentleOk ? Math.max(0, Math.min(1, (off - 0.12) / 0.18)) : 1;
     let roll = gRoll * (1 - w) + aRoll * w, pitch = gPitch * (1 - w) + aPitch * w;
     if (opt.keepBank && w < 1) roll = roll * 0.5 + aRoll * 0.5;
-    let yaw = Math.max(-1, Math.min(1, (hv * 2.5 + ffr * 0.5) / Math.max(lim.r, 0.05))) * near;
+    const yaw = Math.max(-1, Math.min(1, (hv * 2.5 + ffr * 0.5) / Math.max(lim.r, 0.05))) * near;
+    return finish(c, P, out, pitch, roll, yaw, off);
+  }
+  function finish(c, P, out, pitch, roll, yaw, off) {
     // stall protection: keep the angle of attack just below critical (and below 26 deg on high-AoA jets)
     const aMax = Math.min(P.aoa * 0.96, 0.45);
     if (pitch > 0 && c.alpha > aMax * 0.85) pitch *= Math.max(0, Math.min(1, (aMax - c.alpha) / (aMax * 0.15)));

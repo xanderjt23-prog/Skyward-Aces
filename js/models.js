@@ -100,6 +100,9 @@ const Models = (() => {
     if (sh === 'jet_d' || sh === 'jet_dc') { chord = L * 0.5; tipC = chord * 0.08; sweep = chord * 0.45; wingZ = L * 0.12; wingY = -fr * 0.2; }
     if (sh === 'jet_s' || sh === 'jet_s2') { chord = S * 0.17; tipC = chord * 0.55; }
     if (sh === 'jet_tt' && pl.span > 12) wingZ = L * 0.08;
+    // where the wing joins the fuselage (low / mid / shoulder / high), from the aircraft's real layout
+    const lk = typeof look === 'function' ? look(pl) : new Set();
+    if (!bi) { if (lk.has('lowwing')) wingY = -fr * 0.55; else if (lk.has('midwing')) wingY = -fr * 0.05; else if (lk.has('shoulder')) wingY = fr * 0.45; else if (lk.has('highwing')) wingY = fr * 0.85; }
     const tailZ = L * 0.5 - chord * 0.25;
     const cockZ = jet ? -L * 0.3 : big ? -L * 0.38 : -L * 0.02 + (bi ? 0.3 : 0);
     const engines = [];
@@ -108,9 +111,11 @@ const Models = (() => {
       else if (pl.eng === 2) for (const s of [-1, 1]) engines.push({ x: s * S * 0.18, y: wingY + 0.1, z: wingZ - chord * 0.55, r: fr * 0.7, len: L * 0.22 });
       else for (const s of [-1, 1]) for (const f of [0.14, 0.3]) engines.push({ x: s * S * f, y: wingY + 0.1, z: wingZ - chord * 0.5, r: fr * 0.55, len: L * 0.16 });
     } else if (sh === 'jet_s2' || sh === 'jet_bomber') for (const s of [-1, 1]) engines.push({ x: s * (sh === 'jet_bomber' ? fr * 1.3 : S * 0.2), y: wingY, z: wingZ, r: fr * 0.6, len: L * 0.3 });
+    else if (lk.has('pods')) for (const s of [-1, 1]) engines.push({ x: s * fr * 1.35, y: fr * 1.2, z: L * 0.22, r: fr * 0.62, len: L * 0.24, pod: true }); // A-10: engines in pods on the rear fuselage
     else if (pl.eng === 2) for (const s of [-1, 1]) engines.push({ x: s * fr * 0.65, y: 0, z: L * 0.3, r: fr * 0.62, len: L * 0.32, jet: true });
     else engines.push({ x: 0, y: 0, z: L * 0.3, r: fr * 0.8, len: L * 0.32, jet: true });
-    const lay = { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ, engines, bi, big, jet, upperY: fr * 1.75 };
+    const lay = { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ, engines, bi, big, jet, upperY: fr * 1.75, look: lk,
+      hasStab: !(sh === 'jet_d' || sh === 'jet_dc') || lk.has('deltatail') };
     // landing gear: fixed gear (biplanes etc.) or retractable main gear under the wings; gearH = height of the CG above the ground when sitting on the wheels
     lay.fixed = bi || !!pl.fixedGear;
     lay.wheelR = Math.max(0.3, fr * (big ? 0.45 : 0.32));

@@ -25,7 +25,7 @@ Destroy battles have tanks from each team driving around their territory (era-ap
 ## Flying
 Gunnery assist (Profile settings, on by default): put the aim circle on the red lead marker and the instructor tracks it; the marker turns into a white FIRE cue when your guns are on target and in range. Arrows at the screen edge point to nearby enemies off screen. Bot skill can be set from Rookie to Ace.
 
-The mouse-aim autopilot works like War Thunder's instructor: it flies the aircraft towards the aim circle with damped, rate-based inputs, keeps the angle of attack below the stall and eases off when the pilot is greying out. The manual pitch keys override all of that.
+The mouse-aim autopilot works like War Thunder's instructor: it flies the aircraft towards the aim circle with damped, rate-based inputs, keeps the angle of attack below the stall and eases off when the pilot is greying out. The manual pitch keys override all of that. The bank it uses follows how far the aim is off to the side: a small correction is a shallow bank, and only a big turn (or an aim that keeps sweeping, like a turning target) is flown on its side or rolled over.
 - **Post-stall manoeuvres:** high-AoA jets (Su-27, MiG-29, F/A-18) and thrust-vectoring jets (F-22, Su-35, Su-57) can be hauled far past the stall with the manual pull: a Pugachev's Cobra (pull hard at ~400 km/h and let go) bleeds a lot of speed; holding it on a thrust-vectoring jet flips it into a Kulbit. Other aircraft simply stall.
 - **G-forces:** above the pilot's tolerance the view narrows and greys (no G-suit before the jet age: ~4.5-5 G; G-suits: 5.5-7.5 G). Pull ~2 G beyond that and it builds up to G-LOC: the screen goes black and the pilot is unconscious for ~5 s. Strong negative G reddens the view. Bots feel G too.
 
@@ -66,6 +66,7 @@ A checkbox in every game mode. You start on your team's airfield runway with the
 Everything is synthesised in the browser (no recordings): piston engines buzz at their real cylinder firing frequency (rotary, inline and radial engines differ, multi-engine aircraft beat), jets have a roar, turbine whine and afterburner rumble, guns fire at their real rate of fire with a report per calibre (Gatling guns growl), distant sounds arrive late at the speed of sound and lose their highs, and nearby aircraft fly past with a Doppler shift.
 
 ## How the simulation works
+- **Aircraft models** (`js/looks.js`, `js/aircraft3d.js`): each type's real features (open / framed / bubble / glazed cockpit, wing position, inverted-gull or sesquiplane wings, spats, bracing wires, twin or T-tails, intakes, podded engines) are listed per aircraft. Canopies, guns, masts and markings are fitted onto the finished surfaces with ray casts, so nothing floats.
 - **Flight model** (`js/flight.js`): thrust, drag and climb are derived from each aircraft's real top speed, climb rate, turn time, roll rate and G limit. Lift depends on angle of attack, and the wing stalls past the critical angle. Turning bleeds speed, piston engines lose power at altitude, and controls stiffen in very fast dives.
 - **Damage** (`js/damage.js`): there are no health bars. Each aircraft has hit boxes for engines, fuel tanks, crew, ammunition, wings, tailplane, fin and fuselage. Damaged engines lose power, smoke, seize or catch fire. Fuel tanks leak (self-sealing tanks close the holes) and can burn or explode. Wings lose lift, which makes the aircraft roll, and can snap off. A dead pilot means a dead aircraft. High-explosive shells spread fragments to neighbouring parts; armour plate stops small rounds from behind. The aircraft-condition panel shows the hit boxes coloured by state.
 - **Kill credit** (`Match.resolveKill`): when an aircraft is shot down (crew killed, or the aircraft explodes or breaks up), the enemy that did the most damage gets the kill. When it crashes with ≥10% damage, the top damage dealer gets it. Below 10%, credit goes to an enemy that hit it in the last 20 s, otherwise to the enemy aircraft closest to the crash.
@@ -79,7 +80,7 @@ Online play is peer-to-peer over WebRTC (PeerJS), with join codes. Most home net
 node tools/tests/cdp.mjs tools/tests/smoke.mjs     # menus + every mode (PLANE=, MODES=, SECS=)
 node tools/tests/cdp.mjs tools/tests/perf.mjs      # 60v60 simulation cost
 node tools/tests/cdp.mjs tools/tests/uishots.mjs   # menu screenshots
-node tools/tests/cdp.mjs tools/tests/gallery.mjs   # aircraft model sheets (NATION= or IDS=)
+node tools/tests/cdp.mjs tools/tests/gallery.mjs   # aircraft model sheets (NATION= or IDS=, CLOSE=1 cockpit close-ups, CAM=x,y,z view)
 node tools/tests/mp.mjs                            # two tabs: host + join code + battle (needs internet)
 ```
 Screenshots go to `tools/tests/shots/`.

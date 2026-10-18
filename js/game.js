@@ -140,7 +140,7 @@ const Game = (() => {
       const d = G.target.pos.distanceTo(p.pos);
       if (d < 1500) { const ld = p.leadPoint(G.target).sub(p.pos).normalize(); if (Math.acos(Math.max(-1, Math.min(1, ld.dot(G.aimDir)))) < 0.07) { steerDir = ld; G.assisting = true; } }
     }
-    Flight.steer(p, steerDir, p.ctl, { allowPush: false });
+    Flight.steer(p, steerDir, p.ctl, { allowPush: false, pilot: true });
     // on the wheels the aim steers the nose wheel; the wings stay level
     if (p.onGround) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); const hErr = Math.atan2(f.x * G.aimDir.z - f.z * G.aimDir.x, f.x * G.aimDir.x + f.z * G.aimDir.z); p.ctl.yaw = Math.max(-1, Math.min(1, hErr * 3)); p.ctl.roll = 0; }
     // ---- keyboard: A/D roll, Q/E rudder, arrows pitch. The inputs ramp in (~0.4 s), and the pitch keys are a
