@@ -102,136 +102,19 @@ const Models = (() => {
   function layout(pl) {
     if (layoutCache[pl.id]) return layoutCache[pl.id];
     // everything comes from the parametric airframe (airframe.js), so hit boxes, gear, stores and the cockpit eye match the model
-    const sp = Airframe.spec(pl), w = sp.wing, root = sp.wingAt(0), tip = sp.wingAt(1), L = sp.L, S = sp.S, fr = sp.R, jet = sp.jet;
+    const sp = Airframe.spec(pl), w = sp.wing, root = sp.wingAt(0), tip = sp.wingAt(1), L = sp.L, S = sp.S, fr = sp.H / 2, jet = sp.jet; // fr: fuselage half-depth
     const st = sp.stab, fin = sp.fins[0];
     const lay = { L, S, fr, chord: w.rc, tipC: w.tc, sweep: (tip.le + tip.c / 2) - (root.le + root.c / 2), wingZ: root.le + root.c / 2, wingY: w.y,
       tailZ: st ? st.zLE + st.rc / 2 : fin.zLE + fin.rc / 2, cockZ: sp.canopy.z,
       engines: sp.engines.map(e => ({ x: e.x, y: e.y, z: e.z, r: e.r, len: e.len, jet: !!e.jet && (e.kind === 'fus' || e.kind === 'nacelle'), pod: e.kind === 'pod' })),
-      bi: sp.bi, big: sp.big, jet, upperY: sp.wings[sp.wings.length - 1].y, look: sp.look, hasStab: !!st, spec: sp,
+      bi: sp.bi, big: sp.big, jet, upperY: sp.wings[sp.wings.length - 1].y, extras: sp.extras, hasStab: !!st, spec: sp,
       tail: { hsSpan: st ? st.b : 0, hsChord: st ? (st.rc + st.tc) / 2 : 0, tailY: st ? st.y : 0, finH: fin.h, finTop: fin.base + fin.h, finX: Math.max(...sp.fins.map(f => Math.abs(f.x))), finC: fin.rc } };
     lay.eyeY = sp.canopy.type === 'open' ? sp.topAt(sp.canopy.z) + 0.34 : sp.topAt(sp.canopy.z, sp.canopy.x) + Math.min(0.48, sp.canopy.h * 0.5);
     // landing gear: fixed gear (biplanes etc.) or retractable main gear under the wings; gearH = height of the CG above the ground when sitting on the wheels
-    lay.fixed = sp.bi || !!pl.fixedGear;
-    lay.wheelR = Math.max(0.3, fr * (sp.big ? 0.45 : 0.32));
-    lay.gearLen = fr * (jet ? 1.0 : 1.25) + 0.3;
-    lay.gearH = sp.bi ? fr * 2.0 + 0.32 : pl.fixedGear ? -(w.y - fr * 1.2 - 0.36) : -(w.y - lay.gearLen - lay.wheelR);
-    lay.gearX = Math.max(fr * 1.1, Math.min(S * 0.18, pl.eng >= 2 ? S * 0.18 : S * 0.12));
+    Object.assign(lay, { fixed: sp.gear.fixed, wheelR: sp.gear.wheelR, gearLen: sp.gear.gearLen, gearH: sp.gear.gearH, gearX: sp.gear.gearX });
     return (layoutCache[pl.id] = lay);
   }
 
-  // ---- aircraft model
-  function aircraft(pl) {
-    const lay = layout(pl), { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ } = lay, pt = paint(pl), sh = pl.shape;
-    const camo = [pt.top, pt.bot], dark = 0x2a2a2a, metal = 0x55585c;
-    const body = new Builder(), wl = new Builder(), wr = new Builder(), mkB = new Builder(), mkL = new Builder(), mkR = new Builder(); // mk*: national markings
-    // fuselage: nose section + tapering tail cone
-    if (lay.jet) {
-      body.add(zcyl(fr * 0.25, fr, L * 0.22), camo, [0, 0, -L * 0.39]); // radome / nose
-      body.add(zcyl(fr, fr, L * 0.5), camo, [0, 0, -L * 0.03]);
-      body.add(zcyl(fr, fr * 0.75, L * 0.22), camo, [0, 0, L * 0.33]);
-      if (pl.eng === 2 && sh !== 'jet_s2' && sh !== 'jet_bomber') body.add(box(fr * 2.6, fr * 1.3, L * 0.45), camo, [0, -fr * 0.1, L * 0.18]);
-      // intakes
-      if (sh !== 'jet_s2' && sh !== 'jet_bomber') for (const s of [-1, 1]) body.add(box(fr * 0.6, fr * 0.9, L * 0.25), camo, [s * fr * 1.0, -fr * 0.15, -L * 0.12]);
-    } else {
-      const nr = pl.eng === 1 ? fr * 1.05 : fr * 0.7;
-      body.add(zcyl(nr, fr, L * 0.32), camo, [0, 0, -L * 0.34]);
-      body.add(zcyl(fr, fr * 0.22, L * 0.68), camo, [0, fr * 0.1, L * 0.16]);
-      if (lay.big) body.add(zcyl(fr * 0.6, fr, L * 0.12), 0x8899aa, [0, 0, -L * 0.52]); // glazed nose
-    }
-    // canopy
-    const canopy = lay.big ? box(fr * 1.1, fr * 0.5, L * 0.08) : lay.jet ? new THREE.SphereGeometry(1, 10, 6) : box(fr * 0.9, fr * 0.55, L * 0.12);
-    const cockY = fr * (lay.jet ? 0.8 : 0.85);
-    const glassB = new Builder(); glassB.add(canopy, 0xffffff, [0, cockY, cockZ], null, lay.jet && !lay.big ? [fr * 0.55, fr * 0.5, L * (pl.crew.length > 1 ? 0.13 : 0.09)] : null);
-    if (pl.crew.length > 1 && !lay.big && !lay.jet) glassB.add(box(fr * 0.8, fr * 0.45, L * 0.08), 0xffffff, [0, cockY, cockZ + L * 0.12]);
-    // wings
-    const thick = Math.max(0.12, chord * (lay.jet ? 0.06 : 0.12)), half = S / 2 - fr * 0.5;
-    const dih = sh === 'mono' || sh === 'twin' ? 0.07 : sh === 'jet_d' ? -0.02 : 0.03;
-    const wingsAt = [];
-    if (lay.bi && sh !== 'tri') wingsAt.push([wingY, 0], [lay.upperY, -chord * 0.15]);
-    else if (sh === 'tri') wingsAt.push([wingY, 0], [fr * 0.6, -chord * 0.1], [lay.upperY + 0.2, -chord * 0.2]);
-    else wingsAt.push([wingY, 0]);
-    const ellipseTip = pl.ellipse ? 0.4 : 1;
-    wingsAt.forEach(([y, dz], i) => {
-      const hs = sh === 'tri' ? half * (1 - i * 0.04) : lay.bi && i === 0 ? half * 0.94 : half;
-      for (const [b, d] of [[wl, -1], [wr, 1]]) b.add(panel(hs, chord, tipC * ellipseTip, sweep, thick, d, dih), camo, [d * fr * 0.5, y, wingZ + dz]);
-    });
-    if (lay.bi) { // struts and centre-section cabane
-      const top = wingsAt[wingsAt.length - 1][0], bot = wingsAt[0][0];
-      for (const [b, d] of [[wl, -1], [wr, 1]]) for (const zz of [-chord * 0.3, chord * 0.25]) b.add(box(0.06, top - bot, 0.06), 0x5a4a3a, [d * half * 0.62, (top + bot) / 2, wingZ + zz - chord * 0.07]);
-      for (const zz of [-chord * 0.3, chord * 0.2]) for (const s of [-1, 1]) body.add(box(0.05, top - fr * 0.6, 0.05), 0x5a4a3a, [s * fr * 0.5, (top + fr * 0.6) / 2, wingZ + zz - chord * 0.1]);
-      body.add(box(fr * 1.2, 0.08, chord * 0.9), camo, [0, top, wingZ - chord * 0.15]); // centre section of the top wing
-      // fixed undercarriage
-      for (const s of [-1, 1]) { body.add(box(0.05, fr * 1.4, 0.05), 0x4a4a4a, [s * fr * 0.8, -fr * 1.4, wingZ - chord * 0.3]); body.add(cyl(0.32, 0.32, 0.12, 10), dark, [s * fr * 1.0, -fr * 2.0, wingZ - chord * 0.3], [0, 0, Math.PI / 2]); }
-    } else if (pl.fixedGear) for (const s of [-1, 1]) { body.add(box(0.12, fr * 1.2, 0.3), camo, [s * S * 0.15, wingY - fr * 0.6, wingZ - chord * 0.2]); body.add(cyl(0.3, 0.3, 0.12, 10), dark, [s * S * 0.15, wingY - fr * 1.2, wingZ - chord * 0.2], [0, 0, Math.PI / 2]); }
-    if (sh === 'jet_dc') for (const s of [-1, 1]) body.add(panel(S * 0.14, L * 0.09, L * 0.04, L * 0.04, 0.08, s, 0), camo, [s * fr * 0.8, fr * 0.2, -L * 0.28]);
-    // tail surfaces
-    const tailBase = (sh === 'jet_d' || sh === 'jet_dc') ? L * 0.2 : chord, hsSpan = S * (lay.jet ? 0.22 : 0.18), hsChord = tailBase * (lay.jet ? 0.55 : 0.6), finH = Math.max(1, S * (lay.jet ? 0.17 : 0.13) * (lay.big ? 1.1 : 1));
-    const tailY = pl.tTail ? finH * 0.95 : (sh === 'jet_d' || sh === 'jet_dc') ? 99 : 0;
-    if (tailY !== 99) for (const s of [-1, 1]) body.add(panel(hsSpan, hsChord, hsChord * 0.55, lay.jet ? hsChord * 0.5 : 0, 0.1, s, 0), camo, [s * fr * 0.15, tailY, tailZ]);
-    const fin = (x, cant) => { const g = panel(finH, hsChord * 1.2, hsChord * 0.5, lay.jet ? hsChord * 0.7 : hsChord * 0.25, 0.1, 1, 0); g.rotateZ(Math.PI / 2 + cant); body.add(g, pt.top, [x, fr * 0.4, tailZ - hsChord * 0.1]); };
-    if (sh === 'jet_tt') { fin(-fr * 1.0, 0.25); fin(fr * 1.0, -0.25); } else fin(0, 0);
-    if (sh === 'twin' && pl.id === 'p38l') for (const s of [-1, 1]) { body.add(zcyl(fr * 0.6, fr * 0.35, L * 0.75, 8), camo, [s * S * 0.18, wingY + 0.1, wingZ + L * 0.22]); }
-    // engines: cowlings / nacelles / nozzles
-    const props = [], glows = [];
-    for (const e of lay.engines) {
-      if (e.jet) { body.add(zcyl(e.r, e.r * 0.85, L * 0.06, 12), metal, [e.x, e.y, L * 0.47]);
-        const gg = new THREE.Mesh(zcyl(e.r * 0.75, e.r * 0.05, L * 0.35, 10), mat('glow')); gg.position.set(e.x, e.y, L * 0.5 + L * 0.17); gg.visible = false; glows.push(gg); }
-      else if (lay.jet) { body.add(zcyl(e.r * 0.9, e.r, e.len, 10), camo, [e.x, e.y, e.z]); }
-      else {
-        if (e.x !== 0) body.add(zcyl(e.r, e.r * 0.7, e.len, 10), camo, [e.x, e.y, e.z]);
-        else body.add(zcyl(e.r, e.r, L * 0.06, 12), pl.era === 1 ? 0x8a8a7a : pt.acc, [0, 0, -L / 2 + L * 0.03]);
-        body.add(zcyl(0.02, e.r * 0.35, e.r * 0.8, 8), pt.acc, [e.x, e.y, e.z - e.len / 2 - e.r * 0.4]); // spinner
-        const pg = new THREE.Group(); const pr = Math.max(1.1, e.r * (pl.eng === 1 ? 1.6 : 1.7));
-        const blades = new Builder(); const nb = pl.era >= 3 ? (pl.era >= 3 && pl.mass > 3500 ? 4 : 3) : 2;
-        for (let i = 0; i < nb; i++) blades.add(box(0.14, pr * 2 * 0.5, 0.04), 0x2b2116, [0, pr * 0.5 * 0.5, 0], null);
-        const bm = new THREE.Mesh(blades.build(), mat('vc'));
-        for (let i = 0; i < nb; i++) { const m = bm.clone(); m.rotation.z = i / nb * Math.PI * 2; pg.add(m); }
-        const disc = new THREE.Mesh(new THREE.CircleGeometry(pr, 20), mat('prop')); pg.add(disc);
-        pg.position.set(e.x, e.y, e.z - e.len / 2 - 0.08); props.push(pg);
-      }
-    }
-    // guns: little barrels
-    for (const [gid, n, mount] of pl.guns) {
-      const cal = GUNS[gid].cal / 1000, len = 0.4 + cal * 25;
-      for (let i = 0; i < n; i++) {
-        if (mount === 'wing') { const s = i % 2 ? 1 : -1, k = Math.floor(i / 2); body.add(zcyl(cal * 2, cal * 2, len, 5), dark, [s * (fr + S * (0.12 + k * 0.035)), wingY, wingZ - chord * 0.5 - len / 2]); }
-        else if (mount === 'nose' && !lay.jet) body.add(zcyl(cal * 2, cal * 2, len, 5), dark, [(i - (n - 1) / 2) * 0.15, fr * 0.2, -L * 0.5 - len / 2 + 0.2]);
-        else if (mount === 'sync') body.add(zcyl(cal * 2.2, cal * 2.2, len + 0.4, 5), dark, [(i - (n - 1) / 2) * 0.25, fr * 0.95, -L * 0.28]);
-      }
-    }
-    // turrets (domes)
-    for (const t of pl.turrets) { const tp = turretPos(pl, t[2]); body.add(new THREE.SphereGeometry(Math.max(0.35, fr * 0.35), 8, 6), 0x8899aa, [tp.x, tp.y, tp.z]); }
-    // markings
-    const insS = Math.min(S * 0.12, 1.8);
-    // wing markings sit exactly on the top surface of the (top) wing panel at ~2/3 span
-    { const [y0, dz] = wingsAt[wingsAt.length - 1], hs = sh === 'tri' ? half * (1 - (wingsAt.length - 1) * 0.04) : half;
-      const f = Math.min(0.8, Math.max(0.3, (S * 0.33 - fr * 0.5) / hs)), chordAt = chord * (1 - f) + tipC * ellipseTip * f;
-      const yTop = y0 + Math.tan(dih) * hs * f + (thick / 2) * (1 - 0.4 * f) + 0.025, size = Math.min(insS, chordAt * 0.85);
-      for (const s of [-1, 1]) insignia(s < 0 ? mkL : mkR, pl.nation, size, [s * (fr * 0.5 + hs * f), yTop, wingZ + dz + sweep * f], 'y', pl.era); }
-    // fuselage markings on the side of the fuselage at its real radius there (the tail cone tapers)
-    { let x, y = 0, z, size;
-      if (lay.jet) { z = L * 0.12; const boxed = pl.eng === 2 && sh !== 'jet_s2' && sh !== 'jet_bomber'; x = (boxed ? fr * 1.3 : fr) + 0.025; size = Math.min(fr * 1.2, 1.5); if (boxed) y = -fr * 0.1; }
-      else { z = L * 0.12; const t = (z + L * 0.18) / (L * 0.68), r = fr * (1 - 0.78 * t); x = r + 0.02; y = fr * 0.1; size = Math.min(r * 1.4, 1.5); }
-      for (const s of [-1, 1]) insignia(mkB, pl.nation, size, [s * x, y, z], 'x', pl.era); }
-
-    const g = new THREE.Group();
-    let gearMesh = null;
-    if (!lay.fixed) {
-      const gb = new Builder(), wr = lay.wheelR, gl = lay.gearLen, gz = wingZ - chord * 0.15;
-      for (const sd of [-1, 1]) { gb.add(box(0.12, gl, 0.12), 0x555555, [sd * lay.gearX, wingY - gl / 2, gz]); gb.add(cyl(wr, wr, wr * 0.5, 12), dark, [sd * lay.gearX, wingY - gl, gz], [0, 0, Math.PI / 2]); }
-      if (lay.jet) { gb.add(box(0.1, lay.gearH - wr * 0.8, 0.1), 0x555555, [0, -(lay.gearH - wr * 0.8) / 2, -L * 0.32]); gb.add(cyl(wr * 0.8, wr * 0.8, wr * 0.4, 10), dark, [0, -lay.gearH + wr * 0.8, -L * 0.32], [0, 0, Math.PI / 2]); }
-      else { const th = Math.max(0.3, lay.gearH * 0.45); gb.add(box(0.08, th, 0.08), 0x555555, [0, -th / 2, L * 0.4]); gb.add(cyl(0.18, 0.18, 0.12, 8), dark, [0, -th, L * 0.4], [0, 0, Math.PI / 2]); }
-      gearMesh = new THREE.Mesh(gb.build(), mat('vc')); gearMesh.visible = false; g.add(gearMesh);
-    }
-    const bodyMesh = new THREE.Mesh(body.build(), mat('vc')); g.add(bodyMesh);
-    const glass = new THREE.Mesh(glassB.build(), mat('glass')); g.add(glass);
-    const wingL = new THREE.Mesh(wl.build(), mat('vc')), wingR = new THREE.Mesh(wr.build(), mat('vc')); g.add(wingL, wingR);
-    if (mkL.parts.length) wingL.add(new THREE.Mesh(mkL.build(), mat('vc2'))); if (mkR.parts.length) wingR.add(new THREE.Mesh(mkR.build(), mat('vc2')));
-    const marks = mkB.parts.length ? new THREE.Mesh(mkB.build(), mat('vc2')) : null; if (marks) g.add(marks);
-    for (const p of props) g.add(p); for (const gl of glows) g.add(gl);
-    g.userData = { props, glows, wingL, wingR, body: bodyMesh, glass, marks, lay, gear: gearMesh };
-    return g;
-  }
   function turretPos(pl, arc) {
     const lay = layout(pl), L = lay.L, fr = lay.fr;
     return arc === 'rear' ? new V(0, fr * 0.9, lay.cockZ + Math.max(1.3, L * 0.12)) : arc === 'dorsal' ? new V(0, fr * 1.0, L * 0.05) : arc === 'ventral' ? new V(0, -fr * 1.0, L * 0.12)
@@ -318,5 +201,5 @@ const Models = (() => {
     m.userData.r = r; m.userData.len = len; return m;
   }
   function bomb(mass) { const r = 0.12 * Math.cbrt(mass / 20), b = new Builder(); b.add(zcyl(r * 0.6, r * 0.5, r * 5, 8), 0x4a5040, [0, 0, 0]); b.add(new THREE.SphereGeometry(r, 8, 6), 0x4a5040, [0, 0, -r * 2.5]); b.add(box(r * 2, 0.02, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); b.add(box(0.02, r * 2, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); return new THREE.Mesh(b.build(), mat('vc')); }
-  return { aircraft, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
+  return { aircraft: null /* set by aircraft3d.js */, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
 })();

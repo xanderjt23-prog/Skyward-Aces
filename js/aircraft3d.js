@@ -34,10 +34,10 @@
   }
   // superellipse point: n = 2 ellipse, larger n squarer
   const sep = (a, n) => Math.sign(a) * Math.pow(Math.abs(a), 2 / n);
-  // secs: [{z, w, h, y, x}] in increasing z; side quads wind (θ, θ+dθ, next station) = outward for this ordering
+  // secs: [{z, w, h, y, x, n}] in increasing z (n: optional per-section squareness); side quads wind (θ, θ+dθ, next station) = outward for this ordering
   function loftBody(secs, segs, n, name) {
     const pos = [], idx = [];
-    for (const s of secs) for (let j = 0; j < segs; j++) { const a = j / segs * Math.PI * 2; pos.push((s.x || 0) + s.w * sep(Math.cos(a), n), s.y + s.h * sep(Math.sin(a), n), s.z); }
+    for (const s of secs) for (let j = 0; j < segs; j++) { const a = j / segs * Math.PI * 2, ns = s.n || n; pos.push((s.x || 0) + s.w * sep(Math.cos(a), ns), s.y + s.h * sep(Math.sin(a), ns), s.z); }
     for (let i = 0; i < secs.length - 1; i++) for (let j = 0; j < segs; j++) {
       const a = i * segs + j, b = i * segs + (j + 1) % segs, c = (i + 1) * segs + (j + 1) % segs, d = (i + 1) * segs + j;
       idx.push(a, b, c, a, c, d);
@@ -122,7 +122,10 @@
   };
 
   function build(pl) {
-    const sp = Airframe.spec(pl), lk = sp.look, { L, S, R } = sp, z0 = -L / 2;
+    const sp = Airframe.spec(pl), e0 = sp.entry, { L, S, R } = sp, z0 = -L / 2, has = x => sp.extras.has(x);
+    // ---------------- anomaly checklist: every configuration rule is applied explicitly below, and logged when it fires
+    const applied = [];
+    const rule = (cond, text) => { if (cond) applied.push(text); return !!cond; };
     const pt = paint(pl), camo = [pt.top, pt.bot], dark = 0x222222, metal = 0x6a6e72, burnt = 0x4a4642, frameC = shade(pt.top, 0.55);
     const ww1 = pl.era === 1 || (sp.bi && pl.era <= 2);
     const body = new Builder(), wl = new Builder(), wr = new Builder(), glassB = new Builder(), pilotB = new Builder(), lampB = new Builder();
@@ -133,11 +136,15 @@
 
     // ---------------- fuselage
     const tEnd = sp.rows[sp.rows.length - 1][0], NS = 40, secs = [];
-    for (let i = 0; i <= NS; i++) { const u = (1 - Math.cos(Math.PI * i / NS)) / 2, z = z0 + u * tEnd * L, s = sp.at(z); secs.push({ z, w: Math.max(0.012, s.w), h: Math.max(0.012, s.h), y: s.y }); }
+    const boxSides = rule(e0.intakeProfile === 'side_box', 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
+    const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
+    for (let i = 0; i <= NS; i++) { const u = (1 - Math.cos(Math.PI * i / NS)) / 2, z = z0 + u * tEnd * L, s = sp.at(z);
+      const k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // ramps over 0.6 m at each end
+      secs.push({ z, w: Math.max(0.012, s.w), h: Math.max(0.012, s.h), y: s.y, n: sp.n + (4.5 - sp.n) * Math.max(0, k) }); }
     const zTail = secs[secs.length - 1].z;
-    const radome = sp.jet && pl.era >= 5 && sp.intake && sp.intake.type !== 'nose' || (sp.jet && pl.era >= 5 && !sp.intake);
+    const radome = sp.jet && pl.era >= 5 && e0.intakeProfile !== 'nose_cone';
     const glare = !ww1 && !sp.big && lum > 140 && pl.era <= 4; // olive anti-glare panels were a WW2 / Korea-era practice
-    const noseDark = sp.intake && sp.intake.type === 'nose';
+    const noseDark = rule(e0.intakeProfile === 'nose_cone', 'nose_cone: open nose intake with lip' + (e0.intake && e0.intake.shockCone ? ' and shock cone' : ''));
     const fusPaint = (x, y, z, ny, nz) => {
       if (nz < -0.98 && z < z0 + 0.05 && noseDark) return 0x101010;                  // intake mouth
       if (nz > 0.98 && z > zTail - 0.05) return nozzleEngines.some(e => Math.hypot(x - e.x, y - e.y) < e.r) ? 0x161412 : shade(pt.bot, 0.75); // engine face / tail cap
@@ -154,11 +161,11 @@
       if (sp.extra.cone) body.add(latheRing([[0.001, z0 - r * 0.9], [r * 0.5, z0 + 0.1], [0.001, z0 + 0.1]], 18, 'shock cone', 0, s.y), metal);
     }
     if (sp.jet && !noseDark && pl.era >= 4) body.add(cyl(0.025, 0.025, L * 0.05, 6), metal, [0, sp.at(z0).y, z0 - L * 0.02], [Math.PI / 2, 0, 0]); // pitot
-    if (sp.extra.gau8) { // A-10: the GAU-8's barrel cluster under the nose, just left of centre
+    if (rule(sp.extra.gau8, 'GAU-8 barrel cluster under the nose')) { // A-10: the GAU-8's barrel cluster under the nose, just left of centre
       body.add(cyl(0.17, 0.17, 1.2, 10), 0x2a2a2a, [-0.15, sp.at(z0).y - R * 0.25, z0 - 0.45], [Math.PI / 2, 0, 0]);
       for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; body.add(cyl(0.025, 0.025, 1.4, 5), 0x1a1a1a, [-0.15 + Math.cos(a) * 0.11, sp.at(z0).y - R * 0.25 + Math.sin(a) * 0.11, z0 - 0.6], [Math.PI / 2, 0, 0]); }
     }
-    if (sp.extra.duck) { const s = sp.at(z0 + L * 0.08); body.add(loftBody([0, 0.08, 0.18].map(t => { const q = sp.at(z0 + t * L); return { z: z0 + t * L + 0.05, w: q.w * 1.25 + 0.1, h: q.h * 0.5, y: q.y - q.h * 0.2 }; }), 18, 2.4, 'duckbill'), camo); }
+    if (rule(sp.extra.duck, 'side-by-side duckbill nose')) { const s = sp.at(z0 + L * 0.08); body.add(loftBody([0, 0.08, 0.18].map(t => { const q = sp.at(z0 + t * L); return { z: z0 + t * L + 0.05, w: q.w * 1.25 + 0.1, h: q.h * 0.5, y: q.y - q.h * 0.2 }; }), 18, 2.4, 'duckbill'), camo); }
 
     // ---------------- engines
     const props = [], glows = [];
@@ -180,7 +187,7 @@
         if (e.kind === 'underwing') { const wa = sp.wingAt(sp.wingF(e.x)); body.add(box(0.12, Math.max(0.1, wa.y - e.y - e.r * 0.6), e.len * 0.45), camo, [e.x, (wa.y + e.y + e.r * 0.6) / 2, e.z - e.len * 0.05]); }
         if (e.kind === 'pod') { const ft = sp.topAt(e.z, e.x * 0.4), side = Math.sign(e.x); // pylon from the upper rear fuselage
           const py = box(0.18, Math.max(0.2, e.y - e.r * 0.7 - ft + 0.25), e.len * 0.42); py.rotateZ(side * 0.5); body.add(py, camo, [e.x * 0.72, (e.y - e.r * 0.7 + ft) / 2, e.z]); }
-      } else if (e.kind === 'rootnac' || e.kind === 'sidenac' || e.kind === 'nacelle') { // jet nacelles
+      } else if (e.kind === 'sidenac' || e.kind === 'nacelle') { // jet nacelles
         nacelle(e, [[0, 0.88, 0.92], [0.06, 0.98, 1], [0.5, 1, 1], [0.85, 0.96, 0.94], [1, 0.84, 0.82]], e.kind);
         nozzle({ r: e.r * 0.84 }, e.x, e.y, e.z + e.len / 2);
         if (e.kind !== 'nacelle') body.add(latheRing([[e.r * 0.74, e.z - e.len / 2 - 0.06], [e.r * 0.92, e.z - e.len / 2 - 0.06], [e.r * 0.92, e.z - e.len / 2 + 0.25], [e.r * 0.74, e.z - e.len / 2 + 0.25]], 20, 'nacelle lip', e.x, e.y), shade(pt.top, 0.9));
@@ -227,18 +234,19 @@
       if (rake) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const f = Math.max(0, 1 - (p.getZ(i) - zi) / len); p.setZ(i, p.getZ(i) - rake * (p.getY(i) - y) * f); } g.computeVertexNormals(); }
       body.add(g, (px, py, pz, ny, nz) => nz < -0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
     };
-    if (it && it.type !== 'nose') {
-      const zi = z0 + it.z * L, len = it.len * L, w = it.w * R, h = it.h * R;
-      if (it.type === 'rect' || it.type === 'semi') for (const s of [-1, 1]) {
-        const y = sp.at(zi).y + (it.y || 0) * R, x = s * (sp.sideAt(zi, y) + w * (it.type === 'semi' ? 0.25 : 0.3)); // against the fuselage side at the mouth
-        duct(x, y, zi, len, w, h, it.type === 'rect' ? 4 : 2, it.rake === undefined ? (it.type === 'rect' ? 0.35 : 0) : it.rake, 'intake', s * sp.sideAt(zi + len, y) * 0.6);
-        if (it.splitter) body.add(box(0.04, h * 1.6, len * 0.4), camo, [x - s * w * 1.1, y, zi + len * 0.15]);
-        if (it.cone) body.add(latheRing([[0.001, zi - h * 0.7], [Math.min(w, h) * 0.6, zi + 0.1], [0.001, zi + 0.1]], 14, 'half cone', x - s * w * 0.3, y), metal);
+    if (it && it.type !== 'nose_cone') {
+      const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180); // mouth half-sizes (m)
+      if (rule(it.type === 'side_box' || it.type === 'cheek_crescent', it.type === 'side_box' ? 'side_box: raked rectangular intake trunks on the fuselage sides' : 'cheek_crescent: half-round cheek intakes')) for (const s of [-1, 1]) {
+        const y = sp.at(zi).y, x = s * (sp.sideAt(zi, y) + w * (it.type === 'cheek_crescent' ? 0.25 : 0.3)); // against the fuselage side at the mouth
+        duct(x, y, zi, len, w, h, it.type === 'side_box' ? 4.5 : 2, rake, 'intake', s * sp.sideAt(zi + len, y) * 0.6);
+        if (rule(it.splitter && s > 0, 'boundary-layer splitter plates')) {} if (it.splitter) body.add(box(0.04, h * 1.6, len * 0.4), camo, [x - s * w * 1.1, y, zi + len * 0.15]);
+        if (rule(it.shockCone && s > 0, 'half-cone shock bodies in the intakes')) {} if (it.shockCone) body.add(latheRing([[0.001, zi - h * 0.7], [Math.min(w, h) * 0.6, zi + 0.1], [0.001, zi + 0.1]], 14, 'half cone', x - s * w * 0.3, y), metal);
       }
-      else if (it.type === 'chin') { const y = sp.botAt(zi + len * 0.5) + h * 0.35; duct(0, y, zi, len, w, h, it.rect ? 4 : 2.6, 0.15, 'chin intake'); }
-      else if (it.type === 'vent') for (const e of sp.engines.filter(e => e.kind === 'nacelle')) duct(e.x, e.y - e.r * 0.15, zi, len + (e.z - e.len / 2 - zi) + 0.3, w, h, 4, it.rake === undefined ? 0.5 : it.rake, 'ventral intake');
-      else if (it.type === 'root') for (const s of [-1, 1]) { const w0 = sp.wingAt(0.02); body.add(box(R * 0.7, sp.wing.t * w0.c * 0.9, 0.06), 0x0e0e0e, [s * (sp.wing.x0 + R * 0.45), w0.y, w0.le - 0.03]); }
+      else if (rule(it.type === 'chin_scoop', 'chin_scoop: intake under the forward fuselage')) { const y = sp.botAt(zi + len * 0.5) + h * 0.35; duct(0, y, zi, len, w, h, 3, rake, 'chin intake'); }
+      else if (rule(it.type === 'ventral_box', 'ventral_box: raked intakes under the LERX, ahead of the engine nacelles')) for (const e of sp.engines.filter(e => e.kind === 'nacelle')) duct(e.x, e.y - e.r * 0.15, zi, len + (e.z - e.len / 2 - zi) + 0.3, w, h, 4, rake, 'ventral intake');
+      else if (rule(it.type === 'wing_root', 'wing_root: intake slots in the wing-root leading edges')) for (const s of [-1, 1]) { const w0 = sp.wingAt(0.02); body.add(box(w * 2, Math.min(h * 2, sp.wing.t * w0.c * 0.9), 0.06), 0x0e0e0e, [s * (sp.wing.x0 + w * 1.2), w0.y, w0.le - 0.03]); }
     }
+    rule(e0.intakeProfile === 'nacelle', 'nacelle: each engine nacelle / pod carries its own intake');
 
     // ---------------- canopy / cockpit
     const cp = sp.canopy, cz = cp.z, putPilot = (z, y, x) => {
@@ -260,7 +268,7 @@
       for (const u of frames.arcs) arc(u); if (frames.rail) rail(frames.rail[0], frames.rail[1]);
       return { base: sp.topAt(z, x) };
     };
-    if (cp.type === 'open') {
+    if (rule(cp.type === 'open', 'open cockpit with windscreen')) {
       const top = sp.topAt(cz), ring = new THREE.TorusGeometry(Math.min(0.42, sp.at(cz).w * 0.75), 0.045, 6, 18); ring.rotateX(Math.PI / 2); ckB.add(ring, 0x3a2614, [0, top + 0.01, cz + 0.1], null, [1, 1, 1.25]);
       const wsZ = cz - 0.45, wsW = Math.max(0.24, R * 0.36), wsH = Math.max(0.22, R * 0.34), wt = sp.topAt(wsZ);
       const ws = box(wsW * 2, wsH, 0.02); ws.rotateX(-0.35); glassB.add(ws, 0xffffff, [0, wt + wsH * 0.45, wsZ]);
@@ -268,28 +276,28 @@
       if (pl.era >= 2) body.add(loftBody([0, 0.3, 0.7, 1].map(t => ({ z: cz + 0.35 + t * L * 0.16, w: R * 0.22 * (1 - t * 0.6), h: R * 0.42 * (1 - t * 0.85) + 0.02, y: sp.topAt(cz + 0.35 + t * L * 0.16) - 0.05 })), 14, 2, 'headrest'), pt.top);
       putPilot(cz + 0.12, top + 0.12);
       if (cp.two) { const z2 = cz + L * 0.13, t2 = sp.topAt(z2), r2 = new THREE.TorusGeometry(Math.min(0.4, sp.at(z2).w * 0.72), 0.045, 6, 18); r2.rotateX(Math.PI / 2); ckB.add(r2, 0x3a2614, [0, t2 + 0.01, z2]); putPilot(z2, t2 + 0.12); }
-      if (lk.has('hump')) body.add(loftBody([0, 0.5, 1].map(t => ({ z: cz - L * 0.2 + t * L * 0.14, w: R * 0.5, h: R * 0.28 * Math.sin(Math.PI * (0.15 + t * 0.7)), y: sp.topAt(cz - L * 0.2 + t * L * 0.14) - 0.05 })), 16, 2, 'gun hump'), camo);
-    } else if (cp.type === 'glazednose' || cp.type === 'stepped') {
+      if (rule(has('gunHump'), 'gun hump ahead of the open cockpit')) body.add(loftBody([0, 0.5, 1].map(t => ({ z: cz - L * 0.2 + t * L * 0.14, w: R * 0.5, h: R * 0.28 * Math.sin(Math.PI * (0.15 + t * 0.7)), y: sp.topAt(cz - L * 0.2 + t * L * 0.14) - 0.05 })), 16, 2, 'gun hump'), camo);
+    } else if (rule(cp.type === 'glazed_nose' || cp.type === 'stepped', 'glazed bomber nose (' + cp.type + ')')) {
       // bombers: a glazed shell over the nose (fully glazed nose, or the bomb-aimer's nose under a stepped cockpit)
-      const gl = cp.type === 'glazednose' ? L * 0.1 : L * 0.045, gs = [];
+      const gl = cp.type === 'glazed_nose' ? L * 0.1 : L * 0.045, gs = [];
       for (let i = 0; i <= 10; i++) { const u = i / 10, z = z0 - 0.03 + u * gl, s = sp.at(Math.max(z0, z)); gs.push({ z, w: s.w * 1.03 + 0.01, h: s.h * 1.03 + 0.01, y: s.y }); }
       glassB.add(loftBody(gs, 24, sp.n, 'glazed nose'), 0xffffff);
       for (const u of [0.35, 0.7]) { const z = z0 + u * gl, s = sp.at(z), pts = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(new V(s.w * 1.05 * Math.cos(a), s.y + s.h * 1.05 * Math.sin(a), z)); } ckB.add(tube(pts, 0.025), frameC); }
       if (cp.type === 'stepped') { canopy(CAN.framed, cz, Math.max(1.4, L * 0.08), Math.min(sp.at(cz).w * 0.85, R * 0.75), R * 0.55, 0, { arcs: [0.12, 0.45, 0.8], rail: [0.1, 1] }); for (const sd of [-0.3, 0.3]) putPilot(cz + 0.1, sp.topAt(cz) + 0.12, sd * R); }
       else for (const sd of [-0.3, 0.3]) putPilot(z0 + gl * 0.8, sp.at(z0 + gl).y + 0.1, sd * R);
     } else {
-      const kind = cp.type, prof = kind === 'greenhouse' ? CAN.greenhouse : kind === 'bubble' || kind === 'sbs' ? CAN.bubble : CAN.framed;
-      const frames = kind === 'bubble' || kind === 'sbs' ? { arcs: cp.frameless ? [] : [0.16], rail: null } : kind === 'greenhouse' ? { arcs: [0.12, 0.3, 0.5, 0.7, 0.88], rail: [0.1, 1] } : { arcs: [0.13, 0.4, 0.72], rail: [0.1, 1] };
+      const kind = cp.type, prof = kind === 'greenhouse' ? CAN.greenhouse : kind === 'bubble' || kind === 'side_by_side' ? CAN.bubble : CAN.framed;
+      const frames = kind === 'bubble' || kind === 'side_by_side' ? { arcs: cp.frameless ? [] : [0.16], rail: null } : kind === 'greenhouse' ? { arcs: [0.12, 0.3, 0.5, 0.7, 0.88], rail: [0.1, 1] } : { arcs: [0.13, 0.4, 0.72], rail: [0.1, 1] };
       // dark cockpit tub and coaming inside the glass
       ckB.add(cyl(1, 1, 0.02, 18), 0x17191b, [cp.x, sp.topAt(cz, cp.x) - 0.02, cz], null, [cp.w * 0.85, 1, cp.len * 0.42]);
       ckB.add(box(cp.w * 1.6, 0.1, 0.22), 0x1d1f21, [cp.x, sp.topAt(cz - cp.len * 0.3, cp.x) + 0.03, cz - cp.len * 0.3]);
       canopy(prof, cz, cp.len, cp.w, cp.h, cp.x, frames);
-      if (kind === 'razor') { // razorback: the spine fairs the canopy back into the tail
+      if (rule(kind === 'razorback', 'razorback spine behind the canopy')) { // razorback: the spine fairs the canopy back into the tail
         const zA = cz + cp.len / 2 - 0.05, zB = Math.min(sp.fins[0] ? sp.fins[0].zLE : L * 0.4, zA + L * 0.32), rs = [];
         for (let i = 0; i <= 8; i++) { const u = i / 8, z = zA + u * (zB - zA), top = sp.topAt(z); rs.push({ z, w: cp.w * 0.9 * (1 - u * 0.75), h: Math.max(0.03, (cp.h * 0.72 + 0.07) * (1 - u) + 0.04), y: top - 0.07 }); }
         body.add(loftBody(rs, 16, 2.2, 'razorback'), camo);
       }
-      const seats = cp.two ? (kind === 'sbs' ? [[cz - 0.1, -cp.w * 0.42], [cz - 0.1, cp.w * 0.42]] : [[cz - cp.len * 0.22, 0], [cz + cp.len * 0.22, 0]]) : [[cz + cp.len * 0.05, 0]];
+      const seats = cp.two ? (kind === 'side_by_side' ? [[cz - 0.1, -cp.w * 0.42], [cz - 0.1, cp.w * 0.42]] : [[cz - cp.len * 0.22, 0], [cz + cp.len * 0.22, 0]]) : [[cz + cp.len * 0.05, 0]];
       for (const [z, x] of seats) putPilot(z, sp.topAt(z, cp.x + x) + Math.min(0.42, cp.h * 0.42), cp.x + x);
       if (!sp.jet || pl.era <= 4) ckB.add(box(0.05, 0.12, 0.02), 0x2a2a2a, [cp.x, sp.topAt(cz - cp.len * 0.3, cp.x) + 0.14, cz - cp.len * 0.28]); // reflector gunsight
       if (!sp.jet && pl.era >= 3 && kind !== 'bubble') { const mz = cz + cp.len * 0.75, mt = sp.topAt(mz); const m = loftSurface([{ x: 0, le: -0.08, c: 0.18, y: 0, t: 0.12 }, { x: R * 0.55, le: 0.02, c: 0.07, y: 0, t: 0.12 }], 4, 'mast'); m.rotateZ(Math.PI / 2); body.add(m, shade(pt.top, 0.7), [0, mt - 0.03, mz]); } // radio mast
@@ -304,29 +312,31 @@
       const st = surfStations(g, f => sp.wingAt(f, g), { square: sp.wing.tiptanks && i === 0 });
       const geo = loftSurface(st, 14, 'wing' + i), pf = wingPaint(g);
       wr.add(geo, pf); wl.add(mirrorX(geo), pf);
-      if (g.tiptanks && i === 0) { const tip = sp.wingAt(1, g), tl = Math.max(2.4, tip.c * 2.4), tr = Math.max(0.3, tl * 0.12);
+      if (rule(g.tiptanks && i === 0, 'wing-tip tanks')) { const tip = sp.wingAt(1, g), tl = Math.max(2.4, tip.c * 2.4), tr = Math.max(0.3, tl * 0.12);
         const tank = [0, 0.1, 0.3, 0.7, 0.9, 1].map((t, k) => ({ z: tip.le + tip.c * 0.4 - tl * 0.5 + t * tl, w: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], h: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], y: tip.y, x: tip.x + tr * 0.2 }));
         const tg = loftBody(tank, 16, 2, 'tip tank'); wr.add(tg, camo); wl.add(mirrorX(tg), camo); }
-      if (g.fences && i === 0) for (let k = 0; k < g.fences; k++) { const w = sp.wingAt(0.3 + k * 0.22, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(box(0.03, g.t * w.c + 0.12, w.c * 0.9), shade(pt.top, 0.92), [s * w.x, w.y + 0.05, w.le + w.c * 0.47]); }
-      if (g.tiprail && i === 0) { const tip = sp.wingAt(1, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(cyl(0.08, 0.08, tip.c * 1.6, 8), metal, [s * (tip.x + 0.05), tip.y, tip.le + tip.c * 0.4], [Math.PI / 2, 0, 0]); }
+      if (rule(g.fences && i === 0, 'wing fences')) for (let k = 0; k < g.fences; k++) { const w = sp.wingAt(0.3 + k * 0.22, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(box(0.03, g.t * w.c + 0.12, w.c * 0.9), shade(pt.top, 0.92), [s * w.x, w.y + 0.05, w.le + w.c * 0.47]); }
+      if (rule(g.tiprail && i === 0, 'wing-tip missile rails')) { const tip = sp.wingAt(1, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(cyl(0.08, 0.08, tip.c * 1.6, 8), metal, [s * (tip.x + 0.05), tip.y, tip.le + tip.c * 0.4], [Math.PI / 2, 0, 0]); }
     });
-    if (sp.extra.lerx) { const w0 = sp.wingAt(0), zA = w0.le - L * 0.24, s = sp.at(zA + L * 0.1);
+    if (rule(sp.extra.lerx, 'leading-edge root extensions')) { const w0 = sp.wingAt(0), zA = w0.le - L * 0.24, s = sp.at(zA + L * 0.1);
       const lx = loftSurface([{ x: s.w * 0.6, le: zA, c: w0.le - zA + w0.c * 0.3, y: w0.y, t: 0.025 }, { x: sp.wing.x0 + R * 0.75, le: w0.le - 0.15, c: w0.c * 0.35, y: w0.y, t: 0.025 }], 8, 'lerx');
       body.add(lx, camo); body.add(mirrorX(lx), camo); }
-    if (sp.extra.canards) { const cd = sp.extra.canards, zc = z0 + cd.z * L, s = sp.at(zc), y = s.y + (cd.y || 0) * R, c = cd.c * L, x0 = sp.sideAt(zc, y) * 0.8;
-      const cg = loftSurface([{ x: x0, le: zc, c, y, t: 0.04 }, { x: x0 + cd.hs * L, le: zc + c * 0.7, c: c * 0.3, y, t: 0.04 }], 8, 'canard'); body.add(cg, camo); body.add(mirrorX(cg), camo); }
-    if (sp.extra.gearPods) { const [gx, gl] = sp.extra.gearPods; for (const s of [-1, 1]) { const w = sp.wingAt(sp.wingF(gx * S)), len = gl * L, r = Math.max(0.35, R * 0.45);
+    if (rule(sp.extra.canards, 'canards: forward lifting surfaces ' + (sp.extra.canards ? sp.extra.canards.offset : 0) + ' m behind the cockpit centre')) {
+      const cd = sp.extra.canards, zc = cp.z + cd.offset, s0 = sp.at(zc), y = s0.y + cd.height * s0.h, x0 = sp.sideAt(zc, y) * 0.85, c = cd.length * 0.9;
+      const cg = loftSurface([{ x: x0, le: zc - c * 0.5, c, y, t: 0.04 }, { x: x0 + cd.length, le: zc - c * 0.5 + Math.tan(cd.sweep) * cd.length, c: c * 0.3, y, t: 0.04 }], 8, 'canard');
+      body.add(cg, camo); body.add(mirrorX(cg), camo); }
+    if (rule(sp.extra.gearPods, 'main-gear pods under the wings')) { const [gx, gl] = sp.extra.gearPods; for (const s of [-1, 1]) { const w = sp.wingAt(sp.wingF(gx * S)), len = gl * L, r = Math.max(0.35, R * 0.45);
       body.add(loftBody([0, 0.15, 0.5, 0.85, 1].map((t, k) => ({ z: w.le - len * 0.35 + t * len, w: r * [0.2, 0.8, 1, 0.8, 0.2][k] * 0.8, h: r * [0.2, 0.8, 1, 0.8, 0.2][k], y: w.y - r * 0.55, x: s * gx * S })), 16, 2, 'gear pod'), camo); } }
-    if (sp.extra.cft) for (const s of [-1, 1]) { const zA = sp.wing.rootZ - L * 0.05; body.add(loftBody([0, 0.1, 0.9, 1].map((t, k) => ({ z: zA + t * L * 0.3, w: R * [0.2, 0.45, 0.45, 0.2][k], h: R * [0.2, 0.42, 0.42, 0.2][k], y: sp.wing.y - R * 0.15, x: s * (sp.sideAt(zA + L * 0.15, sp.wing.y) + R * 0.2) })), 14, 2.6, 'cft'), camo); }
-    if (sp.extra.belly) { const zA = sp.wing.rootZ; body.add(loftBody([0, 0.15, 0.85, 1].map((t, k) => ({ z: zA + t * L * 0.3, w: R * [0.2, 0.55, 0.55, 0.2][k], h: R * [0.2, 0.5, 0.5, 0.2][k], y: sp.botAt(zA + L * 0.15) - R * 0.3 })), 16, 2, 'ventral tank'), camo); }
+    if (rule(sp.extra.cft, 'conformal fuel tanks')) for (const s of [-1, 1]) { const zA = sp.wing.rootZ - L * 0.05; body.add(loftBody([0, 0.1, 0.9, 1].map((t, k) => ({ z: zA + t * L * 0.3, w: R * [0.2, 0.45, 0.45, 0.2][k], h: R * [0.2, 0.42, 0.42, 0.2][k], y: sp.wing.y - R * 0.15, x: s * (sp.sideAt(zA + L * 0.15, sp.wing.y) + R * 0.2) })), 14, 2.6, 'cft'), camo); }
+    if (rule(sp.extra.belly, 'ventral tank')) { const zA = sp.wing.rootZ; body.add(loftBody([0, 0.15, 0.85, 1].map((t, k) => ({ z: zA + t * L * 0.3, w: R * [0.2, 0.55, 0.55, 0.2][k], h: R * [0.2, 0.5, 0.5, 0.2][k], y: sp.botAt(zA + L * 0.15) - R * 0.3 })), 16, 2, 'ventral tank'), camo); }
     // wing guns: barrels out of the real leading edge
     const wingGunAt = x => { const f = sp.wingF(x), w = sp.wingAt(f); return w; };
     // biplanes: struts, bracing wires, cabane, fixed undercarriage
     if (sp.bi) {
-      const lo = sp.wings[0], up = sp.wings[sp.wings.length - 1], sx = (lo.b) * (lk.has('sesqui') ? 0.62 : 0.66), fl = sp.wingF(sx);
+      const lo = sp.wings[0], up = sp.wings[sp.wings.length - 1], sx = (lo.b) * (has('vStruts') ? 0.62 : 0.66), fl = sp.wingF(sx);
       const pl0 = sp.wingAt(Math.min(1, (sx - lo.x0) / (lo.b - lo.x0)), lo), pu = sp.wingAt(Math.min(1, (sx - up.x0) / (up.b - up.x0)), up);
       for (const [b, d] of [[wl, -1], [wr, 1]]) {
-        if (lk.has('sesqui')) for (const k of [0.2, 0.7]) b.add(tube([new V(d * sx * 0.98, pl0.y + 0.03, pl0.le + pl0.c * 0.4), new V(d * sx, pu.y - 0.03, pu.le + pu.c * k)], 0.035), 0x5a4a3a);
+        if (rule(has('vStruts'), 'sesquiplane V-struts')) for (const k of [0.2, 0.7]) b.add(tube([new V(d * sx * 0.98, pl0.y + 0.03, pl0.le + pl0.c * 0.4), new V(d * sx, pu.y - 0.03, pu.le + pu.c * k)], 0.035), 0x5a4a3a);
         else for (const k of [0.22, 0.72]) b.add(tube([new V(d * sx, pl0.y + 0.03, pl0.le + pl0.c * k), new V(d * sx, pu.y - 0.03, pu.le + pu.c * k)], 0.035), 0x5a4a3a);
         if (pl.id !== 'fd7') { b.add(tube([new V(d * R * 0.6, pl0.y + 0.03, pl0.le + pl0.c * 0.3), new V(d * sx, pu.y - 0.05, pu.le + pu.c * 0.3)], 0.01), 0x8a8a8a); b.add(tube([new V(d * R * 0.6, pu.y - 0.05, pu.le + pu.c * 0.6), new V(d * sx, pl0.y + 0.05, pl0.le + pl0.c * 0.6)], 0.01), 0x8a8a8a); }
       }
@@ -335,13 +345,13 @@
         const wh = latheRing([[0.12, -0.06], [0.32, -0.06], [0.32, 0.06], [0.12, 0.06]], 16, 'wheel'); wh.rotateY(Math.PI / 2); body.add(wh, dark, [s * R * 1.05, gy, gz]); }
       body.add(cyl(0.025, 0.025, R * 2.1, 6), 0x4a4a4a, [0, -R * 2.0, lo.rootZ + lo.rc * 0.05], [0, 0, Math.PI / 2]);
       body.add(box(0.06, 0.4, 0.5), 0x4a3a28, [0, sp.botAt(L * 0.44) - 0.1, L * 0.44], [0.6, 0, 0]); // tail skid
-    } else if (pl.fixedGear) for (const s of [-1, 1]) {
+    } else if (rule(has('fixedGear'), 'fixed undercarriage')) for (const s of [-1, 1]) {
       const gx = s * S * 0.15, w = wingGunAt(gx), gy = w.y - R * 1.2, gz = w.le + w.c * 0.3;
-      body.add(loftSurface([{ x: 0, le: -0.2, c: lk.has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }, { x: w.y - gy, le: -0.2, c: lk.has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }], 6, 'gear leg').rotateZ(-Math.PI / 2), camo, [gx, w.y + 0.05, gz]);
-      if (lk.has('spats')) body.add(loftBody([0, 0.15, 0.45, 0.8, 1].map((t, k) => ({ z: gz - 0.55 + t * 1.15, w: 0.17 * [0.2, 0.8, 1, 0.75, 0.15][k], h: 0.36 * [0.25, 0.85, 1, 0.8, 0.2][k], y: gy })), 14, 2, 'spat'), camo);
+      body.add(loftSurface([{ x: 0, le: -0.2, c: has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }, { x: w.y - gy, le: -0.2, c: has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }], 6, 'gear leg').rotateZ(-Math.PI / 2), camo, [gx, w.y + 0.05, gz]);
+      if (rule(has('spats'), 'streamlined wheel spats')) body.add(loftBody([0, 0.15, 0.45, 0.8, 1].map((t, k) => ({ z: gz - 0.55 + t * 1.15, w: 0.17 * [0.2, 0.8, 1, 0.75, 0.15][k], h: 0.36 * [0.25, 0.85, 1, 0.8, 0.2][k], y: gy })), 14, 2, 'spat'), camo);
       else { const wh = latheRing([[0.1, -0.07], [0.3, -0.07], [0.3, 0.07], [0.1, 0.07]], 16, 'wheel'); wh.rotateY(Math.PI / 2); body.add(wh, dark, [gx, gy, gz]); }
     }
-    if (lk.has('wire')) for (const s of [-1, 1]) { const w = wingGunAt(s * S * 0.3); for (const yy of [sp.topAt(cz - 0.5) - 0.02, sp.botAt(cz - 0.5) + 0.05]) (s < 0 ? wl : wr).add(tube([new V(s * sp.at(cz - 0.5).w * 0.7, yy, cz - 0.5), new V(s * w.x, w.y, w.le + w.c * 0.4)], 0.012), 0x9a9a9a); }
+    if (rule(has('bracingWires') && !sp.bi, 'monoplane wing bracing wires')) for (const s of [-1, 1]) { const w = wingGunAt(s * S * 0.3); for (const yy of [sp.topAt(cz - 0.5) - 0.02, sp.botAt(cz - 0.5) + 0.05]) (s < 0 ? wl : wr).add(tube([new V(s * sp.at(cz - 0.5).w * 0.7, yy, cz - 0.5), new V(s * w.x, w.y, w.le + w.c * 0.4)], 0.012), 0x9a9a9a); }
 
     // ---------------- tail surfaces
     const st = sp.stab;
@@ -352,6 +362,13 @@
       body.add(mirrorX(geo), (x, y, z, ny) => { const f = (Math.abs(x) - st.x0) / (st.b - st.x0), a = at(Math.max(0, Math.min(1, f))), fr = (z - a.le) / a.c, base = ny < -0.25 ? pt.bot : pt.top; return fr > 0.7 && (!sp.jet || pl.era <= 4) ? shade(base, 0.86) : base; });
     }
     const flash = pl.nation === 'fra' ? [0x0055a4, 0xffffff, 0xef4135] : pl.nation === 'uk' ? (pl.era <= 2 ? [0x1c2f6e, 0xffffff, 0xc8102e] : pl.era === 3 ? [0xc8102e, 0xffffff, 0x1c2f6e] : [0xc8102e, 0x1c2f6e]) : null;
+    rule(e0.tailConfiguration === 't_tail', 't_tail: tailplane on top of the fin');
+    rule(e0.horizontalTail === 'fin_mid', 'cruciform: tailplane part-way up the fin');
+    rule(e0.horizontalTail === 'none', 'tailless: no horizontal tail');
+    rule(e0.tailConfiguration === 'twin_endplate', 'twin_endplate: fins on the tailplane tips');
+    rule(e0.tailConfiguration === 'twin_boom', 'twin_boom: fins on the booms, tailplane between them');
+    rule(e0.tailConfiguration === 'twin_vertical_straight', 'twin_vertical_straight: two upright fins');
+    rule(e0.tailConfiguration === 'twin_vertical_canted', 'twin_vertical_canted: fins tilted outwards by ' + e0.finCantDeg + ' deg');
     sp.fins.forEach((fn, i) => {
       // built along +X (height) with the chord along Z, then stood up (and canted) about the Z axis
       const h = fn.h, at = f => ({ x: f * h, le: fn.zLE + fn.sw * f * h, c: fn.rc * (1 - f) + fn.tc * f, y: 0 });
@@ -361,9 +378,9 @@
       if (flash && sp.fins.length === 1) { const f = 0.45, a = at(f), half = naca(0.5, fn.t) * a.c + 0.012, w = a.c * 0.12;
         flash.forEach((c, k) => { for (const sd of [-1, 1]) mkB.add(box(0.01, h * 0.42, w), c, [sd * half, fn.base + h * f, a.le + a.c * 0.35 + (k - (flash.length - 1) / 2) * w]); }); }
     });
-    if (sp.dorsal && sp.fins.length === 1) { const fn = sp.fins[0], dl = L * 0.18, zA = fn.zLE - dl * 0.85;
+    if (rule(sp.dorsal && sp.fins.length === 1, 'dorsal fin fillet')) { const fn = sp.fins[0], dl = L * 0.18, zA = fn.zLE - dl * 0.85;
       const g = loftSurface([{ x: 0, le: zA, c: dl + fn.rc * 0.2, y: 0, t: 0.06 }, { x: fn.h * 0.25, le: fn.zLE + fn.sw * fn.h * 0.2, c: fn.rc * 0.15, y: 0, t: 0.06 }], 6, 'dorsal'); g.rotateZ(Math.PI / 2); body.add(g, pt.top, [0, sp.topAt(fn.zLE) - 0.12, 0]); }
-    if (sp.ventral) { const v = sp.ventral, g = loftSurface([{ x: 0, le: v.zLE, c: v.rc, y: 0, t: 0.06 }, { x: v.h, le: v.zLE + v.rc * 0.45, c: v.rc * 0.45, y: 0, t: 0.06 }], 6, 'ventral fin'); g.rotateZ(-Math.PI / 2); body.add(g, pt.bot, [0, sp.botAt(v.zLE + v.rc / 2) + 0.1, 0]); }
+    if (rule(sp.ventral, 'ventral fin')) { const v = sp.ventral, g = loftSurface([{ x: 0, le: v.zLE, c: v.rc, y: 0, t: 0.06 }, { x: v.h, le: v.zLE + v.rc * 0.45, c: v.rc * 0.45, y: 0, t: 0.06 }], 6, 'ventral fin'); g.rotateZ(-Math.PI / 2); body.add(g, pt.bot, [0, sp.botAt(v.zLE + v.rc / 2) + 0.1, 0]); }
 
     // ---------------- guns
     for (const [gid, n, mount] of pl.guns) {
@@ -418,6 +435,7 @@
       else { const th = Math.max(0.3, lay.gearH * 0.45), tz = L * 0.4, ty = sp.botAt(tz); gb.add(box(0.08, th, 0.08), 0x555555, [0, ty - th / 2, tz]); gb.add(wheel(0.18), dark, [0, ty - th, tz]); }
       grp.gear = new THREE.Mesh(gb.build(), mat('vc')); grp.gear.visible = false;
     }
+    Airframe.anomalies = Airframe.anomalies || {}; Airframe.anomalies[pl.id] = sp.notes.concat(applied);
     return grp;
   }
   // merge non-indexed, vertex-coloured geometries

@@ -3,6 +3,20 @@
 import path from 'path';
 export default async function (t) {
   await t.goto('file:///' + path.resolve('index.html').replace(/\\/g, '/'));
+  // 1. the registry: every aircraft explicitly defined and valid; a missing property must throw, not fall back to a default
+  const reg = JSON.parse(await t.eval(`(() => {
+    const errors = Airframe.audit(PLANE_LIST), ids = PLANE_LIST.map(p => p.id), missing = ids.filter(id => !Airframe.REGISTRY[id]);
+    const probe = (mut, label) => { const id = '__probe' + label; const base = JSON.parse(JSON.stringify(Airframe.REGISTRY.f22a)); mut(base); Airframe.REGISTRY[id] = base;
+      try { Airframe.spec(Object.assign({}, PLANES.f22a, { id })); return label + ': NOT rejected'; } catch (e) { return label + ': rejected (' + e.message.replace(/^Airframe "[^"]+": /, '') + ')'; } finally { delete Airframe.REGISTRY[id]; } };
+    const probes = [probe(e => { delete e.canardPresence; }, 'no canardPresence'), probe(e => { e.finCantDeg = 0; }, 'canted fins without a cant'),
+      probe(e => { e.intakeProfile = 'tube'; }, 'unknown intake'), probe(e => { delete e.fuselage.fuselageLengthToWidthRatio; }, 'no width ratio'),
+      probe(e => { e.canardPresence = true; e.canardLength = 0; }, 'canards without a length'), probe(e => { delete e.wing.sweepTE; }, 'diamond wing without TE sweep')];
+    let unknown = false; try { Airframe.spec({ id: '__nope', len: 10, span: 10, kind: 'jet', eng: 1, crew: ['pilot'], shape: 'jet_sw', era: 6 }); } catch (e) { unknown = true; }
+    return JSON.stringify({ count: Object.keys(Airframe.REGISTRY).length, errors, missing, probes, unknown });
+  })()`));
+  console.log('registry entries', reg.count, '| aircraft without an entry:', reg.missing.length, '| invalid entries:', reg.errors.length, reg.errors.slice(0, 5).join(' / '));
+  console.log('unregistered aircraft throws:', reg.unknown);
+  for (const p of reg.probes) console.log('  probe -', p);
   const out = await t.eval(`(() => {
     const res = { planes: 0, parts: 0, flipped: {}, open: [], inverted: [], nan: [], tris: 0, maxTris: 0, maxId: '' };
     for (const pl of PLANE_LIST) {
@@ -38,4 +52,6 @@ export default async function (t) {
   console.log('open (non-watertight) parts:', r.open.length, r.open.slice(0, 30).join(' '));
   console.log('inside-out parts:', r.inverted.length, r.inverted.slice(0, 30).join(' '));
   console.log('NaN parts:', r.nan.length, r.nan.slice(0, 30).join(' '));
+  // 3. the anomaly checklist each aircraft went through
+  if (process.env.LOG) { const log = JSON.parse(await t.eval('JSON.stringify(Airframe.anomalies)')); for (const id of process.env.LOG.split(',')) console.log(id + ':\n  - ' + (log[id] || []).join('\n  - ')); }
 }

@@ -64,7 +64,7 @@ const Cockpit = (() => {
     } else {
       // canopy framing
       // open-cockpit monoplanes (P-26, I-16, TB-3...) only have a small windscreen: no roof, no rails
-      const open = typeof look === 'function' && look(def).has('open');
+      const open = Airframe.spec(def).canopy.type === 'open';
       const fw = st === 'bomber' ? 0.75 : open ? 0.26 : 0.36, fz = st === 'modern' ? -0.85 : -0.6;
       if (open) { for (const s of [-1, 1]) bar(0.22, s * fw, -0.16, fz, -0.4, s * 0.2, 0.014); bar(fw * 2, 0, -0.06, fz - 0.04, 0, Math.PI / 2, 0.014); }
       else if (st !== 'modern') { for (const s of [-1, 1]) bar(0.55, s * fw, 0.02, fz, -0.35, s * 0.25, 0.022); bar(fw * 2, 0, 0.27, fz - 0.05, 0, Math.PI / 2, 0.022); }

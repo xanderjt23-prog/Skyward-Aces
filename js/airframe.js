@@ -1,263 +1,1164 @@
 // ============================================================================
-// Airframes: a parametric description of every aircraft, built from explicit
-// sub-components lined up on the central axis (nose -Z, tail +Z, up +Y):
-//   fuselage  - cross-section stations along the axis (superellipse sections)
-//   wing      - root/tip chords, leading-edge sweep, dihedral (with a kink for
-//               gull / cranked wings), position on the fuselage, airfoil thickness
-//   stab      - horizontal tail (on the fuselage, on the fin, or none)
-//   fins      - single, twin on the body, or end plates on the tailplane tips
-//   engines   - propeller, jet in the fuselage, nacelles, pods
-//   intakes, nozzles, canopy, extras (canards, LERX, booms, ventral fins...)
-// Numbers come from each type's general-arrangement (three-view) proportions and
-// are given as fractions: lengths along the axis of the aircraft length L, the
-// fuselage half-width R of L, cross-sections of R, spans of the wing span S.
-// spec(pl) resolves everything to metres; the model builder and the shared
-// layout (damage boxes, gear, stores, cockpit eye) both read the same spec.
+// Airframe registry: every aircraft in the game, defined explicitly from real
+// aviation data. There are NO class defaults: spec() validates each entry and
+// throws if any required property is missing or inconsistent, instead of
+// guessing a shape.
+//
+// Each entry:
+//   dims      published figures: length, span, height (m, on its wheels; tail-wheel
+//             types in the three-point attitude), wingArea (m², gross)
+//   gear      'tailwheel' | 'tricycle' | 'skid'   (used to turn the published height into fin height)
+//   fuselage  profile (side/plan shape along the axis, see FUS), section ('round' | 'oval' |
+//             'rounded_box' | 'box'), fuselageLengthToWidthRatio (L / max body width, incl.
+//             side intake trunks), heightToWidth (max body depth / max width)
+//   wing      wingMountHeight (0 low .. 0.5 mid .. 1 high/shoulder), planform ('trapezoid' |
+//             'elliptical' | 'delta' | 'diamond' | 'gull' | 'inverted_gull' | 'cranked'),
+//             rootLE (leading edge at the centreline, fraction of L from the nose), sweepLE,
+//             taper (tip / root chord), dihedral (deg), thickness (t/c);
+//             kink [span fraction, inner dihedral, outer dihedral] for gull / inverted_gull / cranked;
+//             sweepTE for diamond. The root chord is computed from dims.wingArea.
+//   biplane   null, or { wings: 2|3, gapToChord, stagger (fraction of chord, + = upper forward),
+//             lowerSpanRatio, lowerChordRatio, middleSpanRatio (triplanes) }
+//   intakeProfile  'none' (propellers) | 'nose_cone' | 'side_box' | 'cheek_crescent' | 'chin_scoop' |
+//             'ventral_box' (under the LERX, ahead of engine nacelles) | 'wing_root' | 'nacelle'
+//   intake    null, or { at (mouth, fraction of L), length (fraction of L), width, height (m, the mouth's real
+//             size), rake (deg, top lip forward), splitter, shockCone }
+//   engines   { layout, count, ... } - see ENGINE_FIELDS below
+//   tailConfiguration  'single_vertical' | 'twin_vertical_straight' | 'twin_vertical_canted' | 't_tail' |
+//             'twin_endplate' (fins on the tailplane tips) | 'twin_boom'
+//   horizontalTail  'fuselage' | 'fin_mid' (cruciform) | 'fin_top' | 'boom' | 'none'
+//   finCantDeg  outward cant of the fins (0 unless twin_vertical_canted)
+//   tail      stabSpan (m, tip to tip), stabChord (m, root), stabTaper, stabLE (fraction of L), stabSweep,
+//             stabDihedral, stabHeight (fuselage tail: in local half-heights; fin_mid: fraction up the fin),
+//             finLE (fraction of L), finChord (m, root), finTaper, finSweep,
+//             finSpacing (twin_vertical_*: in body half-widths), finBelow (twin_endplate / twin_boom:
+//             fraction of the fin below the tailplane), finTip (tail-wheel / skid types only: fin tip above the
+//             fuselage centreline in m, from the side elevation - their published height is often taken to the
+//             vertical propeller tip, so it is only used as a cross-check)
+//   canardPresence, canardLength (m, exposed semi-span), canardSweep (deg), canardOffset (m behind
+//             the cockpit centre; negative = ahead of it), canardHeight (body half-heights)
+//   cockpit   canopy ('open' | 'framed' | 'razorback' | 'bubble' | 'greenhouse' | 'side_by_side' |
+//             'glazed_nose' | 'stepped'), at (canopy centre, fraction of L), length (m), offset (m, sideways)
+//   extras    explicit list of distinguishing features (see EXTRAS)
+//
+// Sources: published specifications (manufacturer data and standard references, cross-checked
+// online: e.g. aerospaceweb, migflug, armedconflicts, warbirdsresourcegroup, airpages, Wikipedia);
+// positions along the length, body widths and tail chords measured from the types' three-view
+// general-arrangement drawings.
 // ============================================================================
 const Airframe = (() => {
   const D = Math.PI / 180;
-  // ---- fuselage section templates: [t (0 nose .. 1 tail), half-width, half-height, centre-line height] in units of R
+  // ---- fuselage shapes along the axis: [t (0 nose .. 1 tail), width, depth, centre-line height (in half-widths)].
+  // Width and depth are normalised at load time, so the aircraft's real width / depth come only from its ratios.
   const FUS = {
-    inline:  [[0, .42, .5, -.02], [.04, .74, .9, 0], [.13, .92, 1.15, .02], [.27, 1, 1.32, .08], [.42, .96, 1.3, .1], [.62, .66, .98, .14], [.84, .32, .58, .2], [.97, .13, .3, .24], [1, .07, .16, .25]],
-    radial:  [[0, .9, .9, 0], [.03, .98, .98, 0], [.13, 1, 1, 0], [.28, 1, 1.06, .04], [.44, .92, 1.08, .08], [.64, .6, .82, .12], [.86, .28, .44, .18], [1, .07, .14, .22]],
-    biplane: [[0, .82, .88, 0], [.12, 1, 1, 0], [.3, 1, 1.04, .02], [.55, .72, .84, .06], [.85, .3, .44, .1], [1, .06, .12, .12]],
-    bomber:  [[0, .32, .34, -.05], [.04, .74, .8, -.02], [.12, .94, 1.04, 0], [.22, 1, 1.12, 0], [.6, .96, 1.1, 0], [.82, .58, .76, .08], [.96, .25, .4, .14], [1, .14, .24, .15]],
-    glazed:  [[0, .18, .18, -.1], [.025, .6, .6, -.06], [.08, .9, .92, -.02], [.18, 1, 1.08, 0], [.6, .96, 1.08, 0], [.82, .58, .76, .08], [.96, .25, .4, .14], [1, .14, .24, .15]],
-    // jets: nose intake + tail nozzle / radar nose + tail nozzle / slender (engines elsewhere, tail closes)
-    jetNose: [[0, .84, .88, 0], [.08, .95, .99, 0], [.3, 1, 1.06, .02], [.62, .93, .98, .02], [.86, .8, .83, .02], [1, .72, .74, 0]],
-    jetOval: [[0, .9, .62, -.05], [.08, .98, .86, 0], [.3, 1, 1.02, .02], [.62, .93, .96, .02], [.86, .8, .82, .02], [1, .7, .72, 0]],
-    jetRadar:[[0, .02, .02, -.04], [.04, .3, .3, -.04], [.12, .58, .58, -.02], [.22, .82, .82, 0], [.34, 1, .98, 0], [.62, 1, .98, 0], [.86, .86, .84, 0], [1, .72, .72, 0]],
-    jetGun:  [[0, .3, .3, -.05], [.04, .58, .6, -.03], [.12, .82, .84, 0], [.25, 1, 1, 0], [.62, .96, .98, .02], [.86, .8, .82, .02], [1, .66, .68, 0]],
-    jetBlend:[[0, .02, .02, -.08], [.05, .3, .3, -.07], [.13, .52, .5, -.04], [.22, .7, .68, 0], [.3, 1.1, .78, 0], [.45, 1.6, .8, 0], [.8, 1.6, .76, 0], [.95, 1.35, .66, 0], [1, 1.2, .6, 0]],
-    jetF16:  [[0, .02, .02, -.05], [.05, .3, .3, -.04], [.12, .55, .55, -.02], [.2, .72, .72, 0], [.3, .92, .8, .02], [.45, 1.2, .8, .02], [.7, 1.08, .78, .02], [.9, .78, .74, 0], [1, .64, .64, 0]],
-    jetSlim: [[0, .04, .04, -.05], [.05, .36, .38, -.04], [.14, .66, .7, -.02], [.28, .92, .96, 0], [.42, 1, 1, 0], [.75, .94, .98, .04], [.95, .44, .52, .1], [1, .14, .18, .14]],
-    jetPod:  [[0, .02, .02, -.05], [.06, .4, .42, -.03], [.16, .72, .74, 0], [.3, .92, .96, 0], [.42, 1, 1, 0], [.72, .9, .94, .04], [.94, .38, .46, .14], [1, .12, .16, .16]],
-    jetGlaze:[[0, .2, .2, -.1], [.03, .6, .62, -.06], [.1, .9, .92, -.02], [.22, 1, 1, 0], [.7, .92, .96, .04], [.94, .38, .46, .14], [1, .12, .16, .16]],
-    // types with a shape of their own
-    a10:     [[0, .4, .55, -.12], [.04, .7, .85, -.06], [.12, .92, 1.05, 0], [.28, 1, 1.12, .02], [.5, .9, 1.04, .08], [.72, .58, .78, .16], [.9, .32, .44, .28], [1, .12, .16, .32]],
-    me262:   [[0, .2, .24, -.1], [.05, .6, .66, -.06], [.14, .9, .94, -.02], [.32, 1, 1.02, 0], [.6, .84, .92, .04], [.88, .4, .5, .12], [1, .16, .24, .16]],
-    f4:      [[0, .02, .02, -.06], [.05, .34, .34, -.05], [.14, .62, .62, -.02], [.24, .82, .86, 0], [.4, 1, 1.05, 0], [.66, .96, 1, .06], [.8, .7, .82, .2], [.94, .36, .5, .38], [1, .24, .34, .42]],
-    flanker: [[0, .02, .02, -.08], [.05, .32, .32, -.07], [.14, .55, .55, -.04], [.24, .74, .74, 0], [.36, 1.1, .82, .04], [.5, 1.3, .8, .06], [.7, .9, .64, .08], [.88, .5, .46, .1], [1, .32, .32, .1]],
-    lightning:[[0, .8, 1.05, 0], [.08, .9, 1.18, 0], [.3, 1, 1.35, .05], [.62, .96, 1.32, .05], [.86, .86, 1.2, .05], [1, .8, 1.15, .05]],
-    bucc:    [[0, .02, .02, -.05], [.05, .38, .4, -.03], [.14, .7, .74, 0], [.3, .96, 1, 0], [.45, .82, .96, 0], [.62, 1, 1.02, .02], [.85, .7, .76, .06], [.97, .3, .34, .1], [1, .14, .16, .1]],
-    p38pod:  [[0, .3, .32, 0], [.05, .66, .7, 0], [.14, .92, .96, 0], [.3, 1, 1.05, .02], [.5, .9, .98, .04], [.6, .6, .7, .06], [.64, .3, .4, .08], [.66, .12, .16, .08]],
+    piston_inline:  [[0, .42, .5, -.02], [.04, .74, .9, 0], [.13, .92, 1.15, .02], [.27, 1, 1.32, .08], [.42, .96, 1.3, .1], [.62, .66, .98, .14], [.84, .32, .58, .2], [.97, .13, .3, .24], [1, .07, .16, .25]],
+    piston_radial:  [[0, .9, .9, 0], [.03, .98, .98, 0], [.13, 1, 1, 0], [.28, 1, 1.06, .04], [.44, .92, 1.08, .08], [.64, .6, .82, .12], [.86, .28, .44, .18], [1, .07, .14, .22]],
+    biplane:        [[0, .82, .88, 0], [.12, 1, 1, 0], [.3, 1, 1.04, .02], [.55, .72, .84, .06], [.85, .3, .44, .1], [1, .06, .12, .12]],
+    bomber_solid:   [[0, .32, .34, -.05], [.04, .74, .8, -.02], [.12, .94, 1.04, 0], [.22, 1, 1.12, 0], [.6, .96, 1.1, 0], [.82, .58, .76, .08], [.96, .25, .4, .14], [1, .14, .24, .15]],
+    bomber_glazed:  [[0, .18, .18, -.1], [.025, .6, .6, -.06], [.08, .9, .92, -.02], [.18, 1, 1.08, 0], [.6, .96, 1.08, 0], [.82, .58, .76, .08], [.96, .25, .4, .14], [1, .14, .24, .15]],
+    jet_nose_intake:[[0, .84, .88, 0], [.08, .95, .99, 0], [.3, 1, 1.06, .02], [.62, .93, .98, .02], [.86, .8, .83, .02], [1, .72, .74, 0]],
+    jet_nose_oval:  [[0, .9, .62, -.05], [.08, .98, .86, 0], [.3, 1, 1.02, .02], [.62, .93, .96, .02], [.86, .8, .82, .02], [1, .7, .72, 0]],
+    jet_radar:      [[0, .02, .02, -.04], [.04, .3, .3, -.04], [.12, .58, .58, -.02], [.22, .82, .82, 0], [.34, 1, .98, 0], [.62, 1, .98, 0], [.86, .86, .84, 0], [1, .72, .72, 0]],
+    jet_gun_nose:   [[0, .3, .3, -.05], [.04, .58, .6, -.03], [.12, .82, .84, 0], [.25, 1, 1, 0], [.62, .96, .98, .02], [.86, .8, .82, .02], [1, .66, .68, 0]],
+    jet_blended:    [[0, .02, .02, -.08], [.05, .3, .3, -.07], [.13, .52, .5, -.04], [.22, .7, .68, 0], [.3, 1.1, .78, 0], [.45, 1.6, .8, 0], [.8, 1.6, .76, 0], [.95, 1.35, .66, 0], [1, 1.2, .6, 0]],
+    jet_f16:        [[0, .02, .02, -.05], [.05, .3, .3, -.04], [.12, .55, .55, -.02], [.2, .72, .72, 0], [.3, .92, .8, .02], [.45, 1.2, .8, .02], [.7, 1.08, .78, .02], [.9, .78, .74, 0], [1, .64, .64, 0]],
+    jet_tapered:    [[0, .04, .04, -.05], [.05, .36, .38, -.04], [.14, .66, .7, -.02], [.28, .92, .96, 0], [.42, 1, 1, 0], [.75, .94, .98, .04], [.95, .44, .52, .1], [1, .14, .18, .14]],
+    jet_pod_tail:   [[0, .02, .02, -.05], [.06, .4, .42, -.03], [.16, .72, .74, 0], [.3, .92, .96, 0], [.42, 1, 1, 0], [.72, .9, .94, .04], [.94, .38, .46, .14], [1, .12, .16, .16]],
+    jet_glazed:     [[0, .2, .2, -.1], [.03, .6, .62, -.06], [.1, .9, .92, -.02], [.22, 1, 1, 0], [.7, .92, .96, .04], [.94, .38, .46, .14], [1, .12, .16, .16]],
+    a10:            [[0, .4, .55, -.12], [.04, .7, .85, -.06], [.12, .92, 1.05, 0], [.28, 1, 1.12, .02], [.5, .9, 1.04, .08], [.72, .58, .78, .16], [.9, .32, .44, .28], [1, .12, .16, .32]],
+    me262:          [[0, .2, .24, -.1], [.05, .6, .66, -.06], [.14, .9, .94, -.02], [.32, 1, 1.02, 0], [.6, .84, .92, .04], [.88, .4, .5, .12], [1, .16, .24, .16]],
+    f4:             [[0, .02, .02, -.06], [.05, .34, .34, -.05], [.14, .62, .62, -.02], [.24, .82, .86, 0], [.4, 1, 1.05, 0], [.66, .96, 1, .06], [.8, .7, .82, .2], [.94, .36, .5, .38], [1, .24, .34, .42]],
+    flanker:        [[0, .02, .02, -.08], [.05, .32, .32, -.07], [.14, .55, .55, -.04], [.24, .74, .74, 0], [.36, 1.1, .82, .04], [.5, 1.3, .8, .06], [.7, .9, .64, .08], [.88, .5, .46, .1], [1, .32, .32, .1]],
+    lightning:      [[0, .8, 1.05, 0], [.08, .9, 1.18, 0], [.3, 1, 1.35, .05], [.62, .96, 1.32, .05], [.86, .86, 1.2, .05], [1, .8, 1.15, .05]],
+    buccaneer:      [[0, .02, .02, -.05], [.05, .38, .4, -.03], [.14, .7, .74, 0], [.3, .96, 1, 0], [.45, .82, .96, 0], [.62, 1, 1.02, .02], [.85, .7, .76, .06], [.97, .3, .34, .1], [1, .14, .16, .1]],
+    p38_gondola:    [[0, .3, .32, 0], [.05, .66, .7, 0], [.14, .92, .96, 0], [.3, 1, 1.05, .02], [.5, .9, .98, .04], [.6, .6, .7, .06], [.64, .3, .4, .08], [.66, .12, .16, .08]],
   };
-  // per-type parameters (anything not given comes from the class defaults below)
-  //  fus: template, R: half-width / L, n: section squareness (2 ellipse .. 4 box)
-  //  wing: x root LE / L from the nose, c root chord / L, tr taper, sw LE sweep, te TE sweep (overrides tr), dih, kink [span f, inner, outer dih],
-  //        pos root height in local half-heights (-1 bottom .. 1 top), t thickness, ellip, tiptanks, fences, droop (drooped tips)
-  //  stab: x, hs half-span / L, c, tr, sw, dih, y (R units) or fin: fraction up the fin; null = none
-  //  fin:  x, h height above the fuselage top / L, c, tr, sw, cant, twin: 'body' (xo in R) | 'tips', below, ventral, dorsal
-  //  eng:  nacelles / pods; nz: nozzles [x in R, y in R]; intake: type (nose|rect|semi|chin|vent|root|round), z, len, w, h (R units)
-  //  canopy: z centre / L from the nose, len / L, type, w, h (R units)
-  const T = {
-    // ---------------- early jets
-    f80c:   { fus: 'jetGun', R: .066, wing: { x: .36, c: .24, tr: .45, sw: 4, dih: 5, pos: -.5, t: .13, tiptanks: true }, intake: { type: 'semi', z: .3, len: .22, w: .45, h: .75, y: -.05 }, stab: { x: .85, hs: .17, c: .09, tr: .6, sw: 8, y: .2 }, fin: { x: .8, h: .15, c: .15, tr: .45, sw: 30 }, canopy: { z: .22, len: .15, type: 'bubble' } },
-    f86f:   { fus: 'jetNose', R: .072, wing: { x: .38, c: .28, tr: .5, sw: 37, dih: 3, pos: -.45, t: .1 }, stab: { x: .84, hs: .17, c: .1, tr: .5, sw: 35, y: .3 }, fin: { x: .76, h: .17, c: .2, tr: .4, sw: 40 }, canopy: { z: .25, len: .16, type: 'bubble' } },
-    mig15:  { fus: 'jetNose', R: .072, wing: { x: .37, c: .29, tr: .5, sw: 37, dih: -2, pos: .1, t: .1, fences: 2 }, stab: { x: .86, hs: .16, c: .1, tr: .5, sw: 40, fin: .55 }, fin: { x: .72, h: .2, c: .23, tr: .4, sw: 56 }, canopy: { z: .27, len: .14, type: 'bubble' } },
-    mig17:  { fus: 'jetNose', R: .066, wing: { x: .38, c: .3, tr: .45, sw: 45, dih: -3, pos: .1, t: .08, fences: 3 }, stab: { x: .86, hs: .15, c: .1, tr: .5, sw: 45, fin: .5 }, fin: { x: .72, h: .19, c: .23, tr: .4, sw: 56 }, canopy: { z: .26, len: .13, type: 'bubble' } },
-    ouragan:{ fus: 'jetNose', R: .075, wing: { x: .36, c: .25, tr: .55, sw: 14, dih: 2, pos: 0, t: .1, tiptanks: true }, stab: { x: .84, hs: .17, c: .1, tr: .6, sw: 15, fin: .35 }, fin: { x: .76, h: .17, c: .2, tr: .45, sw: 35 }, canopy: { z: .25, len: .15, type: 'bubble' } },
-    mystere4:{ fus: 'jetNose', R: .066, wing: { x: .39, c: .27, tr: .45, sw: 41, dih: 0, pos: 0, t: .075 }, stab: { x: .86, hs: .15, c: .1, tr: .5, sw: 42, fin: .4 }, fin: { x: .74, h: .17, c: .21, tr: .4, sw: 45 }, canopy: { z: .25, len: .15, type: 'bubble' } },
-    g91:    { fus: 'jetOval', R: .07, wing: { x: .4, c: .28, tr: .5, sw: 37, dih: 2, pos: -.45, t: .09 }, stab: { x: .85, hs: .15, c: .1, tr: .5, sw: 35, y: .2 }, fin: { x: .75, h: .17, c: .2, tr: .4, sw: 40 }, canopy: { z: .25, len: .15, type: 'bubble' } },
-    hunter6:{ fus: 'jetRadar', R: .07, wing: { x: .38, c: .32, tr: .35, sw: 40, dih: -1, pos: 0, t: .085 }, intake: { type: 'root' }, stab: { x: .85, hs: .13, c: .09, tr: .45, sw: 40, fin: .22 }, fin: { x: .74, h: .17, c: .2, tr: .4, sw: 45 }, canopy: { z: .2, len: .14, type: 'bubble' } },
-    meteor8:{ fus: 'jetPod', R: .058, wing: { x: .38, c: .22, tr: .55, sw: 4, dih: 4, pos: -.2, t: .12 }, eng: { type: 'wingnac', x: .155, r: .056, len: .34, z: .4 }, stab: { x: .87, hs: .16, c: .09, tr: .6, sw: 12, fin: .38 }, fin: { x: .8, h: .14, c: .15, tr: .55, sw: 25 }, canopy: { z: .2, len: .14, type: 'bubble' } },
-    me262:  { fus: 'me262', R: .064, wing: { x: .4, c: .26, tr: .45, sw: 18, dih: 6, pos: -.6, t: .11 }, eng: { type: 'underwing', x: .165, r: .055, len: .33, z: .42 }, stab: { x: .86, hs: .14, c: .1, tr: .55, sw: 12, y: .55 }, fin: { x: .82, h: .13, c: .15, tr: .45, sw: 25, below: .25 }, canopy: { z: .43, len: .16, type: 'framed' } },
-    ar234:  { fus: 'jetGlaze', R: .052, wing: { x: .38, c: .23, tr: .55, sw: 3, dih: 3, pos: .85, t: .13 }, eng: { type: 'underwing', x: .2, r: .052, len: .3, z: .4 }, stab: { x: .86, hs: .15, c: .09, tr: .55, sw: 8, y: .3 }, fin: { x: .8, h: .14, c: .15, tr: .5, sw: 25 }, canopy: { type: 'glazednose' } },
-    canberra:{ fus: 'jetSlim', R: .052, wing: { x: .35, c: .3, tr: .45, sw: 10, dih: 2, pos: 0, t: .12 }, eng: { type: 'wingnac', x: .15, r: .042, len: .26, z: .4 }, stab: { x: .87, hs: .13, c: .1, tr: .55, sw: 12, dih: 10, y: .3 }, fin: { x: .8, h: .13, c: .19, tr: .5, sw: 30 }, canopy: { z: .14, len: .09, type: 'bubble', x: -.25 } },
-    il28:   { fus: 'jetGlaze', R: .052, wing: { x: .38, c: .22, tr: .55, sw: 3, dih: 2, pos: .6, t: .13 }, eng: { type: 'underwing', x: .15, r: .045, len: .26, z: .4 }, stab: { x: .86, hs: .14, c: .1, tr: .45, sw: 35, y: .3 }, fin: { x: .78, h: .14, c: .2, tr: .4, sw: 40 }, canopy: { z: .2, len: .1, type: 'bubble' } },
-    vautour:{ fus: 'jetGlaze', R: .06, wing: { x: .38, c: .26, tr: .45, sw: 35, dih: 0, pos: 0, t: .09 }, eng: { type: 'underwing', x: .2, r: .046, len: .3, z: .42 }, stab: { x: .86, hs: .15, c: .1, tr: .5, sw: 40, fin: .55 }, fin: { x: .74, h: .17, c: .22, tr: .4, sw: 45 }, canopy: { z: .2, len: .12, type: 'bubble' } },
-    tu16:   { fus: 'jetGlaze', R: .052, wing: { x: .38, c: .17, tr: .4, sw: 37, dih: -3, pos: 0, t: .12 }, eng: { type: 'rootnac', r: .042, len: .28, z: .38 }, stab: { x: .87, hs: .14, c: .08, tr: .45, sw: 42, y: .2 }, fin: { x: .78, h: .14, c: .16, tr: .4, sw: 45 }, canopy: { z: .1, len: .07, type: 'bubble' } },
-    // ---------------- 1950s-60s
-    f100d:  { fus: 'jetOval', R: .055, wing: { x: .38, c: .3, tr: .35, sw: 49, dih: 0, pos: -.5, t: .07 }, stab: { x: .86, hs: .16, c: .11, tr: .4, sw: 45, y: -.3 }, fin: { x: .72, h: .17, c: .24, tr: .35, sw: 45 }, canopy: { z: .22, len: .13, type: 'bubble' } },
-    f104g:  { fus: 'jetRadar', R: .045, wing: { x: .48, c: .17, tr: .4, sw: 27, dih: -10, pos: -.1, t: .034 }, intake: { type: 'semi', z: .37, len: .24, w: .45, h: .85 }, stab: { x: .86, hs: .13, c: .1, tr: .5, sw: 10, fin: 1 }, fin: { x: .78, h: .17, c: .2, tr: .5, sw: 40 }, canopy: { z: .2, len: .12, type: 'framed' } },
-    mig21bis:{ fus: 'jetNose', R: .05, n: 2, wing: { x: .45, c: .38, tr: .03, sw: 57, dih: -2, pos: 0, t: .05 }, stab: { x: .87, hs: .1, c: .08, tr: .35, sw: 55, y: -.1 }, fin: { x: .7, h: .17, c: .22, tr: .3, sw: 60, ventral: true, dorsal: true }, canopy: { z: .27, len: .12, type: 'framed' }, cone: true },
-    su7b:   { fus: 'jetNose', R: .055, wing: { x: .45, c: .3, tr: .3, sw: 60, dih: -2, pos: 0, t: .06, fences: 2 }, stab: { x: .87, hs: .12, c: .09, tr: .35, sw: 55, y: -.2 }, fin: { x: .74, h: .17, c: .2, tr: .3, sw: 55, dorsal: true }, canopy: { z: .27, len: .12, type: 'framed' }, cone: true },
-    lightning:{ fus: 'lightning', R: .05, wing: { x: .45, c: .4, tr: .3, sw: 60, dih: 0, pos: 0, t: .05 }, stab: { x: .88, hs: .12, c: .1, tr: .4, sw: 60, y: -.6 }, fin: { x: .74, h: .15, c: .23, tr: .35, sw: 55 }, nz: [[0, .55], [0, -.45]], canopy: { z: .22, len: .13, type: 'framed' }, cone: true, belly: true },
-    f105:   { fus: 'jetRadar', R: .055, wing: { x: .44, c: .27, tr: .4, sw: 48, dih: -3, pos: .05, t: .05 }, intake: { type: 'root' }, stab: { x: .88, hs: .13, c: .11, tr: .4, sw: 45, y: -.3 }, fin: { x: .7, h: .16, c: .27, tr: .3, sw: 50 }, canopy: { z: .2, len: .1, type: 'framed' } },
-    a4:     { fus: 'jetRadar', R: .075, wing: { x: .4, c: .42, tr: .2, sw: 33, dih: 0, pos: -.5, t: .06 }, intake: { type: 'semi', z: .27, len: .22, w: .5, h: .8 }, stab: { x: .86, hs: .14, c: .1, tr: .45, sw: 25, fin: .3 }, fin: { x: .72, h: .2, c: .23, tr: .4, sw: 35 }, canopy: { z: .2, len: .14, type: 'bubble' } },
-    mirage3c:{ fus: 'jetRadar', R: .055, wing: { x: .4, c: .56, tr: .04, sw: 60, dih: 0, pos: -.4, t: .045 }, intake: { type: 'semi', z: .3, len: .3, w: .55, h: .9, cone: true }, stab: null, fin: { x: .72, h: .18, c: .25, tr: .3, sw: 50 }, canopy: { z: .22, len: .14, type: 'framed' } },
-    f4e:    { fus: 'f4', R: .062, wing: { x: .4, c: .3, tr: .3, sw: 45, kink: [.6, 0, 12], pos: -.55, t: .05 }, intake: { type: 'rect', z: .22, len: .36, w: .55, h: 1.05, splitter: true }, stab: { x: .88, hs: .14, c: .1, tr: .45, sw: 43, dih: -23, y: .7 }, fin: { x: .76, h: .15, c: .2, tr: .35, sw: 50 }, nz: [[-.55, -.25], [.55, -.25]], nzz: .8, canopy: { z: .21, len: .2, type: 'framed' } },
-    mig23:  { fus: 'jetRadar', R: .056, wing: { x: .45, c: .25, tr: .3, sw: 45, dih: -3, pos: .7, t: .05, glove: true }, intake: { type: 'rect', z: .27, len: .35, w: .55, h: 1.0, splitter: true }, stab: { x: .87, hs: .15, c: .12, tr: .35, sw: 55, y: 0 }, fin: { x: .7, h: .17, c: .27, tr: .3, sw: 55, dorsal: true, ventral: true }, canopy: { z: .2, len: .12, type: 'framed' } },
-    buccaneer:{ fus: 'bucc', R: .062, wing: { x: .42, c: .3, tr: .45, sw: 40, dih: -1, pos: -.1, t: .08 }, eng: { type: 'rootnac', r: .042, len: .32, z: .38 }, stab: { x: .88, hs: .12, c: .1, tr: .5, sw: 35, fin: 1 }, fin: { x: .76, h: .15, c: .22, tr: .5, sw: 40 }, canopy: { z: .18, len: .2, type: 'framed' } },
-    jaguar: { fus: 'jetRadar', R: .055, wing: { x: .45, c: .25, tr: .3, sw: 40, dih: -3, pos: .75, t: .05 }, intake: { type: 'rect', z: .3, len: .32, w: .5, h: .95 }, stab: { x: .86, hs: .14, c: .1, tr: .35, sw: 40, dih: -10, y: .1 }, fin: { x: .72, h: .16, c: .23, tr: .3, sw: 45 }, nz: [[-.5, -.35], [.5, -.35]], canopy: { z: .2, len: .13, type: 'framed' } },
-    // ---------------- modern
-    f15c:   { fus: 'jetBlend', R: .055, n: 3, wing: { x: .38, c: .34, tr: .27, sw: 45, dih: -1, pos: .6, t: .05 }, intake: { type: 'rect', z: .2, len: .42, w: .7, h: 1.25, rake: .5 }, stab: { x: .87, hs: .14, c: .14, tr: .35, sw: 50, y: 0 }, fin: { twin: 'body', xo: 1.15, x: .8, h: .16, c: .17, tr: .45, sw: 36 }, nz: [[-.62, 0], [.62, 0]], canopy: { z: .2, len: .14, type: 'bubble' } },
-    f16c:   { fus: 'jetF16', R: .055, wing: { x: .42, c: .3, tr: .23, sw: 40, dih: 0, pos: 0, t: .04 }, lerx: true, intake: { type: 'chin', z: .26, len: .36, w: .75, h: .55 }, stab: { x: .87, hs: .17, c: .11, tr: .35, sw: 40, dih: -10, y: 0 }, fin: { x: .76, h: .15, c: .2, tr: .4, sw: 47, ventral: true }, canopy: { z: .2, len: .17, type: 'bubble', frameless: true } },
-    fa18e:  { fus: 'jetBlend', R: .05, n: 2.6, wing: { x: .43, c: .27, tr: .35, sw: 28, dih: -3, pos: .25, t: .05 }, lerx: true, intake: { type: 'rect', z: .34, len: .3, w: .55, h: .85, y: -.35, rake: .4 }, stab: { x: .86, hs: .16, c: .12, tr: .4, sw: 42, y: 0 }, fin: { twin: 'body', xo: .95, cant: 20, x: .72, h: .15, c: .17, tr: .4, sw: 35 }, nz: [[-.5, 0], [.5, 0]], canopy: { z: .2, len: .15, type: 'bubble' } },
-    f22a:   { fus: 'jetBlend', R: .06, n: 3.2, wing: { x: .42, c: .38, sw: 42, te: -17, dih: -3, pos: .35, t: .04 }, intake: { type: 'rect', z: .25, len: .4, w: .62, h: 1.1, rake: .6, caret: true }, stab: { x: .86, hs: .15, c: .14, sw: 42, te: -17, y: 0 }, fin: { twin: 'body', xo: 1.0, cant: 28, x: .73, h: .14, c: .2, tr: .4, sw: 22 }, nz: [[-.5, 0], [.5, 0]], nzRect: true, canopy: { z: .2, len: .16, type: 'bubble', frameless: true } },
-    mig29:  { fus: 'flanker', R: .05, n: 2.6, wing: { x: .43, c: .3, tr: .25, sw: 42, dih: -2, pos: .2, t: .05 }, lerx: true, eng: { type: 'nacelle', x: 1.3, r: .042, z0: .3, z1: .98 }, intake: { type: 'vent', z: .3, len: .2, w: .62, h: .7 }, stab: { x: .87, hs: .17, c: .13, tr: .35, sw: 45, y: -.1, root: 2.0 }, fin: { twin: 'body', xo: 1.7, cant: 6, x: .74, h: .15, c: .17, tr: .4, sw: 40 }, nz: [[-1.3, -.4], [1.3, -.4]], canopy: { z: .2, len: .13, type: 'bubble' } },
-    su27:   { fus: 'flanker', R: .046, n: 2.6, wing: { x: .44, c: .28, tr: .23, sw: 42, dih: -2, pos: .2, t: .05, tiprail: true }, lerx: true, eng: { type: 'nacelle', x: 1.45, r: .038, z0: .3, z1: .97 }, intake: { type: 'vent', z: .3, len: .22, w: .62, h: .75 }, stab: { x: .87, hs: .17, c: .12, tr: .35, sw: 45, y: -.1, root: 2.2 }, fin: { twin: 'body', xo: 2.0, cant: 0, x: .74, h: .14, c: .16, tr: .4, sw: 40 }, nz: [[-1.45, -.4], [1.45, -.4]], canopy: { z: .18, len: .12, type: 'bubble' } },
-    su57:   { fus: 'flanker', R: .052, n: 3.2, wing: { x: .42, c: .34, sw: 48, te: -14, dih: -2, pos: .2, t: .04 }, lerx: true, eng: { type: 'nacelle', x: 1.4, r: .042, z0: .28, z1: .97 }, intake: { type: 'vent', z: .28, len: .26, w: .66, h: .85, rake: .4 }, stab: { x: .87, hs: .16, c: .13, sw: 45, te: -10, y: -.1, root: 2.1 }, fin: { twin: 'body', xo: 1.8, cant: 26, x: .76, h: .12, c: .17, tr: .4, sw: 45 }, nz: [[-1.4, -.4], [1.4, -.4]], canopy: { z: .19, len: .13, type: 'bubble', frameless: true } },
-    su34:   { fus: 'flanker', R: .05, n: 2.8, wing: { x: .44, c: .27, tr: .23, sw: 42, dih: -2, pos: .2, t: .05 }, lerx: true, canards: { z: .3, hs: .08, c: .07 }, eng: { type: 'nacelle', x: 1.45, r: .036, z0: .32, z1: .97 }, intake: { type: 'vent', z: .32, len: .2, w: .62, h: .72 }, stab: { x: .87, hs: .16, c: .11, tr: .35, sw: 45, y: -.1, root: 2.2 }, fin: { twin: 'body', xo: 2.0, x: .75, h: .13, c: .15, tr: .4, sw: 40 }, nz: [[-1.45, -.4], [1.45, -.4]], canopy: { z: .16, len: .12, type: 'sbs', w: 1.2 }, duck: true },
-    f111f:  { fus: 'jetRadar', R: .062, n: 2.6, wing: { x: .4, c: .22, tr: .35, sw: 35, dih: 0, pos: .6, t: .06, glove: true }, intake: { type: 'rect', z: .4, len: .25, w: .5, h: .8, y: -.1 }, stab: { x: .86, hs: .15, c: .12, tr: .4, sw: 55, y: 0 }, fin: { x: .7, h: .17, c: .25, tr: .3, sw: 55 }, nz: [[-.45, 0], [.45, 0]], canopy: { z: .17, len: .12, type: 'sbs', w: 1.1 } },
-    su24:   { fus: 'jetRadar', R: .062, n: 2.6, wing: { x: .42, c: .22, tr: .35, sw: 35, dih: -3, pos: .6, t: .06, glove: true }, intake: { type: 'rect', z: .3, len: .35, w: .55, h: .95 }, stab: { x: .86, hs: .15, c: .12, tr: .4, sw: 55, y: 0 }, fin: { x: .7, h: .16, c: .25, tr: .3, sw: 55 }, nz: [[-.45, 0], [.45, 0]], canopy: { z: .18, len: .12, type: 'sbs', w: 1.1 } },
-    tornadoids:{ fus: 'jetRadar', R: .06, n: 2.4, wing: { x: .42, c: .25, tr: .35, sw: 30, dih: 0, pos: .6, t: .06, glove: true }, intake: { type: 'rect', z: .3, len: .3, w: .62, h: 1.1 }, stab: { x: .86, hs: .18, c: .13, tr: .45, sw: 45, dih: -3, y: 0 }, fin: { x: .7, h: .2, c: .27, tr: .3, sw: 50 }, nz: [[-.45, 0], [.45, 0]], canopy: { z: .2, len: .22, type: 'framed' } },
-    ef2000g:{ fus: 'jetRadar', R: .055, n: 2.4, wing: { x: .45, c: .46, tr: .12, sw: 53, dih: -2, pos: -.1, t: .045 }, canards: { z: .18, hs: .1, c: .07 }, intake: { type: 'chin', z: .3, len: .32, w: 1.0, h: .55, rect: true }, stab: null, fin: { x: .72, h: .18, c: .23, tr: .3, sw: 50 }, nz: [[-.45, 0], [.45, 0]], canopy: { z: .17, len: .14, type: 'bubble' } },
-    rafalec:{ fus: 'jetRadar', R: .055, n: 2.4, wing: { x: .45, c: .45, tr: .14, sw: 48, dih: -2, pos: -.3, t: .045 }, canards: { z: .32, hs: .11, c: .07, y: .45 }, intake: { type: 'semi', z: .33, len: .3, w: .55, h: .9 }, stab: null, fin: { x: .72, h: .17, c: .23, tr: .3, sw: 50 }, nz: [[-.45, 0], [.45, 0]], canopy: { z: .18, len: .14, type: 'bubble' } },
-    m2000c: { fus: 'jetRadar', R: .055, wing: { x: .4, c: .56, tr: .04, sw: 58, dih: 0, pos: -.4, t: .045 }, intake: { type: 'semi', z: .3, len: .3, w: .55, h: .9, cone: true }, stab: null, fin: { x: .72, h: .18, c: .25, tr: .3, sw: 50 }, canopy: { z: .22, len: .14, type: 'bubble' } },
-    su25:   { fus: 'jetSlim', R: .052, wing: { x: .38, c: .22, tr: .45, sw: 20, dih: -2, pos: .6, t: .1 }, eng: { type: 'sidenac', x: 1.25, r: .04, z0: .36, z1: .86 }, stab: { x: .86, hs: .15, c: .1, tr: .5, sw: 25, dih: 5, y: .3 }, fin: { x: .76, h: .15, c: .17, tr: .45, sw: 35 }, canopy: { z: .17, len: .1, type: 'framed' } },
-    a10a:   { fus: 'a10', R: .05, n: 2.6, wing: { x: .37, c: .2, tr: .62, sw: 2, kink: [.3, 0, 7], pos: -.5, t: .16, droop: true }, eng: { type: 'pod', x: .085, y: 1.55, r: .04, len: .24, z: .63 }, stab: { x: .84, hs: .17, c: .115, tr: .95, sw: 0, y: .5 }, fin: { twin: 'tips', x: .835, h: .15, c: .135, tr: .75, sw: 4, below: .3, round: true }, gearPods: [.13, .12], canopy: { z: .14, len: .12, type: 'bubble', h: 1.1 }, gau8: true },
+  for (const k in FUS) { const r = FUS[k], mw = Math.max(...r.map(x => x[1])), mh = Math.max(...r.map(x => x[2])); FUS[k] = r.map(([t, w, h, y]) => [t, w / mw, h / mh, y / mw]); }
+  const SECTION_N = { round: 2, oval: 2.2, rounded_box: 2.8, box: 4 };
+  const ENUM = {
+    gear: ['tailwheel', 'tricycle', 'skid'],
+    planform: ['trapezoid', 'elliptical', 'delta', 'diamond', 'gull', 'inverted_gull', 'cranked'],
+    intakeProfile: ['none', 'nose_cone', 'side_box', 'cheek_crescent', 'chin_scoop', 'ventral_box', 'wing_root', 'nacelle'],
+    tailConfiguration: ['single_vertical', 'twin_vertical_straight', 'twin_vertical_canted', 't_tail', 'twin_endplate', 'twin_boom'],
+    horizontalTail: ['fuselage', 'fin_mid', 'fin_top', 'boom', 'none'],
+    canopy: ['open', 'framed', 'razorback', 'bubble', 'greenhouse', 'side_by_side', 'glazed_nose', 'stepped'],
+    layout: ['nose_propeller', 'wing_propellers', 'twin_boom_propellers', 'fuselage_jet', 'wing_nacelles', 'underwing_pods', 'rear_fuselage_pods', 'fuselage_side_nacelles', 'ventral_nacelles'],
   };
-  // relatives that share an airframe
-  for (const [a, b] of [['f86fj', 'f86f'], ['sabre6', 'f86f'], ['f104j', 'f104g'], ['mig21mf', 'mig21bis'], ['f4ej', 'f4e'], ['f15j', 'f15c'], ['f15e', 'f15c'], ['f2a', 'f16c'], ['mig29g', 'mig29'], ['su35s', 'su27'], ['ef2000uk', 'ef2000g'], ['tornadof3', 'tornadoids'], ['tornadogr1', 'tornadoids'], ['m2000d', 'm2000c'], ['f1j', 'jaguar']]) T[a] = T[a] || T[b];
-  T.f2a = Object.assign({}, T.f16c, { wing: Object.assign({}, T.f16c.wing, { c: .34, sw: 33 }) });
-  T.f15e = Object.assign({}, T.f15c, { canopy: { z: .2, len: .2, type: 'bubble' }, cft: true });
-  T.m2000d = Object.assign({}, T.m2000c, { canopy: { z: .23, len: .19, type: 'framed' } });
-  T.tornadof3 = Object.assign({}, T.tornadoids, { fus: 'jetRadar' });
-  T.f1j = Object.assign({}, T.jaguar, { canopy: { z: .2, len: .11, type: 'framed' } });
+  // engines.layout and the fields each needs:
+  //   nose_propeller { radial }                         wing_propellers { positions (semi-span fractions), radial, pusher }
+  //   twin_boom_propellers { positions }                fuselage_jet { nozzles [[x, y] in body half-widths], nozzleAt (fraction of L) }
+  //   wing_nacelles / underwing_pods { positions, diameter (m), length (m) }
+  //   rear_fuselage_pods { lateral (m), height (m above axis), at (fraction of L), diameter, length }
+  //   fuselage_side_nacelles { at, diameter, length, lateral (body half-widths, 0 = against the side) }
+  //   ventral_nacelles { lateral (body half-widths), diameter, from, to (fractions of L) }
+  const ENGINE_FIELDS = {
+    nose_propeller: ['radial'], wing_propellers: ['positions', 'radial', 'pusher'], twin_boom_propellers: ['positions'],
+    fuselage_jet: ['nozzles', 'nozzleAt'], wing_nacelles: ['positions', 'diameter', 'length'], underwing_pods: ['positions', 'diameter', 'length'],
+    rear_fuselage_pods: ['lateral', 'height', 'at', 'diameter', 'length'], fuselage_side_nacelles: ['at', 'diameter', 'length', 'lateral'],
+    ventral_nacelles: ['lateral', 'diameter', 'from', 'to'],
+  };
+  const EXTRAS = ['dorsalFin', 'ventralFin', 'bellyScoop', 'chinRadiator', 'wingRadiators', 'spats', 'bracingWires', 'gunHump', 'vStruts', 'tipTanks', 'wingFences', 'lerx',
+    'wingGlove', 'ventralTank', 'conformalTanks', 'gearPods', 'gau8', 'duckbillNose', 'tipRails', 'droopedTips', 'fixedGear', 'headrest', 'pusher'];
 
-  // ---- props and bombers: small per-type touches on top of the class defaults
-  const P = {
-    p51d:   { wing: { x: .3, c: .245, tr: .45, sw: 3 }, canopy: { z: .47, len: .2 } },
-    p40e:   { wing: { x: .31, c: .23, tr: .5 }, canopy: { z: .46, len: .16 } },
-    p47d:   { R: .068, canopy: { z: .45, len: .2 } },
-    f4u1d:  { wing: { kink: [.3, -14, 9] }, canopy: { z: .5, len: .16 } },
-    bf109e: { wing: { x: .3, c: .21, tr: .48, sw: 3 }, stab: { y: .9 }, canopy: { z: .44, len: .16 } },
-    bf109g: { wing: { x: .31, c: .21, tr: .48, sw: 3 }, stab: { y: .9 }, canopy: { z: .43, len: .16 } },
-    spit9:  { canopy: { z: .45, len: .16 } },
-    ju87:   { wing: { kink: [.3, -12, 8], c: .2 }, canopy: { z: .4, len: .3 } },
-    p38l:   { fus: 'p38pod', R: .075, booms: { x: .19, r: .055 }, wing: { x: .34, c: .26, tr: .4, pos: 0 }, stab: { x: .9, hs: .2, c: .1, tr: 1, y: 0, boom: true }, fin: { twin: 'booms', h: .15, below: .45, round: true, x: .86, c: .13, tr: .7, sw: 10 }, canopy: { z: .28, len: .14, type: 'bubble' } },
-    bf110:  { canopy: { z: .3, len: .32 } },
-    il2:    { canopy: { z: .4, len: .22 } },
-    b17g:   { fin: { h: .17, c: .26, tr: .3, sw: 40 } },
-    b29:    { fin: { h: .14, c: .2, tr: .35, sw: 35 }, wing: { c: .16, tr: .35, pos: .1 } },
-    lancaster:{ fin: { twin: 'tips', h: .12, below: .4, round: true, c: .1, tr: .8 } },
+  // ---------------------------------------------------------------- the registry
+  // t(): the tail block, in the order of its fields (see the header)
+  const t = (stabSpan, stabChord, stabTaper, stabLE, stabSweep, stabDihedral, stabHeight, finLE, finChord, finTaper, finSweep, finSpacing, finBelow) =>
+    ({ stabSpan, stabChord, stabTaper, stabLE, stabSweep, stabDihedral, stabHeight, finLE, finChord, finTaper, finSweep, finSpacing, finBelow });
+  const NOCANARD = { canardPresence: false, canardLength: 0, canardSweep: 0, canardOffset: 0, canardHeight: 0 };
+  const NOSE = { at: 0, length: 0, width: 0, height: 0, rake: 0, splitter: false, shockCone: false };
+  const REG = {
+    // ======================= USA =======================
+    spad13us: { dims: { length: 6.3, span: 8.1, height: 2.6, wingArea: 21.1 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.9, heightToWidth: 1.25 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.05, stagger: .15, lowerSpanRatio: .96, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.7, .8, .8, .86, 0, 0, .2, .86, .8, .7, 35, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .42, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    n28: { dims: { length: 6.2, span: 8, height: 2.48, wingArea: 16 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'round', fuselageLengthToWidthRatio: 8.3, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: .9, dihedral: 2, thickness: .09 },
+      biplane: { wings: 2, gapToChord: 1.1, stagger: .2, lowerSpanRatio: .92, lowerChordRatio: .9 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.6, .75, .8, .86, 0, 0, .2, .86, .75, .7, 35, 0, 0), finTip: 1.15 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    p12: { dims: { length: 6.2, span: 9.1, height: 2.69, wingArea: 21.1 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'rounded_box', fuselageLengthToWidthRatio: 6.5, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: .85, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.05, stagger: .2, lowerSpanRatio: .9, lowerChordRatio: .85 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3, .85, .75, .86, 0, 0, .2, .86, .85, .7, 35, 0, 0), finTip: 1.3 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .48, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear', 'headrest'] },
+    p26: { dims: { length: 7.2, span: 8.5, height: 3.04, wingArea: 13.89 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 6.9, heightToWidth: 1.1 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .27, sweepLE: 2, taper: .7, dihedral: 5, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.1, .95, .65, .85, 6, 0, .2, .83, 1.0, .5, 30, 0, 0), finTip: 1.55 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .5, length: 0, offset: 0 }, extras: ['bracingWires', 'spats', 'fixedGear', 'headrest'] },
+    p40e: { dims: { length: 9.7, span: 11.4, height: 3.76, wingArea: 21.92 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10.8, heightToWidth: 1.5 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .31, sweepLE: 4, taper: .5, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, 1.2, .55, .85, 8, 0, .25, .82, 1.5, .45, 30, 0, 0), finTip: 1.75 },
+      ...NOCANARD, cockpit: { canopy: 'razorback', at: .46, length: 1.6, offset: 0 }, extras: ['chinRadiator'] },
+    p51d: { dims: { length: 9.8, span: 11.3, height: 4.08, wingArea: 21.83 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10.9, heightToWidth: 1.45 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .3, sweepLE: 3, taper: .45, dihedral: 5, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.16, 1.3, .55, .85, 8, 0, .25, .8, 1.75, .45, 32, 0, 0), finTip: 1.85 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .47, length: 2.0, offset: 0 }, extras: ['dorsalFin', 'bellyScoop'] },
+    p47d: { dims: { length: 11, span: 12.4, height: 4.47, wingArea: 27.87 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 8.3, heightToWidth: 1.45 },
+      wing: { wingMountHeight: .1, planform: 'elliptical', rootLE: .3, sweepLE: 2, taper: .3, dihedral: 4, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.5, 1.5, .55, .85, 6, 0, .25, .82, 1.9, .45, 28, 0, 0), finTip: 2.1 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .45, length: 2.1, offset: 0 }, extras: ['dorsalFin'] },
+    p38l: { dims: { length: 11.5, span: 15.8, height: 3.0, wingArea: 30.43 }, gear: 'tricycle',
+      fuselage: { profile: 'p38_gondola', section: 'oval', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .34, sweepLE: 3, taper: .4, dihedral: 4, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'twin_boom_propellers', count: 2, positions: [.38] },
+      tailConfiguration: 'twin_boom', horizontalTail: 'boom', finCantDeg: 0, tail: t(6.1, 1.2, 1, .9, 0, 0, 0, .86, 1.5, .7, 10, 0, .45),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .28, length: 1.6, offset: 0 }, extras: [] },
+    f4u1d: { dims: { length: 10.2, span: 12.5, height: 4.5, wingArea: 29.17 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 7.8, heightToWidth: 1.2 },
+      wing: { wingMountHeight: .05, planform: 'inverted_gull', rootLE: .3, sweepLE: 3, taper: .45, dihedral: 0, thickness: .16, kink: [.3, -14, 9] },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.3, 1.45, .55, .85, 5, 0, .3, .82, 1.8, .5, 25, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .5, length: 1.7, offset: 0 }, extras: ['wingRadiators'] },
+    f80c: { dims: { length: 10.5, span: 11.8, height: 3.45, wingArea: 22.07 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_gun_nose', section: 'oval', fuselageLengthToWidthRatio: 7.8, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .15, planform: 'trapezoid', rootLE: .36, sweepLE: 4, taper: .45, dihedral: 5, thickness: .13 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .3, length: .22, width: 0.5, height: 0.7, rake: 0, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.5, 1.1, .6, .85, 8, 0, .2, .8, 1.6, .45, 30, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .22, length: 1.6, offset: 0 }, extras: ['tipTanks'] },
+    f86f: { dims: { length: 11.4, span: 11.3, height: 4.5, wingArea: 28.1 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'oval', fuselageLengthToWidthRatio: 7.4, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .2, planform: 'trapezoid', rootLE: .38, sweepLE: 37, taper: .5, dihedral: 3, thickness: .1 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, splitter: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.9, 1.15, .5, .84, 35, 10, .3, .76, 2.2, .4, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.8, offset: 0 }, extras: [] },
+    f100d: { dims: { length: 15.2, span: 11.8, height: 4.95, wingArea: 35.77 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_oval', section: 'oval', fuselageLengthToWidthRatio: 8.9, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .38, sweepLE: 49, taper: .35, dihedral: 0, thickness: .07 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.4, 1.8, .4, .86, 45, 0, -.3, .72, 3.6, .35, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .22, length: 2.0, offset: 0 }, extras: [] },
+    f4e: { dims: { length: 19.2, span: 11.7, height: 5.0, wingArea: 49.24 }, gear: 'tricycle',
+      fuselage: { profile: 'f4', section: 'rounded_box', fuselageLengthToWidthRatio: 5.8, heightToWidth: .58 },
+      wing: { wingMountHeight: .1, planform: 'cranked', rootLE: .4, sweepLE: 45, taper: .3, dihedral: 0, thickness: .05, kink: [.6, 0, 12] },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .22, length: .36, width: 0.75, height: 1.35, rake: 12, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, -.25], [.3, -.25]], nozzleAt: .8 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.4, 1.9, .45, .88, 43, -23, .7, .76, 3.8, .35, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .21, length: 3.8, offset: 0 }, extras: [] },
+    f15c: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: [] },
+    f16c: { dims: { length: 15, span: 9.96, height: 4.88, wingArea: 27.87 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_f16', section: 'oval', fuselageLengthToWidthRatio: 6.8, heightToWidth: .65 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .42, sweepLE: 40, taper: .23, dihedral: 0, thickness: .04 },
+      biplane: null, intakeProfile: 'chin_scoop', intake: { at: .26, length: .36, width: 1.25, height: 0.85, rake: 8, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.58, 1.65, .35, .87, 40, -10, 0, .76, 3.0, .4, 47, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.6, offset: 0 }, extras: ['lerx', 'ventralFin'] },
+    fa18e: { dims: { length: 18.3, span: 13.6, height: 4.88, wingArea: 46.45 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 5.1, heightToWidth: .55 },
+      wing: { wingMountHeight: .65, planform: 'trapezoid', rootLE: .43, sweepLE: 28, taper: .35, dihedral: -3, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .34, length: .3, width: 0.8, height: 1.0, rake: 20, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.27, 0], [.27, 0]], nozzleAt: 1 },
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 20, tail: t(7.3, 2.2, .4, .86, 42, 0, 0, .72, 3.1, .4, 35, .55, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: ['lerx'] },
+    f22a: { dims: { length: 18.9, span: 13.6, height: 5.08, wingArea: 78.04 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_blended', section: 'box', fuselageLengthToWidthRatio: 3.9, heightToWidth: .4 },
+      wing: { wingMountHeight: .75, planform: 'diamond', rootLE: .42, sweepLE: 42, taper: .14, dihedral: -3, thickness: .04, sweepTE: -17 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .25, length: .4, width: 1.0, height: 1.7, rake: 30, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.25, 0], [.25, 0]], nozzleAt: 1, rectangular: true },
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 28, tail: t(8.84, 2.6, .25, .86, 42, 0, 0, .73, 3.8, .4, 22, .5, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 3.0, offset: 0 }, extras: [] },
+    b17g: { dims: { length: 22.7, span: 31.6, height: 5.82, wingArea: 131.92 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_solid', section: 'oval', fuselageLengthToWidthRatio: 9.9, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .2, planform: 'trapezoid', rootLE: .3, sweepLE: 6, taper: .42, dihedral: 4.5, thickness: .18 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 4, positions: [.23, .44], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(13.0, 3.6, .45, .84, 8, 0, .3, .72, 6.0, .3, 40, 0, 0), finTip: 4.3 },
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .2, length: 2.0, offset: 0 }, extras: ['dorsalFin'] },
+    b29: { dims: { length: 30.2, span: 43.1, height: 8.46, wingArea: 161.3 }, gear: 'tricycle',
+      fuselage: { profile: 'bomber_glazed', section: 'round', fuselageLengthToWidthRatio: 10.4, heightToWidth: 1.0 },
+      wing: { wingMountHeight: .45, planform: 'trapezoid', rootLE: .32, sweepLE: 7, taper: .35, dihedral: 4.5, thickness: .2 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 4, positions: [.2, .4], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(15.0, 4.0, .45, .86, 8, 0, .3, .76, 6.0, .35, 35, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .05, length: 3.0, offset: 0 }, extras: ['dorsalFin'] },
+    f105: { dims: { length: 19.6, span: 10.6, height: 5.99, wingArea: 35.8 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 11.2, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .44, sweepLE: 48, taper: .4, dihedral: -3, thickness: .05 },
+      biplane: null, intakeProfile: 'wing_root', intake: { at: .44, length: .05, width: 1.0, height: 0.45, rake: -20, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.2, 2.1, .4, .88, 45, 0, -.3, .7, 5.0, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.0, offset: 0 }, extras: [] },
+    a4: { dims: { length: 12.2, span: 8.4, height: 4.57, wingArea: 24.15 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 8.1, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .05, planform: 'delta', rootLE: .4, sweepLE: 33, taper: .2, dihedral: 0, thickness: .06 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .27, length: .22, width: 0.45, height: 0.8, rake: 0, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(3.4, 1.2, .45, .86, 25, 0, .3, .72, 2.8, .4, 35, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.7, offset: 0 }, extras: [] },
+    f15e: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 3.9, offset: 0 }, extras: ['conformalTanks'] },
+    dh4: { dims: { length: 9.2, span: 12.9, height: 3.35, wingArea: 40.32 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.35 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: 1, dihedral: 3, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .1, lowerSpanRatio: 1, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.2, 1.1, .8, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .38, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    b10: { dims: { length: 13.6, span: 21.5, height: 4.7, wingArea: 63 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.25 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 5, taper: .45, dihedral: 4, thickness: .17 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.26], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.0, 1.7, .55, .85, 6, 0, .3, .8, 2.2, .5, 30, 0, 0), finTip: 2.2 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .32, length: 2.6, offset: 0 }, extras: [] },
+    sbd: { dims: { length: 10.1, span: 12.7, height: 4.14, wingArea: 30.19 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 7.8, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .05, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .45, dihedral: 6, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.5, 1.4, .55, .85, 6, 0, .3, .8, 1.9, .5, 25, 0, 0), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .44, length: 3.2, offset: 0 }, extras: [] },
+    b25j: { dims: { length: 16.1, span: 20.6, height: 4.98, wingArea: 56.67 }, gear: 'tricycle',
+      fuselage: { profile: 'bomber_solid', section: 'oval', fuselageLengthToWidthRatio: 11.5, heightToWidth: 1.35 },
+      wing: { wingMountHeight: .65, planform: 'cranked', rootLE: .32, sweepLE: 4, taper: .4, dihedral: 0, thickness: .17, kink: [.3, 4, -1] },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(6.6, 1.7, .7, .85, 2, 0, .35, .84, 1.6, .7, 8, 0, .3),
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .25, length: 2.0, offset: 0 }, extras: [] },
+    a1h: { dims: { length: 11.8, span: 15.2, height: 4.78, wingArea: 37.19 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 8.4, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .05, planform: 'trapezoid', rootLE: .3, sweepLE: 3, taper: .45, dihedral: 6, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.2, 1.6, .55, .86, 6, 0, .3, .8, 2.4, .45, 30, 0, 0), finTip: 2.3 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .44, length: 2.2, offset: 0 }, extras: ['dorsalFin'] },
+    a10a: { dims: { length: 16.3, span: 17.5, height: 4.47, wingArea: 47 }, gear: 'tricycle',
+      fuselage: { profile: 'a10', section: 'rounded_box', fuselageLengthToWidthRatio: 10.2, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .1, planform: 'cranked', rootLE: .37, sweepLE: 2, taper: .62, dihedral: 0, thickness: .16, kink: [.3, 0, 7] },
+      biplane: null, intakeProfile: 'nacelle', intake: null,
+      engines: { layout: 'rear_fuselage_pods', count: 2, lateral: 1.4, height: 1.25, at: .63, diameter: 1.3, length: 3.9 },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.74, 1.9, .95, .84, 0, 0, .5, .835, 2.2, .75, 4, 0, .3),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .14, length: 2.0, offset: 0 }, extras: ['gearPods', 'gau8', 'droopedTips'] },
+    f111f: { dims: { length: 22.4, span: 19.2, height: 5.22, wingArea: 48.77 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.0, heightToWidth: .6 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .4, sweepLE: 16, taper: .35, dihedral: 0, thickness: .06 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .4, length: .25, width: 0.8, height: 0.8, rake: 0, splitter: true, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.28, 0], [.28, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(9.0, 3.0, .4, .86, 55, 0, 0, .7, 5.0, .3, 55, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'side_by_side', at: .17, length: 2.6, offset: 0 }, extras: ['wingGlove'] },
+    // ======================= Germany =======================
+    albd3: { dims: { length: 7.3, span: 9, height: 2.98, wingArea: 20.5 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 9.1, heightToWidth: 1.4 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: .9, dihedral: 1, thickness: .09 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .25, lowerSpanRatio: .97, lowerChordRatio: .55 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, .8, .8, .86, 0, 0, .2, .86, .85, .7, 35, 0, 0), finTip: 1.3 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .42, length: 0, offset: 0 }, extras: ['vStruts', 'bracingWires', 'fixedGear'] },
+    dr1: { dims: { length: 5.8, span: 7.2, height: 2.95, wingArea: 18.66 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.3, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 0, thickness: .12 },
+      biplane: { wings: 3, gapToChord: .85, stagger: .1, lowerSpanRatio: .79, lowerChordRatio: 1, middleSpanRatio: .86 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.7, .8, .8, .86, 0, 0, .2, .87, .7, .8, 40, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .45, length: 0, offset: 0 }, extras: ['fixedGear'] },
+    fd7: { dims: { length: 7, span: 8.9, height: 2.75, wingArea: 20.5 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 8.8, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: .85, dihedral: 0, thickness: .12 },
+      biplane: { wings: 2, gapToChord: .95, stagger: .2, lowerSpanRatio: .8, lowerChordRatio: .8 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.9, .85, .8, .86, 0, 0, .2, .86, .85, .7, 35, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['fixedGear'] },
+    he51: { dims: { length: 8.4, span: 11, height: 3.2, wingArea: 27.2 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 8.8, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: .8, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .2, lowerSpanRatio: .9, lowerChordRatio: .9 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.6, 1.0, .75, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.4 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .46, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear', 'headrest'] },
+    bf109e: { dims: { length: 8.6, span: 9.9, height: 2.6, wingArea: 16.05 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10.7, heightToWidth: 1.6 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .3, sweepLE: 3, taper: .48, dihedral: 6.5, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, 1.0, .6, .86, 6, 0, .9, .84, 1.3, .55, 25, 0, 0), finTip: 1.45 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .44, length: 1.5, offset: 0 }, extras: ['wingRadiators'] },
+    bf109g: { dims: { length: 9, span: 9.9, height: 2.5, wingArea: 16.05 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 11.2, heightToWidth: 1.6 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .31, sweepLE: 3, taper: .48, dihedral: 6.5, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, 1.0, .6, .86, 6, 0, .9, .84, 1.35, .55, 25, 0, 0), finTip: 1.45 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .43, length: 1.5, offset: 0 }, extras: ['wingRadiators'] },
+    fw190a: { dims: { length: 9, span: 10.5, height: 3.95, wingArea: 18.3 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 6.9, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 5.5, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.65, 1.15, .55, .86, 6, 0, .3, .82, 1.4, .5, 25, 0, 0), finTip: 1.75 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .46, length: 1.7, offset: 0 }, extras: [] },
+    me262: { dims: { length: 10.6, span: 12.6, height: 3.5, wingArea: 21.7 }, gear: 'tricycle',
+      fuselage: { profile: 'me262', section: 'oval', fuselageLengthToWidthRatio: 8.5, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .4, sweepLE: 18, taper: .45, dihedral: 6, thickness: .11 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'underwing_pods', count: 2, positions: [.33], diameter: 1.0, length: 3.6 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(4.8, 1.1, .55, .86, 12, 0, .12, .82, 1.5, .45, 25, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .43, length: 1.8, offset: 0 }, extras: [] },
+    sabre6: { dims: { length: 11.4, span: 11.6, height: 4.5, wingArea: 28.1 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'oval', fuselageLengthToWidthRatio: 7.4, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .2, planform: 'trapezoid', rootLE: .38, sweepLE: 37, taper: .5, dihedral: 3, thickness: .1 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, splitter: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.9, 1.15, .5, .84, 35, 10, .3, .76, 2.2, .4, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.8, offset: 0 }, extras: [] },
+    f104g: { dims: { length: 16.7, span: 6.7, height: 4.09, wingArea: 18.22 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'round', fuselageLengthToWidthRatio: 10.8, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .45, planform: 'trapezoid', rootLE: .48, sweepLE: 27, taper: .4, dihedral: -10, thickness: .034 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .37, length: .24, width: 0.55, height: 0.9, rake: 0, splitter: false, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 't_tail', horizontalTail: 'fin_top', finCantDeg: 0, tail: t(3.63, 1.5, .5, .86, 10, 0, 1, .78, 3.3, .5, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.0, offset: 0 }, extras: [] },
+    mig21mf: { dims: { length: 15.8, span: 7.2, height: 4.12, wingArea: 23 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.0 },
+      wing: { wingMountHeight: .5, planform: 'delta', rootLE: .45, sweepLE: 57, taper: .05, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.7, 1.3, .35, .87, 55, 0, -.1, .7, 3.5, .3, 60, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .27, length: 1.9, offset: 0 }, extras: ['dorsalFin', 'ventralFin'] },
+    mig29g: { dims: { length: 17.3, span: 11.4, height: 4.73, wingArea: 38 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'rounded_box', fuselageLengthToWidthRatio: 7.2, heightToWidth: .7 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .43, sweepLE: 42, taper: .25, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .3, length: .2, width: 0.75, height: 0.9, rake: 25, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.1, diameter: 1.25, from: .3, to: .98 },
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 6, tail: t(7.78, 2.2, .35, .87, 45, 0, -.1, .74, 2.9, .4, 40, 1.5, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.2, offset: 0 }, extras: ['lerx'] },
+    ef2000g: { dims: { length: 15.96, span: 10.95, height: 5.28, wingArea: 51.2 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.3, heightToWidth: .8 },
+      wing: { wingMountHeight: .4, planform: 'delta', rootLE: .45, sweepLE: 53, taper: .12, dihedral: -2, thickness: .045 },
+      biplane: null, intakeProfile: 'chin_scoop', intake: { at: .3, length: .32, width: 1.4, height: 0.7, rake: 10, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.4, 0], [.4, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.7, .3, 50, 0, 0),
+      canardPresence: true, canardLength: 1.45, canardSweep: 50, canardOffset: 0.6, canardHeight: 0, cockpit: { canopy: 'bubble', at: .17, length: 2.4, offset: 0 }, extras: [] },
+    gotha: { dims: { length: 12.4, span: 23.7, height: 4.3, wingArea: 89.5 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 9.5, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .25, sweepLE: 5, taper: .9, dihedral: 1, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: 0, lowerSpanRatio: .92, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.22], radial: false, pusher: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.0, 1.6, .8, .86, 0, 0, .2, .86, 1.5, .7, 35, 0, 0), finTip: 2.3 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .25, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear', 'pusher'] },
+    he111: { dims: { length: 16.4, span: 22.6, height: 4.0, wingArea: 87.6 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.1, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .1, planform: 'elliptical', rootLE: .32, sweepLE: 8, taper: .35, dihedral: 5, thickness: .17 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.27], radial: false, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(7.0, 1.9, .55, .85, 6, 0, .3, .8, 2.4, .5, 30, 0, 0), finTip: 2.3 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .06, length: 2.0, offset: 0 }, extras: [] },
+    ju87: { dims: { length: 11, span: 13.8, height: 4.01, wingArea: 31.9 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10, heightToWidth: 1.6 },
+      wing: { wingMountHeight: 0, planform: 'inverted_gull', rootLE: .3, sweepLE: 3, taper: .45, dihedral: 0, thickness: .16, kink: [.3, -12, 8] },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.5, 1.4, .6, .85, 3, 0, .4, .82, 1.8, .55, 25, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .4, length: 3.2, offset: 0 }, extras: ['spats', 'fixedGear', 'chinRadiator'] },
+    hannover: { dims: { length: 7.6, span: 11.7, height: 2.8, wingArea: 32.7 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 8.0, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: .9, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: .9, stagger: .15, lowerSpanRatio: .94, lowerChordRatio: .9 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, .9, .8, .86, 0, 0, .3, .86, .8, .7, 35, 0, 0), finTip: 1.3 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .38, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    do17: { dims: { length: 15.8, span: 18, height: 4.56, wingArea: 55 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 12.2, heightToWidth: 1.45 },
+      wing: { wingMountHeight: .8, planform: 'trapezoid', rootLE: .3, sweepLE: 6, taper: .45, dihedral: 3, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.6, 1.5, .7, .86, 4, 0, .3, .85, 1.5, .7, 8, 0, .3), finTip: 2.1 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .08, length: 2.0, offset: 0 }, extras: [] },
+    ju88: { dims: { length: 14.4, span: 20.1, height: 4.85, wingArea: 54.7 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.3, heightToWidth: 1.35 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 5, taper: .4, dihedral: 5, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.28], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.4, 1.8, .55, .85, 6, 0, .3, .8, 2.5, .5, 28, 0, 0), finTip: 2.6 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .08, length: 2.4, offset: 0 }, extras: [] },
+    bf110: { dims: { length: 12.1, span: 16.3, height: 4.13, wingArea: 38.4 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10.1, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .45, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.31], radial: false, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.0, 1.4, .7, .86, 4, 0, .3, .85, 1.4, .7, 8, 0, .3), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .3, length: 3.9, offset: 0 }, extras: [] },
+    ar234: { dims: { length: 12.6, span: 14.4, height: 4.29, wingArea: 26.4 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_glazed', section: 'oval', fuselageLengthToWidthRatio: 10.1, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 1, planform: 'trapezoid', rootLE: .38, sweepLE: 3, taper: .55, dihedral: 3, thickness: .13 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'underwing_pods', count: 2, positions: [.4], diameter: .95, length: 3.6 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.4, 1.2, .55, .86, 8, 0, .3, .8, 1.8, .5, 25, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .05, length: 1.6, offset: 0 }, extras: [] },
+    g91: { dims: { length: 10.3, span: 8.6, height: 4.0, wingArea: 16.42 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_oval', section: 'oval', fuselageLengthToWidthRatio: 6.9, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .4, sweepLE: 37, taper: .5, dihedral: 2, thickness: .09 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.9, 1.1, .5, .85, 35, 0, .2, .75, 2.0, .4, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.5, offset: 0 }, extras: [] },
+    tornadoids: { dims: { length: 16.7, span: 13.9, height: 5.95, wingArea: 26.6 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 5.8, heightToWidth: .65 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .42, sweepLE: 25, taper: .35, dihedral: 0, thickness: .06 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .3, length: .3, width: 0.75, height: 1.25, rake: 15, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.27, 0], [.27, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(6.8, 2.4, .45, .86, 45, -3, 0, .7, 4.5, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 3.6, offset: 0 }, extras: ['wingGlove'] },
+    // ======================= Britain =======================
+    camel: { dims: { length: 5.7, span: 8.5, height: 2.59, wingArea: 21.46 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.6, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .18, sweepLE: 0, taper: 1, dihedral: 5, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.1, stagger: .2, lowerSpanRatio: 1, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.6, .8, .8, .86, 0, 0, .2, .86, .7, .7, 40, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .42, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear', 'gunHump'] },
+    se5a: { dims: { length: 6.4, span: 8.1, height: 2.89, wingArea: 22.67 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.5, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 5, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .15, lowerSpanRatio: .96, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.8, .85, .8, .86, 0, 0, .2, .86, .8, .7, 35, 0, 0), finTip: 1.3 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    gladiator: { dims: { length: 8.4, span: 9.8, height: 3.53, wingArea: 30 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 7.3, heightToWidth: 1.05 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: .9, dihedral: 3, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .2, lowerSpanRatio: .95, lowerChordRatio: .95 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.4, 1.0, .75, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .47, length: 1.4, offset: 0 }, extras: ['fixedGear'] },
+    hurri1: { dims: { length: 9.8, span: 12.2, height: 4.0, wingArea: 23.92 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 9.3, heightToWidth: 1.45 },
+      wing: { wingMountHeight: .05, planform: 'trapezoid', rootLE: .29, sweepLE: 3, taper: .5, dihedral: 3.5, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.5, 1.3, .55, .84, 6, 0, .3, .82, 1.7, .5, 30, 0, 0), finTip: 1.85 },
+      ...NOCANARD, cockpit: { canopy: 'razorback', at: .44, length: 1.6, offset: 0 }, extras: ['bellyScoop'] },
+    spit9: { dims: { length: 9.5, span: 11.2, height: 3.85, wingArea: 22.48 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 11.2, heightToWidth: 1.6 },
+      wing: { wingMountHeight: .05, planform: 'elliptical', rootLE: .27, sweepLE: 0, taper: .2, dihedral: 6, thickness: .13 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.2, 1.2, .5, .85, 4, 0, .3, .83, 1.4, .5, 20, 0, 0), finTip: 1.75 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .45, length: 1.6, offset: 0 }, extras: ['wingRadiators'] },
+    typhoon1b: { dims: { length: 9.7, span: 12.7, height: 4.67, wingArea: 25.92 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 8.8, heightToWidth: 1.4 },
+      wing: { wingMountHeight: .05, planform: 'trapezoid', rootLE: .29, sweepLE: 3, taper: .5, dihedral: 5.5, thickness: .18 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.1, 1.4, .55, .84, 6, 0, .3, .82, 1.8, .5, 28, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .44, length: 1.7, offset: 0 }, extras: ['chinRadiator'] },
+    meteor8: { dims: { length: 13.6, span: 11.3, height: 3.96, wingArea: 32.5 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_pod_tail', section: 'oval', fuselageLengthToWidthRatio: 11.3, heightToWidth: 1.25 },
+      wing: { wingMountHeight: .3, planform: 'trapezoid', rootLE: .38, sweepLE: 4, taper: .55, dihedral: 4, thickness: .12 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'wing_nacelles', count: 2, positions: [.31], diameter: 1.15, length: 4.6 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(4.7, 1.2, .6, .87, 12, 0, .38, .8, 2.0, .55, 25, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.9, offset: 0 }, extras: [] },
+    hunter6: { dims: { length: 14, span: 10.3, height: 4.01, wingArea: 32.42 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 8.8, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .38, sweepLE: 40, taper: .35, dihedral: -1, thickness: .085 },
+      biplane: null, intakeProfile: 'wing_root', intake: { at: .38, length: .05, width: 0.9, height: 0.3, rake: 0, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(3.5, 1.3, .45, .85, 40, 0, .22, .74, 2.8, .4, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.9, offset: 0 }, extras: [] },
+    lightning: { dims: { length: 16.8, span: 10.6, height: 5.97, wingArea: 44.08 }, gear: 'tricycle',
+      fuselage: { profile: 'lightning', section: 'oval', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.45 },
+      wing: { wingMountHeight: .5, planform: 'delta', rootLE: .45, sweepLE: 60, taper: .3, dihedral: 0, thickness: .05 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[0, .38], [0, -.32]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.4, 1.7, .4, .88, 60, 0, -.6, .74, 3.9, .35, 55, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .22, length: 2.2, offset: 0 }, extras: ['ventralTank'] },
+    tornadof3: { dims: { length: 18.7, span: 13.9, height: 5.95, wingArea: 26.6 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 6.4, heightToWidth: .65 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .44, sweepLE: 25, taper: .35, dihedral: 0, thickness: .06 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .32, length: .3, width: 0.75, height: 1.25, rake: 15, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.27, 0], [.27, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(6.8, 2.4, .45, .87, 45, -3, 0, .72, 4.5, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 3.6, offset: 0 }, extras: ['wingGlove'] },
+    ef2000uk: { dims: { length: 15.96, span: 10.95, height: 5.28, wingArea: 51.2 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.3, heightToWidth: .8 },
+      wing: { wingMountHeight: .4, planform: 'delta', rootLE: .45, sweepLE: 53, taper: .12, dihedral: -2, thickness: .045 },
+      biplane: null, intakeProfile: 'chin_scoop', intake: { at: .3, length: .32, width: 1.4, height: 0.7, rake: 10, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.4, 0], [.4, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.7, .3, 50, 0, 0),
+      canardPresence: true, canardLength: 1.45, canardSweep: 50, canardOffset: 0.6, canardHeight: 0, cockpit: { canopy: 'bubble', at: .17, length: 2.4, offset: 0 }, extras: [] },
+    ho400: { dims: { length: 19.2, span: 30.5, height: 6.7, wingArea: 153.1 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 13.7, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: 0, lowerSpanRatio: .83, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.19], radial: false, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.0, 1.7, .9, .86, 0, 0, .3, .86, 1.6, .9, 5, 0, .4), finTip: 2.4 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .2, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    dh9a: { dims: { length: 9.2, span: 14, height: 3.45, wingArea: 45.2 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.35 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: 1, dihedral: 3, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .1, lowerSpanRatio: 1, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.4, 1.1, .8, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .4, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    hart: { dims: { length: 9, span: 11.4, height: 3.17, wingArea: 32.3 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 9.5, heightToWidth: 1.35 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 6, taper: .9, dihedral: 3, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .25, lowerSpanRatio: .9, lowerChordRatio: .9 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.8, 1.0, .75, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.45 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .4, length: 0, offset: 0 }, extras: ['fixedGear'] },
+    blenheim: { dims: { length: 12.98, span: 17.2, height: 3.0, wingArea: 43.57 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.3, heightToWidth: 1.35 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 5, taper: .45, dihedral: 6, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.0, 1.5, .55, .86, 6, 0, .3, .82, 1.8, .5, 30, 0, 0), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .06, length: 1.6, offset: 0 }, extras: [] },
+    mosquito: { dims: { length: 13.6, span: 16.5, height: 5.3, wingArea: 42.18 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.25 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .4, dihedral: 3, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: false, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.0, 1.5, .55, .86, 4, 0, .3, .8, 2.3, .45, 30, 0, 0), finTip: 2.3 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .25, length: 2.0, offset: 0 }, extras: [] },
+    lancaster: { dims: { length: 21.1, span: 31.1, height: 6.1, wingArea: 120 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_solid', section: 'oval', fuselageLengthToWidthRatio: 11.7, heightToWidth: 1.35 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .4, dihedral: 3, thickness: .17 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 4, positions: [.23, .45], radial: false, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(10.0, 2.7, .8, .86, 4, 0, .3, .85, 2.5, .8, 5, 0, .4), finTip: 2.9 },
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .22, length: 2.4, offset: 0 }, extras: [] },
+    canberra: { dims: { length: 20, span: 19.5, height: 4.75, wingArea: 89.2 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_tapered', section: 'round', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.0 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .35, sweepLE: 10, taper: .45, dihedral: 2, thickness: .12 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'wing_nacelles', count: 2, positions: [.29], diameter: 1.2, length: 5.2 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.5, 2.1, .55, .87, 12, 10, .3, .8, 3.6, .5, 30, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .14, length: 1.8, offset: -.45 }, extras: [] },
+    buccaneer: { dims: { length: 19.3, span: 13.4, height: 4.97, wingArea: 47.82 }, gear: 'tricycle',
+      fuselage: { profile: 'buccaneer', section: 'oval', fuselageLengthToWidthRatio: 10.2, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .45, planform: 'trapezoid', rootLE: .42, sweepLE: 40, taper: .45, dihedral: -1, thickness: .08 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'fuselage_side_nacelles', count: 2, at: .38, diameter: 1.6, length: 6.2, lateral: 0 },
+      tailConfiguration: 't_tail', horizontalTail: 'fin_top', finCantDeg: 0, tail: t(4.3, 1.9, .5, .88, 35, 0, 1, .76, 4.2, .5, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .18, length: 3.9, offset: 0 }, extras: [] },
+    tornadogr1: { dims: { length: 16.7, span: 13.9, height: 5.95, wingArea: 26.6 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 5.8, heightToWidth: .65 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .42, sweepLE: 25, taper: .35, dihedral: 0, thickness: .06 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .3, length: .3, width: 0.75, height: 1.25, rake: 15, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.27, 0], [.27, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(6.8, 2.4, .45, .86, 45, -3, 0, .7, 4.5, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 3.6, offset: 0 }, extras: ['wingGlove'] },
+    // ======================= USSR / Russia =======================
+    n17ru: { dims: { length: 5.8, span: 8.2, height: 2.4, wingArea: 14.75 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.2, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 1, thickness: .08 },
+      biplane: { wings: 2, gapToChord: 1.1, stagger: .2, lowerSpanRatio: .95, lowerChordRatio: .5 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.4, .7, .8, .86, 0, 0, .2, .86, .7, .7, 40, 0, 0), finTip: 1.1 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['vStruts', 'bracingWires', 'fixedGear'] },
+    i15: { dims: { length: 6.3, span: 10.2, height: 2.2, wingArea: 22.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'round', fuselageLengthToWidthRatio: 6.3, heightToWidth: 1.0 },
+      wing: { wingMountHeight: 0, planform: 'gull', rootLE: .2, sweepLE: 0, taper: .85, dihedral: 0, thickness: .1, kink: [.15, 25, 3] },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .2, lowerSpanRatio: .73, lowerChordRatio: .8 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, .8, .75, .86, 0, 0, .2, .86, .8, .7, 35, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .48, length: 0, offset: 0 }, extras: ['fixedGear'] },
+    i16: { dims: { length: 6.1, span: 9, height: 3.25, wingArea: 14.54 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 4.4, heightToWidth: 1.0 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .25, sweepLE: 6, taper: .5, dihedral: 4, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, .95, .6, .84, 6, 0, .2, .82, 1.0, .55, 30, 0, 0), finTip: 1.45 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .5, length: 0, offset: 0 }, extras: ['headrest'] },
+    yak3: { dims: { length: 8.5, span: 9.2, height: 2.39, wingArea: 14.85 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10, heightToWidth: 1.45 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .3, sweepLE: 4, taper: .45, dihedral: 6, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.0, 1.0, .55, .85, 6, 0, .3, .82, 1.3, .5, 28, 0, 0), finTip: 1.4 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .47, length: 1.5, offset: 0 }, extras: ['bellyScoop'] },
+    la5fn: { dims: { length: 8.7, span: 9.8, height: 2.54, wingArea: 17.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 6.9, heightToWidth: 1.1 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .5, dihedral: 5, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.5, 1.05, .55, .85, 6, 0, .3, .82, 1.3, .5, 28, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .47, length: 1.6, offset: 0 }, extras: [] },
+    il2: { dims: { length: 11.6, span: 14.6, height: 4.17, wingArea: 38.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 9.3, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'cranked', rootLE: .3, sweepLE: 15, taper: .45, dihedral: 0, thickness: .15, kink: [.3, 0, 5] },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.9, 1.4, .6, .86, 6, 0, .3, .83, 1.6, .55, 28, 0, 0), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .4, length: 2.6, offset: 0 }, extras: [] },
+    mig15: { dims: { length: 10.1, span: 10.1, height: 3.7, wingArea: 20.6 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 7.0, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .55, planform: 'trapezoid', rootLE: .37, sweepLE: 37, taper: .5, dihedral: -2, thickness: .1 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, splitter: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(3.75, 1.1, .5, .86, 40, 0, .55, .72, 2.3, .4, 56, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .27, length: 1.5, offset: 0 }, extras: ['wingFences'] },
+    mig17: { dims: { length: 11.3, span: 9.6, height: 3.8, wingArea: 22.6 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 7.8, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .55, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .45, dihedral: -3, thickness: .08 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, splitter: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(3.4, 1.1, .5, .86, 45, 0, .5, .72, 2.6, .4, 56, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .26, length: 1.5, offset: 0 }, extras: ['wingFences'] },
+    mig21bis: { dims: { length: 15.8, span: 7.2, height: 4.13, wingArea: 23 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.0 },
+      wing: { wingMountHeight: .5, planform: 'delta', rootLE: .45, sweepLE: 57, taper: .05, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.7, 1.3, .35, .87, 55, 0, -.1, .7, 3.5, .3, 60, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .27, length: 1.9, offset: 0 }, extras: ['dorsalFin', 'ventralFin'] },
+    mig23: { dims: { length: 16.7, span: 13.97, height: 4.82, wingArea: 37.35 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 6.4, heightToWidth: .7 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .45, sweepLE: 20, taper: .3, dihedral: -3, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .27, length: .35, width: 0.7, height: 1.2, rake: 5, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.8, 2.3, .35, .87, 55, 0, 0, .7, 4.5, .3, 55, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.0, offset: 0 }, extras: ['wingGlove', 'dorsalFin', 'ventralFin'] },
+    mig29: { dims: { length: 17.3, span: 11.4, height: 4.73, wingArea: 38 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'rounded_box', fuselageLengthToWidthRatio: 7.2, heightToWidth: .7 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .43, sweepLE: 42, taper: .25, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .3, length: .2, width: 0.75, height: 0.9, rake: 25, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.1, diameter: 1.25, from: .3, to: .98 },
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 6, tail: t(7.78, 2.2, .35, .87, 45, 0, -.1, .74, 2.9, .4, 40, 1.5, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.2, offset: 0 }, extras: ['lerx'] },
+    su27: { dims: { length: 21.9, span: 14.7, height: 5.93, wingArea: 62 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'rounded_box', fuselageLengthToWidthRatio: 8.4, heightToWidth: .7 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .44, sweepLE: 42, taper: .23, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .3, length: .22, width: 0.9, height: 1.15, rake: 25, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.25, diameter: 1.4, from: .3, to: .97 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(9.9, 2.6, .35, .87, 45, 0, -.1, .74, 3.5, .4, 40, 1.75, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .18, length: 2.6, offset: 0 }, extras: ['lerx', 'tipRails'] },
+    su35s: { dims: { length: 21.9, span: 15.3, height: 5.9, wingArea: 62 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'rounded_box', fuselageLengthToWidthRatio: 8.4, heightToWidth: .7 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .44, sweepLE: 42, taper: .23, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .3, length: .22, width: 0.9, height: 1.15, rake: 25, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.25, diameter: 1.4, from: .3, to: .97 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(9.9, 2.6, .35, .87, 45, 0, -.1, .74, 3.5, .4, 40, 1.75, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .18, length: 2.6, offset: 0 }, extras: ['lerx', 'tipRails'] },
+    su57: { dims: { length: 20.1, span: 14.1, height: 4.6, wingArea: 78.8 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'box', fuselageLengthToWidthRatio: 6.3, heightToWidth: .55 },
+      wing: { wingMountHeight: .6, planform: 'diamond', rootLE: .42, sweepLE: 48, taper: .15, dihedral: -2, thickness: .04, sweepTE: -14 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .28, length: .26, width: 1.0, height: 1.2, rake: 20, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.2, diameter: 1.4, from: .28, to: .97 },
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 26, tail: t(9.4, 2.6, .25, .87, 45, 0, -.1, .76, 3.4, .4, 45, 1.6, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .19, length: 2.6, offset: 0 }, extras: ['lerx'] },
+    pe2: { dims: { length: 12.7, span: 17.2, height: 3.5, wingArea: 40.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 10.2, heightToWidth: 1.25 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .45, dihedral: 5, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.3], radial: false, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.6, 1.4, .7, .86, 4, 8, .4, .85, 1.4, .7, 8, 0, .3), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .3, length: 3.2, offset: 0 }, extras: [] },
+    tu16: { dims: { length: 34.8, span: 33, height: 10.36, wingArea: 164.7 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_glazed', section: 'round', fuselageLengthToWidthRatio: 13.9, heightToWidth: 1.0 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .38, sweepLE: 37, taper: .4, dihedral: -3, thickness: .12 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'fuselage_side_nacelles', count: 2, at: .36, diameter: 2.0, length: 9.0, lateral: 0 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(11.75, 3.2, .45, .87, 42, 0, .2, .78, 6.5, .4, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .05, length: 3.6, offset: 0 }, extras: ['gearPods'] },
+    su24: { dims: { length: 22.5, span: 17.6, height: 6.19, wingArea: 55.2 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.0, heightToWidth: .6 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .42, sweepLE: 16, taper: .35, dihedral: -3, thickness: .06 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .3, length: .35, width: 0.8, height: 1.2, rake: 5, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.28, 0], [.28, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.8, 2.9, .4, .86, 55, 0, 0, .7, 5.2, .3, 55, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'side_by_side', at: .18, length: 2.6, offset: 0 }, extras: ['wingGlove'] },
+    muromets: { dims: { length: 17.1, span: 29.8, height: 4.7, wingArea: 128 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 10.7, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .3, sweepLE: 0, taper: 1, dihedral: 0, thickness: .09 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: 0, lowerSpanRatio: .7, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 4, positions: [.2, .36], radial: false, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(8.0, 2.0, .9, .84, 0, 0, .3, .86, 1.6, .8, 20, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .12, length: 3.0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    tb3: { dims: { length: 24.4, span: 41.8, height: 8.5, wingArea: 234.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_solid', section: 'box', fuselageLengthToWidthRatio: 11.1, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 6, taper: .4, dihedral: 2, thickness: .2 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 4, positions: [.22, .43], radial: false, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(12.0, 3.2, .55, .85, 6, 0, .3, .8, 3.6, .5, 30, 0, 0), finTip: 3.6 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .22, length: 0, offset: 0 }, extras: ['fixedGear'] },
+    sb2: { dims: { length: 12.6, span: 20.3, height: 3.6, wingArea: 56.7 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 8.4, heightToWidth: 1.2 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 6, taper: .4, dihedral: 4, thickness: .17 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.25], radial: false, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.0, 1.6, .55, .86, 6, 0, .3, .82, 2.0, .5, 30, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .06, length: 1.6, offset: 0 }, extras: [] },
+    tu2: { dims: { length: 13.8, span: 18.9, height: 4.55, wingArea: 48.8 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.2, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 5, taper: .45, dihedral: 4, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.4, 1.6, .7, .86, 4, 0, .3, .85, 1.6, .7, 8, 0, .3), finTip: 2.2 },
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .2, length: 2.2, offset: 0 }, extras: [] },
+    il28: { dims: { length: 17.6, span: 21.5, height: 6.7, wingArea: 60.8 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.8, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .75, planform: 'trapezoid', rootLE: .38, sweepLE: 3, taper: .55, dihedral: 2, thickness: .13 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'underwing_pods', count: 2, positions: [.29], diameter: 1.4, length: 5.0 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(7.1, 2.0, .45, .86, 35, 7, .3, .78, 3.4, .4, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.7, offset: 0 }, extras: [] },
+    su7b: { dims: { length: 16.8, span: 9.3, height: 4.99, wingArea: 34 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 10.5, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .45, sweepLE: 60, taper: .3, dihedral: -2, thickness: .06 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.4, 1.6, .35, .87, 55, 0, -.2, .74, 3.4, .3, 55, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .27, length: 2.0, offset: 0 }, extras: ['wingFences', 'dorsalFin'] },
+    su25: { dims: { length: 15.5, span: 14.4, height: 5.2, wingArea: 30.1 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_tapered', section: 'oval', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 20, taper: .45, dihedral: -2, thickness: .1 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'fuselage_side_nacelles', count: 2, at: .36, diameter: 1.25, length: 7.8, lateral: .1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.65, 1.5, .5, .86, 25, 5, .3, .76, 2.6, .45, 35, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .17, length: 1.6, offset: 0 }, extras: [] },
+    su34: { dims: { length: 23.3, span: 14.7, height: 6.09, wingArea: 62 }, gear: 'tricycle',
+      fuselage: { profile: 'flanker', section: 'rounded_box', fuselageLengthToWidthRatio: 7.8, heightToWidth: .7 },
+      wing: { wingMountHeight: .6, planform: 'trapezoid', rootLE: .44, sweepLE: 42, taper: .23, dihedral: -2, thickness: .05 },
+      biplane: null, intakeProfile: 'ventral_box', intake: { at: .32, length: .2, width: 0.9, height: 1.1, rake: 25, splitter: false, shockCone: false },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.25, diameter: 1.35, from: .32, to: .97 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(9.9, 2.5, .35, .87, 45, 0, -.1, .75, 3.3, .4, 40, 1.75, 0),
+      canardPresence: true, canardLength: 1.5, canardSweep: 53, canardOffset: 4.2, canardHeight: .2, cockpit: { canopy: 'side_by_side', at: .16, length: 2.8, offset: 0 }, extras: ['lerx', 'duckbillNose'] },
+    // ======================= Japan =======================
+    n24ko3: { dims: { length: 5.9, span: 8.2, height: 2.4, wingArea: 14.75 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'round', fuselageLengthToWidthRatio: 7.4, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 1, thickness: .08 },
+      biplane: { wings: 2, gapToChord: 1.1, stagger: .2, lowerSpanRatio: .95, lowerChordRatio: .5 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.4, .7, .8, .86, 0, 0, .2, .86, .7, .7, 40, 0, 0), finTip: 1.1 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['vStruts', 'bracingWires', 'fixedGear'] },
+    ki10: { dims: { length: 7.6, span: 10, height: 3.0, wingArea: 23 }, gear: 'tailwheel',
+      fuselage: { profile: 'biplane', section: 'oval', fuselageLengthToWidthRatio: 7.6, heightToWidth: 1.05 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 0, taper: .8, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.0, stagger: .2, lowerSpanRatio: .9, lowerChordRatio: .85 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.4, .95, .75, .86, 0, 0, .2, .86, .95, .7, 35, 0, 0), finTip: 1.4 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .46, length: 0, offset: 0 }, extras: ['fixedGear', 'headrest'] },
+    ki27: { dims: { length: 7.5, span: 11.3, height: 3.25, wingArea: 18.56 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 6.5, heightToWidth: 1.1 },
+      wing: { wingMountHeight: 0, planform: 'elliptical', rootLE: .27, sweepLE: 3, taper: .3, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.4, 1.0, .55, .85, 6, 0, .25, .82, 1.2, .5, 28, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .5, length: 1.6, offset: 0 }, extras: ['spats', 'fixedGear'] },
+    a6m2: { dims: { length: 9.06, span: 12, height: 3.05, wingArea: 22.44 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 7.6, heightToWidth: 1.1 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 6.5, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, 1.1, .55, .86, 6, 0, .25, .83, 1.4, .5, 28, 0, 0), finTip: 1.55 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .46, length: 2.4, offset: 0 }, extras: [] },
+    ki43: { dims: { length: 8.9, span: 10.8, height: 3.27, wingArea: 21.4 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 7.5, heightToWidth: 1.1 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 6, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.6, 1.05, .55, .86, 6, 0, .25, .83, 1.3, .5, 28, 0, 0), finTip: 1.55 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .47, length: 1.7, offset: 0 }, extras: [] },
+    n1k2: { dims: { length: 9.3, span: 12, height: 3.96, wingArea: 23.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 7.2, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .3, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, 1.2, .55, .86, 6, 0, .25, .83, 1.5, .5, 28, 0, 0), finTip: 1.75 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .46, length: 1.8, offset: 0 }, extras: [] },
+    ki84: { dims: { length: 9.9, span: 11.2, height: 3.39, wingArea: 21 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 8.2, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .29, sweepLE: 4, taper: .45, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, 1.15, .55, .86, 6, 0, .25, .83, 1.5, .5, 28, 0, 0), finTip: 1.7 },
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .46, length: 1.8, offset: 0 }, extras: [] },
+    f86fj: { dims: { length: 11.4, span: 11.9, height: 4.5, wingArea: 28.1 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'oval', fuselageLengthToWidthRatio: 7.4, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .2, planform: 'trapezoid', rootLE: .38, sweepLE: 37, taper: .5, dihedral: 3, thickness: .1 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE, splitter: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(3.9, 1.15, .5, .84, 35, 10, .3, .76, 2.2, .4, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.8, offset: 0 }, extras: [] },
+    f104j: { dims: { length: 16.7, span: 6.7, height: 4.09, wingArea: 18.22 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'round', fuselageLengthToWidthRatio: 10.8, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .45, planform: 'trapezoid', rootLE: .48, sweepLE: 27, taper: .4, dihedral: -10, thickness: .034 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .37, length: .24, width: 0.55, height: 0.9, rake: 0, splitter: false, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 't_tail', horizontalTail: 'fin_top', finCantDeg: 0, tail: t(3.63, 1.5, .5, .86, 10, 0, 1, .78, 3.3, .5, 40, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.0, offset: 0 }, extras: [] },
+    f4ej: { dims: { length: 19.2, span: 11.7, height: 5.0, wingArea: 49.24 }, gear: 'tricycle',
+      fuselage: { profile: 'f4', section: 'rounded_box', fuselageLengthToWidthRatio: 5.8, heightToWidth: .58 },
+      wing: { wingMountHeight: .1, planform: 'cranked', rootLE: .4, sweepLE: 45, taper: .3, dihedral: 0, thickness: .05, kink: [.6, 0, 12] },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .22, length: .36, width: 0.75, height: 1.35, rake: 12, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, -.25], [.3, -.25]], nozzleAt: .8 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.4, 1.9, .45, .88, 43, -23, .7, .76, 3.8, .35, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .21, length: 3.8, offset: 0 }, extras: [] },
+    f15j: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: [] },
+    f2a: { dims: { length: 15.5, span: 11.1, height: 4.96, wingArea: 34.84 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_f16', section: 'oval', fuselageLengthToWidthRatio: 6.8, heightToWidth: .65 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .4, sweepLE: 33, taper: .23, dihedral: 0, thickness: .04 },
+      biplane: null, intakeProfile: 'chin_scoop', intake: { at: .26, length: .36, width: 1.25, height: 0.85, rake: 8, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.9, 1.75, .35, .87, 40, -10, 0, .76, 3.1, .4, 47, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.6, offset: 0 }, extras: ['lerx', 'ventralFin'] },
+    ki21: { dims: { length: 16, span: 22.5, height: 4.85, wingArea: 69.6 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 10, heightToWidth: 1.2 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .32, sweepLE: 5, taper: .45, dihedral: 4, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.27], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.8, 1.9, .55, .85, 6, 0, .3, .8, 2.4, .5, 30, 0, 0), finTip: 2.5 },
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .22, length: 2.4, offset: 0 }, extras: [] },
+    d3a: { dims: { length: 10.2, span: 14.4, height: 3.85, wingArea: 34.97 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 7.8, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 0, planform: 'elliptical', rootLE: .28, sweepLE: 3, taper: .3, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.6, 1.3, .55, .86, 6, 0, .3, .82, 1.8, .5, 28, 0, 0), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .44, length: 3.0, offset: 0 }, extras: ['spats', 'fixedGear', 'dorsalFin'] },
+    b5n: { dims: { length: 10.3, span: 15.5, height: 3.7, wingArea: 37.7 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_radial', section: 'oval', fuselageLengthToWidthRatio: 7.9, heightToWidth: 1.2 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .28, sweepLE: 3, taper: .45, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.8, 1.3, .55, .86, 6, 0, .3, .82, 1.7, .5, 28, 0, 0), finTip: 1.9 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .44, length: 3.6, offset: 0 }, extras: [] },
+    g4m: { dims: { length: 20, span: 25, height: 6.0, wingArea: 78.13 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'round', fuselageLengthToWidthRatio: 10, heightToWidth: 1.15 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .3, sweepLE: 6, taper: .4, dihedral: 4, thickness: .17 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(7.7, 2.1, .55, .85, 6, 0, .3, .8, 2.6, .5, 30, 0, 0), finTip: 2.9 },
+      ...NOCANARD, cockpit: { canopy: 'glazed_nose', at: .06, length: 2.4, offset: 0 }, extras: [] },
+    ki45: { dims: { length: 11, span: 15, height: 3.7, wingArea: 32 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 9.6, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .3, planform: 'trapezoid', rootLE: .3, sweepLE: 5, taper: .45, dihedral: 5, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.31], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(5.0, 1.4, .55, .86, 6, 0, .3, .82, 1.8, .5, 30, 0, 0), finTip: 2.0 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .3, length: 3.4, offset: 0 }, extras: [] },
+    f1j: { dims: { length: 17.8, span: 7.9, height: 4.48, wingArea: 21.18 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.7, heightToWidth: .7 },
+      wing: { wingMountHeight: .95, planform: 'trapezoid', rootLE: .45, sweepLE: 42, taper: .3, dihedral: -9, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .3, length: .32, width: 0.55, height: 0.85, rake: 5, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, -.35], [.3, -.35]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.3, 1.8, .35, .86, 40, -10, .1, .72, 3.8, .3, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.0, offset: 0 }, extras: [] },
+    // ======================= France =======================
+    n17: { dims: { length: 5.8, span: 8.2, height: 2.4, wingArea: 14.75 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.2, heightToWidth: 1.15 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 1, thickness: .08 },
+      biplane: { wings: 2, gapToChord: 1.1, stagger: .2, lowerSpanRatio: .95, lowerChordRatio: .5 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.4, .7, .8, .86, 0, 0, .2, .86, .7, .7, 40, 0, 0), finTip: 1.1 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .44, length: 0, offset: 0 }, extras: ['vStruts', 'bracingWires', 'fixedGear'] },
+    spad13: { dims: { length: 6.3, span: 8.1, height: 2.6, wingArea: 21.1 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 7.9, heightToWidth: 1.25 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .2, sweepLE: 0, taper: 1, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: 1.05, stagger: .15, lowerSpanRatio: .96, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(2.7, .8, .8, .86, 0, 0, .2, .86, .8, .7, 35, 0, 0), finTip: 1.2 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .42, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    br14: { dims: { length: 8.9, span: 14.4, height: 3.3, wingArea: 47.5 }, gear: 'skid',
+      fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 8.9, heightToWidth: 1.3 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .22, sweepLE: 2, taper: 1, dihedral: 2, thickness: .1 },
+      biplane: { wings: 2, gapToChord: .9, stagger: .1, lowerSpanRatio: .86, lowerChordRatio: 1 },
+      intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.4, 1.1, .8, .86, 0, 0, .2, .86, 1.0, .7, 35, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .4, length: 0, offset: 0 }, extras: ['bracingWires', 'fixedGear'] },
+    d510: { dims: { length: 7.9, span: 12.1, height: 2.42, wingArea: 16.5 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 8.3, heightToWidth: 1.35 },
+      wing: { wingMountHeight: 0, planform: 'elliptical', rootLE: .27, sweepLE: 2, taper: .35, dihedral: 4, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.4, 1.0, .6, .85, 6, 0, .25, .83, 1.2, .5, 28, 0, 0), finTip: 1.45 },
+      ...NOCANARD, cockpit: { canopy: 'open', at: .5, length: 0, offset: 0 }, extras: ['spats', 'fixedGear', 'headrest', 'bracingWires'] },
+    ms406: { dims: { length: 8.2, span: 10.6, height: 2.83, wingArea: 16 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 8.6, heightToWidth: 1.45 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .29, sweepLE: 5, taper: .5, dihedral: 6, thickness: .15 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.3, 1.0, .6, .85, 6, 0, .3, .83, 1.3, .5, 28, 0, 0), finTip: 1.55 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .46, length: 1.8, offset: 0 }, extras: ['bellyScoop'] },
+    d520: { dims: { length: 8.6, span: 10.2, height: 2.57, wingArea: 15.97 }, gear: 'tailwheel',
+      fuselage: { profile: 'piston_inline', section: 'oval', fuselageLengthToWidthRatio: 9.6, heightToWidth: 1.4 },
+      wing: { wingMountHeight: 0, planform: 'trapezoid', rootLE: .3, sweepLE: 4, taper: .45, dihedral: 6, thickness: .14 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(3.1, 1.0, .6, .85, 6, 0, .3, .83, 1.3, .5, 28, 0, 0), finTip: 1.5 },
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .47, length: 1.6, offset: 0 }, extras: ['bellyScoop'] },
+    ouragan: { dims: { length: 10.7, span: 13.2, height: 4.14, wingArea: 23.4 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 6.9, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .36, sweepLE: 14, taper: .55, dihedral: 2, thickness: .1 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(4.4, 1.1, .6, .84, 15, 0, .35, .76, 2.1, .45, 35, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.6, offset: 0 }, extras: ['tipTanks'] },
+    mystere4: { dims: { length: 12.9, span: 11.1, height: 4.6, wingArea: 32 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_nose_intake', section: 'round', fuselageLengthToWidthRatio: 8.3, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .39, sweepLE: 41, taper: .45, dihedral: 0, thickness: .075 },
+      biplane: null, intakeProfile: 'nose_cone', intake: { ...NOSE },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(4.0, 1.3, .5, .86, 42, 0, .4, .74, 2.7, .4, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .25, length: 1.9, offset: 0 }, extras: [] },
+    mirage3c: { dims: { length: 15, span: 8.2, height: 4.5, wingArea: 34.85 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 9.4, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .2, planform: 'delta', rootLE: .4, sweepLE: 60, taper: .04, dihedral: 0, thickness: .045 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .3, length: .3, width: 0.6, height: 1.0, rake: 0, splitter: false, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.7, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .22, length: 2.1, offset: 0 }, extras: [] },
+    m2000c: { dims: { length: 14.36, span: 9.13, height: 5.2, wingArea: 41 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 9.0, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .2, planform: 'delta', rootLE: .4, sweepLE: 58, taper: .04, dihedral: 0, thickness: .045 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .3, length: .3, width: 0.62, height: 1.05, rake: 0, splitter: false, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.6, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .22, length: 2.0, offset: 0 }, extras: [] },
+    rafalec: { dims: { length: 15.3, span: 10.9, height: 5.34, wingArea: 45.7 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.0, heightToWidth: .8 },
+      wing: { wingMountHeight: .25, planform: 'delta', rootLE: .45, sweepLE: 48, taper: .14, dihedral: -2, thickness: .045 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .33, length: .3, width: 0.6, height: 0.9, rake: 0, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.4, 0], [.4, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.6, .3, 50, 0, 0),
+      canardPresence: true, canardLength: 1.6, canardSweep: 45, canardOffset: 2.6, canardHeight: .45, cockpit: { canopy: 'bubble', at: .18, length: 2.2, offset: 0 }, extras: [] },
+    amiot143: { dims: { length: 18.2, span: 24.5, height: 5.68, wingArea: 100 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'box', fuselageLengthToWidthRatio: 10.1, heightToWidth: 1.5 },
+      wing: { wingMountHeight: 1, planform: 'trapezoid', rootLE: .3, sweepLE: 4, taper: .45, dihedral: 2, thickness: .2 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.29], radial: true, pusher: false },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(7.0, 2.0, .6, .85, 4, 0, .3, .8, 2.4, .55, 25, 0, 0), finTip: 2.7 },
+      ...NOCANARD, cockpit: { canopy: 'greenhouse', at: .2, length: 3.0, offset: 0 }, extras: ['fixedGear'] },
+    leo451: { dims: { length: 17.2, span: 22.5, height: 5.24, wingArea: 68 }, gear: 'tailwheel',
+      fuselage: { profile: 'bomber_glazed', section: 'oval', fuselageLengthToWidthRatio: 10.7, heightToWidth: 1.3 },
+      wing: { wingMountHeight: .1, planform: 'trapezoid', rootLE: .32, sweepLE: 6, taper: .4, dihedral: 6, thickness: .16 },
+      biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'wing_propellers', count: 2, positions: [.27], radial: true, pusher: false },
+      tailConfiguration: 'twin_endplate', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(6.4, 1.8, .7, .86, 4, 12, .4, .85, 1.7, .7, 8, 0, .3), finTip: 2.4 },
+      ...NOCANARD, cockpit: { canopy: 'stepped', at: .2, length: 2.0, offset: 0 }, extras: [] },
+    vautour: { dims: { length: 15.6, span: 15.1, height: 4.94, wingArea: 45 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_glazed', section: 'oval', fuselageLengthToWidthRatio: 9.2, heightToWidth: 1.1 },
+      wing: { wingMountHeight: .5, planform: 'trapezoid', rootLE: .38, sweepLE: 35, taper: .45, dihedral: 0, thickness: .09 },
+      biplane: null, intakeProfile: 'nacelle', intake: null, engines: { layout: 'underwing_pods', count: 2, positions: [.4], diameter: 1.2, length: 4.8 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(5.5, 1.7, .5, .86, 40, 0, .55, .74, 3.3, .4, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.9, offset: 0 }, extras: [] },
+    jaguar: { dims: { length: 16.8, span: 8.7, height: 4.89, wingArea: 24.18 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.3, heightToWidth: .7 },
+      wing: { wingMountHeight: .95, planform: 'trapezoid', rootLE: .45, sweepLE: 40, taper: .3, dihedral: -3, thickness: .05 },
+      biplane: null, intakeProfile: 'side_box', intake: { at: .3, length: .32, width: 0.55, height: 0.85, rake: 5, splitter: false, shockCone: false },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, -.35], [.3, -.35]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(4.5, 1.8, .35, .86, 40, -10, .1, .72, 3.8, .3, 45, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .2, length: 2.2, offset: 0 }, extras: [] },
+    m2000d: { dims: { length: 14.55, span: 9.13, height: 5.15, wingArea: 41 }, gear: 'tricycle',
+      fuselage: { profile: 'jet_radar', section: 'oval', fuselageLengthToWidthRatio: 9.1, heightToWidth: 1.05 },
+      wing: { wingMountHeight: .2, planform: 'delta', rootLE: .4, sweepLE: 58, taper: .04, dihedral: 0, thickness: .045 },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .3, length: .3, width: 0.62, height: 1.05, rake: 0, splitter: false, shockCone: true },
+      engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
+      tailConfiguration: 'single_vertical', horizontalTail: 'none', finCantDeg: 0, tail: t(0, 0, 0, 0, 0, 0, 0, .72, 3.6, .3, 50, 0, 0),
+      ...NOCANARD, cockpit: { canopy: 'framed', at: .23, length: 2.8, offset: 0 }, extras: [] },
   };
-  const deep = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object' ? Object.assign({}, a[k], b[k]) : b[k]; return o; };
 
-  // ---- class defaults
-  const RADIAL = ['p12', 'p26', 'p47d', 'f4u1d', 'fw190a', 'la5fn', 'a6m2', 'ki43', 'ki84', 'n1k2', 'i15', 'i16', 'gladiator', 'ki27', 'ki10', 'b5n', 'sbd', 'a1h', 'd3a', 'camel', 'dr1', 'n17', 'n17ru', 'n24ko3', 'n28', 'he51', 'hart'];
-  function defaults(pl, lk) {
-    const sh = pl.shape, jet = pl.kind === 'jet', bi = sh === 'bi' || sh === 'tri' || !!pl.bi, big = sh.startsWith('bomber') || sh === 'jet_bomber';
-    const pos = lk.has('lowwing') ? -.55 : lk.has('midwing') ? 0 : lk.has('shoulder') ? .55 : lk.has('highwing') ? .85 : -.5;
-    if (bi) return { fus: 'biplane', R: .068, n: pl.era === 1 ? 4 : 2.6, wing: { x: .2, c: .17, tr: 1, sw: 0, dih: 2, t: .1, ellip: false }, stab: { x: .86, hs: .2, c: .11, tr: .75, sw: 0, y: .2 }, fin: { x: .86, h: .1, c: .12, tr: .7, sw: 35, round: true }, canopy: { z: .42, type: 'open' } };
-    if (!jet && !big && sh !== 'twin') {
-      const radial = RADIAL.includes(pl.id);
-      return { fus: radial ? 'radial' : 'inline', R: radial ? .064 : .05, n: 2.2,
-        wing: { x: radial ? .28 : .3, c: .21, tr: .48, sw: 3, dih: pos < -.3 ? 6 : 3, pos, t: .15, ellip: lk.has('ellip') },
-        stab: { x: .85, hs: .2, c: .12, tr: .55, sw: 8, y: .25 }, fin: { x: .82, h: .14, c: .17, tr: .45, sw: 30, round: true }, canopy: { z: .46, len: .17 } };
-    }
-    if (!jet) { // twins and bombers
-      const glazed = lk.has('roundnose') || lk.has('greenhouse') && big;
-      return { fus: glazed ? 'glazed' : sh === 'twin' ? 'inline' : 'bomber', R: sh === 'twin' ? .055 : .052, n: 2.2,
-        wing: { x: .3, c: .18, tr: .42, sw: 4, dih: 4, pos: lk.has('lowwing') || lk.has('midwing') || lk.has('shoulder') || lk.has('highwing') ? pos : -.2, t: .16, ellip: lk.has('ellip') },
-        stab: { x: .85, hs: big ? .27 : .22, c: .12, tr: .55, sw: 6, y: .3 },
-        fin: lk.has('twinfin') ? { twin: 'tips', x: .84, h: .11, c: .12, tr: .75, sw: 8, below: .3, round: true } : { x: .78, h: .15, c: .2, tr: .45, sw: 30, round: true, dorsal: lk.has('dorsal') },
-        canopy: { z: sh === 'twin' ? .3 : .2, len: sh === 'twin' ? .2 : .12 } };
-    }
-    // generic jet fallback (every jet in the game also has an entry in T)
-    return { fus: lk.has('noseint') ? 'jetNose' : 'jetRadar', R: .058, n: 2.2, wing: { x: .4, c: .28, tr: .4, sw: 35, dih: 0, pos, t: .06 }, stab: { x: .86, hs: .14, c: .1, tr: .45, sw: 40, y: 0 }, fin: { x: .74, h: .16, c: .21, tr: .35, sw: 45 }, canopy: { z: .22, len: .14, type: 'bubble' } };
+  // ---------------------------------------------------------------- validation (no guessing: anything missing throws)
+  const num = v => typeof v === 'number' && isFinite(v);
+  function validate(id, e, pl) {
+    const fail = msg => { throw new Error('Airframe "' + id + '": ' + msg); };
+    if (!e) fail('no registry entry (every aircraft must be defined explicitly in js/airframe.js)');
+    const need = (obj, path, keys, test) => { if (!obj || typeof obj !== 'object') fail(path + ' is missing'); for (const k of keys) { if (!(k in obj) || obj[k] === undefined) fail(path + '.' + k + ' is missing'); if (test && !test(obj[k])) fail(path + '.' + k + ' is invalid: ' + JSON.stringify(obj[k])); } };
+    const oneOf = (v, list, what) => { if (!list.includes(v)) fail(what + ' "' + v + '" is not one of ' + list.join(', ')); };
+    need(e, 'entry', ['dims', 'gear', 'fuselage', 'wing', 'biplane', 'intakeProfile', 'intake', 'engines', 'tailConfiguration', 'horizontalTail', 'finCantDeg', 'tail', 'canardPresence', 'canardLength', 'canardSweep', 'canardOffset', 'canardHeight', 'cockpit', 'extras']);
+    need(e.dims, 'dims', ['length', 'span', 'height', 'wingArea'], v => num(v) && v > 0);
+    if (Math.abs(e.dims.length / pl.len - 1) > 0.03 || Math.abs(e.dims.span / pl.span - 1) > 0.03) fail('dims (' + e.dims.length + ' x ' + e.dims.span + ') disagree with the aircraft data (' + pl.len + ' x ' + pl.span + ')');
+    oneOf(e.gear, ENUM.gear, 'gear');
+    need(e.fuselage, 'fuselage', ['profile', 'section', 'fuselageLengthToWidthRatio', 'heightToWidth']);
+    if (!FUS[e.fuselage.profile]) fail('fuselage.profile "' + e.fuselage.profile + '" is not a known shape');
+    if (!(e.fuselage.section in SECTION_N)) fail('fuselage.section "' + e.fuselage.section + '" is unknown');
+    if (!num(e.fuselage.fuselageLengthToWidthRatio) || e.fuselage.fuselageLengthToWidthRatio < 2.5 || e.fuselage.fuselageLengthToWidthRatio > 16) fail('fuselageLengthToWidthRatio out of range');
+    if (!num(e.fuselage.heightToWidth) || e.fuselage.heightToWidth < 0.3 || e.fuselage.heightToWidth > 2) fail('fuselage.heightToWidth out of range');
+    need(e.wing, 'wing', ['wingMountHeight', 'planform', 'rootLE', 'sweepLE', 'taper', 'dihedral', 'thickness']);
+    oneOf(e.wing.planform, ENUM.planform, 'wing.planform');
+    for (const k of ['wingMountHeight', 'rootLE', 'sweepLE', 'taper', 'dihedral', 'thickness']) if (!num(e.wing[k])) fail('wing.' + k + ' must be a number');
+    if (e.wing.wingMountHeight < 0 || e.wing.wingMountHeight > 1) fail('wing.wingMountHeight must be within 0..1');
+    if (['gull', 'inverted_gull', 'cranked'].includes(e.wing.planform) && !(Array.isArray(e.wing.kink) && e.wing.kink.length === 3 && e.wing.kink.every(num))) fail('wing.kink [span fraction, inner dihedral, outer dihedral] is required for a ' + e.wing.planform + ' wing');
+    if (e.wing.planform === 'diamond' && !num(e.wing.sweepTE)) fail('wing.sweepTE is required for a diamond wing');
+    if (e.biplane !== null) { need(e.biplane, 'biplane', ['wings', 'gapToChord', 'stagger', 'lowerSpanRatio', 'lowerChordRatio'], num); if (e.biplane.wings === 3 && !num(e.biplane.middleSpanRatio)) fail('biplane.middleSpanRatio is required for a triplane'); }
+    oneOf(e.intakeProfile, ENUM.intakeProfile, 'intakeProfile');
+    const needsIntake = ['side_box', 'cheek_crescent', 'chin_scoop', 'ventral_box', 'wing_root', 'nose_cone'].includes(e.intakeProfile);
+    if (needsIntake) need(e.intake, 'intake', ['at', 'length', 'width', 'height', 'rake', 'splitter', 'shockCone']);
+    else if (e.intake !== null) fail('intake must be null for intakeProfile "' + e.intakeProfile + '"');
+    need(e.engines, 'engines', ['layout', 'count']); oneOf(e.engines.layout, ENUM.layout, 'engines.layout');
+    for (const k of ENGINE_FIELDS[e.engines.layout]) if (!(k in e.engines)) fail('engines.' + k + ' is required for layout "' + e.engines.layout + '"');
+    if (e.engines.count !== pl.eng) fail('engines.count ' + e.engines.count + ' disagrees with the aircraft data (' + pl.eng + ')');
+    if ((pl.kind === 'jet') !== !['nose_propeller', 'wing_propellers', 'twin_boom_propellers'].includes(e.engines.layout)) fail('engines.layout "' + e.engines.layout + '" does not match a ' + pl.kind + ' aircraft');
+    if ((pl.kind === 'jet') === (e.intakeProfile === 'none')) fail('intakeProfile "' + e.intakeProfile + '" does not match a ' + pl.kind + ' aircraft');
+    oneOf(e.tailConfiguration, ENUM.tailConfiguration, 'tailConfiguration'); oneOf(e.horizontalTail, ENUM.horizontalTail, 'horizontalTail');
+    if (!num(e.finCantDeg)) fail('finCantDeg must be a number');
+    if (e.tailConfiguration === 'twin_vertical_canted' && !(e.finCantDeg > 0)) fail('twin_vertical_canted needs a finCantDeg above 0');
+    if (e.tailConfiguration !== 'twin_vertical_canted' && e.finCantDeg !== 0) fail('finCantDeg must be 0 unless the fins are canted');
+    if ((e.tailConfiguration === 't_tail') !== (e.horizontalTail === 'fin_top')) fail('a t_tail must have horizontalTail "fin_top" (and only a t_tail)');
+    if ((e.tailConfiguration === 'twin_boom') !== (e.horizontalTail === 'boom')) fail('twin_boom tails need horizontalTail "boom" (and only they)');
+    if (e.tailConfiguration === 'twin_endplate' && e.horizontalTail !== 'fuselage') fail('twin_endplate fins sit on a fuselage-mounted tailplane');
+    need(e.tail, 'tail', ['stabSpan', 'stabChord', 'stabTaper', 'stabLE', 'stabSweep', 'stabDihedral', 'stabHeight', 'finLE', 'finChord', 'finTaper', 'finSweep', 'finSpacing', 'finBelow'], num);
+    if (e.horizontalTail !== 'none' && !(e.tail.stabSpan > 0 && e.tail.stabChord > 0 && e.tail.stabLE > 0)) fail('tail.stabSpan / stabChord / stabLE are required with a horizontal tail');
+    if (e.horizontalTail === 'none' && e.tail.stabSpan !== 0) fail('tail.stabSpan must be 0 for a tailless aircraft');
+    if (!(e.tail.finChord > 0 && e.tail.finLE > 0)) fail('tail.finChord / finLE are required');
+    if (e.gear !== 'tricycle' && !(num(e.tail.finTip) && e.tail.finTip > 0)) fail('tail.finTip is required for a ' + e.gear + ' aircraft (its published height is not a fin height)');
+    if (e.gear === 'tricycle' && 'finTip' in e.tail) fail('tail.finTip is derived from dims.height for tricycle aircraft; do not give it');
+    if (/^twin_vertical/.test(e.tailConfiguration) && !(e.tail.finSpacing > 0)) fail('tail.finSpacing is required for twin vertical fins');
+    if (typeof e.canardPresence !== 'boolean') fail('canardPresence must be true or false');
+    if (e.canardPresence) { for (const k of ['canardLength', 'canardSweep', 'canardOffset', 'canardHeight']) if (!num(e[k])) fail(k + ' is required when canardPresence is true'); if (!(e.canardLength > 0)) fail('canardLength must be above 0'); }
+    need(e.cockpit, 'cockpit', ['canopy', 'at', 'length', 'offset']); oneOf(e.cockpit.canopy, ENUM.canopy, 'cockpit.canopy');
+    if (e.cockpit.canopy !== 'open' && !(e.cockpit.length > 0)) fail('cockpit.length is required for a ' + e.cockpit.canopy + ' canopy');
+    if (!Array.isArray(e.extras)) fail('extras must be a list'); for (const x of e.extras) if (!EXTRAS.includes(x)) fail('unknown extra "' + x + '"');
   }
 
-  // ---- smooth interpolation of section tables (Catmull-Rom through the stations)
+  // ---- smooth interpolation through the stations (no overshoot)
   function sample(rows, t, k) {
     let i = 0; while (i < rows.length - 2 && rows[i + 1][0] < t) i++;
     const p0 = rows[Math.max(0, i - 1)], p1 = rows[i], p2 = rows[i + 1], p3 = rows[Math.min(rows.length - 1, i + 2)];
     const u = Math.max(0, Math.min(1, (t - p1[0]) / Math.max(1e-6, p2[0] - p1[0]))), u2 = u * u, u3 = u2 * u;
     const v = 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * u3);
-    return Math.max(Math.min(p1[k], p2[k]) - Math.abs(p2[k] - p1[k]) * 0.15, Math.min(Math.max(p1[k], p2[k]) + Math.abs(p2[k] - p1[k]) * 0.15, v)); // no overshoot
+    return Math.max(Math.min(p1[k], p2[k]) - Math.abs(p2[k] - p1[k]) * 0.15, Math.min(Math.max(p1[k], p2[k]) + Math.abs(p2[k] - p1[k]) * 0.15, v));
   }
 
+  // ---------------------------------------------------------------- spec: the registry entry resolved to metres
   const cache = {};
   function spec(pl) {
     if (cache[pl.id]) return cache[pl.id];
-    const lk = typeof look === 'function' ? look(pl) : new Set(), L = pl.len, S = pl.span, jet = pl.kind === 'jet', sh = pl.shape;
-    const bi = sh === 'bi' || sh === 'tri' || !!pl.bi, big = sh.startsWith('bomber') || sh === 'jet_bomber';
-    let d = defaults(pl, lk);
-    if (T[pl.id]) d = deep(d, T[pl.id]); if (P[pl.id]) d = deep(d, P[pl.id]);
-    const R = Math.max(bi ? 0.38 : 0.36, d.R * L), n = d.n || 2.2;
-    const rows = (Array.isArray(d.fus) ? d.fus : FUS[d.fus] || FUS.inline);
-    const z0 = -L / 2;
-    // fuselage stations in metres
-    const at = z => { const t = Math.max(0, Math.min(1, (z - z0) / L)); return { w: sample(rows, t, 1) * R, h: sample(rows, t, 2) * R, y: sample(rows, t, 3) * R }; };
-    const se = (v, n) => Math.pow(Math.max(0, v), 1 / n);
+    const e = REG[pl.id]; validate(pl.id, e, pl);
+    const L = pl.len, S = pl.span, jet = pl.kind === 'jet', z0 = -L / 2, ex = new Set(e.extras);
+    const W = L / e.fuselage.fuselageLengthToWidthRatio, H = W * e.fuselage.heightToWidth, R = W / 2, n = SECTION_N[e.fuselage.section];
+    const rows = FUS[e.fuselage.profile];
+    const at = z => { const t = Math.max(0, Math.min(1, (z - z0) / L)); return { w: sample(rows, t, 1) * R, h: sample(rows, t, 2) * H / 2, y: sample(rows, t, 3) * R }; };
+    const se = (v, k) => Math.pow(Math.max(0, v), 1 / k);
     const topAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y + s.h * se(1 - Math.pow(q, n), n); };
     const botAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y - s.h * se(1 - Math.pow(q, n), n); };
     const sideAt = (z, y) => { const s = at(z), q = Math.min(1, Math.abs(y - s.y) / s.h); return s.w * se(1 - Math.pow(q, n), n); };
-    const sp = { id: pl.id, L, S, R, n, rows, at, topAt, botAt, sideAt, look: lk, jet, bi, big, era: pl.era, d };
-    // ---- wing(s)
-    const w = d.wing, b = S / 2;
-    const rootZ = z0 + w.x * L, rc = bi ? S * w.c : (jet ? w.c * L : S * w.c);
-    const zMid = rootZ + rc / 2, s0 = at(zMid);
-    const wy = bi ? s0.y - s0.h * 0.85 : s0.y + (w.pos || 0) * s0.h * 0.82;
+    const sp = { id: pl.id, entry: e, L, S, R, W, H, n, rows, at, topAt, botAt, sideAt, extras: ex, jet, bi: !!e.biplane, big: pl.shape.startsWith('bomber') || pl.shape === 'jet_bomber', era: pl.era, notes: [] };
+    const note = s => sp.notes.push(s);
+    // ---- wing: root chord from the published wing area
+    const w = e.wing, b = S / 2, tr = w.taper, bp = e.biplane;
+    let areaFactor = 1; // total wing area relative to one (upper) wing of span S
+    if (bp) { areaFactor += bp.lowerSpanRatio * bp.lowerChordRatio; if (bp.wings === 3) areaFactor += bp.middleSpanRatio; }
+    let rc = w.planform === 'elliptical' ? 4 * e.dims.wingArea / (Math.PI * S * areaFactor) : 2 * e.dims.wingArea / (S * (1 + tr) * areaFactor);
+    let tc = rc * tr;
+    if (w.planform === 'diamond') { // tip chord from the leading- and trailing-edge sweeps, then the root chord that keeps the wing area
+      const k = Math.tan(w.sweepLE * D) - Math.tan(w.sweepTE * D); rc = (2 * e.dims.wingArea / S + k * b) / 2; tc = Math.max(rc * 0.05, rc - k * b);
+      note('diamond wing: chords from the published area and the leading / trailing-edge sweeps'); }
+    const rootLE = z0 + w.rootLE * L, zMid = rootLE + rc / 2, s0 = at(zMid);
+    const wy = bp ? s0.y - s0.h * 0.85 : s0.y + (w.wingMountHeight * 2 - 1) * s0.h * 0.82;
     const x0 = Math.max(0.05, sideAt(zMid, wy) * 0.6);
-    let tc = w.te !== undefined ? null : rc * w.tr; // tip chord
-    const swp = Math.tan((w.sw || 0) * D);
-    if (tc === null) { const span = b - x0, le = swp * span, te = Math.tan(w.te * D) * span; tc = Math.max(rc * 0.05, rc + te - le); }
-    sp.wing = { rootZ, rc, tc, sw: swp, dih: (w.dih || 0) * D, kink: w.kink ? [w.kink[0], w.kink[1] * D, w.kink[2] * D] : null, y: wy, x0, b, t: w.t || (jet ? 0.06 : 0.14), ellip: !!w.ellip, tiptanks: !!w.tiptanks || lk.has('tiptanks'), droop: !!w.droop, fences: w.fences || 0, glove: !!w.glove, tiprail: !!w.tiprail };
-    // spanwise geometry of the (main / lower) wing at semi-span position f (0 root .. 1 tip)
-    sp.wingAt = (f, wg) => { const g = wg || sp.wing, span = g.b - g.x0;
-      const c = g.ellip ? Math.max(g.rc * 0.18, g.rc * Math.sqrt(Math.max(0, 1 - Math.pow(f, 2.2)))) : g.rc * (1 - f) + g.tc * f;
-      const le = g.ellip ? g.rootZ + (g.rc - c) * 0.3 + g.sw * span * f : g.rootZ + g.sw * span * f;
-      let y = g.y; if (g.kink) { const k = g.kink[0]; y += f < k ? Math.tan(g.kink[1]) * span * f : Math.tan(g.kink[1]) * span * k + Math.tan(g.kink[2]) * span * (f - k); } else y += Math.tan(g.dih) * span * f;
-      return { x: g.x0 + span * f, le, c, y }; };
+    const kink = w.kink ? [w.kink[0], w.kink[1] * D, w.kink[2] * D] : null;
+    sp.wing = { rootZ: rootLE, rc, tc, sw: Math.tan(w.sweepLE * D), dih: w.dihedral * D, kink, y: wy, x0, b, t: w.thickness, ellip: w.planform === 'elliptical', tiptanks: ex.has('tipTanks'), droop: ex.has('droopedTips'), fences: ex.has('wingFences') ? (pl.id === 'mig17' ? 3 : 2) : 0, glove: ex.has('wingGlove'), tiprail: ex.has('tipRails') };
+    // chord, leading edge and height at semi-span fraction f, along the trapezoid defined from the centreline
+    sp.wingAt = (f, wg) => { const g = wg || sp.wing, x = g.x0 + (g.b - g.x0) * f, u = x / g.b;
+      const c = g.ellip ? Math.max(g.rc * 0.18, g.rc * Math.sqrt(Math.max(0, 1 - Math.pow(u, 2.2)))) : g.rc + (g.tc - g.rc) * u;
+      const le = g.ellip ? g.rootZ + (g.rc - c) * 0.3 + g.sw * x : g.rootZ + g.sw * x;
+      const span = g.b - g.x0; let y = g.y;
+      if (g.kink) { const k = g.kink[0]; y += f < k ? Math.tan(g.kink[1]) * span * f : Math.tan(g.kink[1]) * span * k + Math.tan(g.kink[2]) * span * (f - k); } else y += Math.tan(g.dih) * span * f;
+      return { x, le, c, y }; };
     sp.wingF = x => Math.max(0, Math.min(1, (Math.abs(x) - sp.wing.x0) / (sp.wing.b - sp.wing.x0)));
-    // biplanes: upper wing (and the triplane's middle wing)
     sp.wings = [sp.wing];
-    if (bi) {
-      const gap = rc * 1.05, top = s0.y + s0.h, upper = Object.assign({}, sp.wing, { y: Math.max(top + 0.25, wy + gap), rootZ: rootZ - rc * 0.18, x0: 0.02, dih: (w.dih || 2) * D });
-      if (lk.has('sesqui')) Object.assign(sp.wing, { rc: rc * 0.6, tc: rc * 0.5, b: b * 0.82, rootZ: rootZ + rc * 0.15 });
-      if (sh === 'tri') { const mid = Object.assign({}, sp.wing, { y: s0.y + s0.h * 0.1, x0: x0 * 0.9, b: b * 0.96 }); sp.wings.push(mid); upper.y = wy + gap * 1.7; upper.b = b; sp.wing.b = b * 0.92; }
-      sp.wings.push(upper);
+    if (bp) {
+      const gap = rc * bp.gapToChord, top = s0.y + s0.h;
+      const upper = Object.assign({}, sp.wing, { y: Math.max(top + 0.25, wy + gap * (bp.wings === 3 ? 1.9 : 1)), rootZ: rootLE - rc * bp.stagger, x0: 0.02 });
+      Object.assign(sp.wing, { rc: rc * bp.lowerChordRatio, tc: tc * bp.lowerChordRatio, b: b * bp.lowerSpanRatio, rootZ: rootLE + rc * (1 - bp.lowerChordRatio) * 0.5 });
+      if (bp.wings === 3) { sp.wings.push(Object.assign({}, sp.wing, { rc, tc, y: s0.y + s0.h * 0.15, x0: x0 * 0.9, b: b * bp.middleSpanRatio, rootZ: rootLE - rc * bp.stagger * 0.5 })); note('triplane: three wings stacked'); }
+      sp.wings.push(upper); note('biplane: upper wing ' + gap.toFixed(2) + ' m above the lower, staggered ' + (bp.stagger * 100).toFixed(0) + '% of the chord');
     }
     // ---- canopy / cockpit
-    const cn = d.canopy || {};
-    const ctype = cn.type || (lk.has('open') ? 'open' : lk.has('greenhouse') ? 'greenhouse' : lk.has('razor') ? 'razor' : lk.has('framed') ? 'framed' : lk.has('sbs') ? 'sbs' : lk.has('roundnose') ? 'glazednose' : lk.has('stepped') ? 'stepped' : 'bubble');
-    const two = pl.crew.length > 1 && !big;
-    const clen = (cn.len || (jet ? 0.14 : 0.16)) * L * (two && !cn.len ? 1.4 : 1);
-    const cz = big && !cn.z ? z0 + L * (ctype === 'glazednose' ? 0.12 : 0.2) : z0 + (cn.z || 0.45) * L;
-    sp.canopy = { type: ctype, z: cz, len: Math.max(0.9, clen), w: (cn.w || (ctype === 'sbs' ? 1.15 : jet ? 0.5 : 0.52)) * R, h: (cn.h || (ctype === 'bubble' ? 0.95 : 0.8)) * R * (jet ? 0.95 : 1), x: (cn.x || 0) * R, two, frameless: !!cn.frameless };
-    sp.canopy.w = Math.min(sp.canopy.w, at(cz).w * 0.92);
-    sp.canopy.h = Math.min(sp.canopy.h, R * 1.15);
-    // ---- tail
-    const st = d.stab, fn = d.fin;
-    sp.fins = []; sp.stab = null;
-    const finH = fn.h * L, finC = fn.c * L, finZ = z0 + fn.x * L;
-    const mkFin = (x, base, cant, h, below) => sp.fins.push({ x, base, cant: cant * D, h, below: below || 0, zLE: finZ, rc: finC, tc: finC * fn.tr, sw: Math.tan(fn.sw * D), t: jet ? 0.05 : 0.1, round: !!fn.round });
-    if (st) {
-      const sz = z0 + st.x * L, src = st.c * L, hs = st.hs * L * (st.boom ? 1 : 1);
-      let y; if (st.fin !== undefined) y = topAt(finZ + finC * 0.4) + finH * st.fin * 0.92; else { const s = at(sz + src / 2); y = s.y + (st.y || 0) * s.h; }
-      const stc = st.te !== undefined ? Math.max(src * 0.08, src + Math.tan(st.te * D) * hs - Math.tan(st.sw * D) * hs) : src * st.tr;
-      const rx = st.fin !== undefined ? 0.05 : st.root ? st.root * R : Math.max(0.05, sideAt(sz + src / 2, y) * 0.5);
-      sp.stab = { zLE: sz, rc: src, tc: stc, sw: Math.tan(st.sw * D), dih: (st.dih || 0) * D, y, x0: rx, b: rx + hs, t: jet ? 0.05 : 0.1 };
-      if (st.boom) { sp.stab.x0 = 0.02; sp.stab.b = d.booms.x * S; }
+    const ck = e.cockpit;
+    sp.canopy = { type: ck.canopy, z: z0 + ck.at * L, len: ck.length, x: ck.offset, two: pl.crew.length > 1 && !sp.big, frameless: ['f16c', 'f22a', 'su57', 'f2a'].includes(pl.id) };
+    { const s = at(sp.canopy.z); sp.canopy.w = Math.min(s.w * 0.92, ck.canopy === 'side_by_side' ? R * 1.15 : Math.max(0.36, Math.min(0.52, s.w * 0.62))); sp.canopy.h = ck.canopy === 'bubble' ? Math.max(0.42, Math.min(0.62, sp.canopy.w * 1.15)) : Math.max(0.38, Math.min(0.56, sp.canopy.w)); }
+    // ---- engines (resolved positions; nacelles / pods carry their own intakes and nozzles)
+    const en = e.engines, engines = [];
+    if (en.layout === 'nose_propeller') engines.push({ kind: 'prop', x: 0, y: 0, z: z0 + L * 0.09, r: R, len: L * 0.18, radial: en.radial });
+    else if (en.layout === 'wing_propellers' || en.layout === 'twin_boom_propellers') {
+      for (const s of [-1, 1]) for (const f of en.positions) { const x = s * f * b, wa = sp.wingAt(sp.wingF(x)), nr = Math.max(0.42, Math.min(1.0, wa.c * 0.24)), nl = Math.max(wa.c * 1.25, L * 0.18);
+        engines.push({ kind: 'propnac', x, y: wa.y + nr * 0.1, z: en.pusher ? wa.le + wa.c * 0.9 : wa.le + wa.c * 0.35 - nl * 0.3, r: nr, len: nl, radial: !!en.radial, boom: en.layout === 'twin_boom_propellers', pusher: !!en.pusher }); }
+    } else if (en.layout === 'fuselage_jet') {
+      const zEnd = z0 + en.nozzleAt * L, sEnd = at(zEnd);
+      const rn = en.count === 2 ? Math.min(sEnd.w * 0.5, sEnd.h * 0.95, R * 0.45) : Math.min(sEnd.w, sEnd.h) * 0.98;
+      for (const [nx, ny] of en.nozzles) engines.push({ kind: 'fus', x: nx * R, y: sEnd.y + ny * R, z: zEnd - L * 0.16, r: rn, len: L * 0.32, jet: true, nozzle: zEnd, rect: !!en.rectangular });
+    } else if (en.layout === 'wing_nacelles' || en.layout === 'underwing_pods') {
+      for (const s of [-1, 1]) for (const f of en.positions) { const x = s * f * b, wa = sp.wingAt(sp.wingF(x)), r = en.diameter / 2;
+        engines.push({ kind: en.layout === 'underwing_pods' ? 'underwing' : 'wingnac', x, y: en.layout === 'underwing_pods' ? wa.y - r * 0.85 : wa.y, z: wa.le + wa.c * 0.3 - en.length * 0.32, r, len: en.length, jet: true }); }
+    } else if (en.layout === 'rear_fuselage_pods') {
+      for (const s of [-1, 1]) engines.push({ kind: 'pod', x: s * en.lateral, y: en.height, z: z0 + en.at * L, r: en.diameter / 2, len: en.length, jet: true });
+    } else if (en.layout === 'fuselage_side_nacelles') {
+      for (const s of [-1, 1]) { const r = en.diameter / 2, z = z0 + en.at * L + en.length / 2; engines.push({ kind: 'sidenac', x: s * (at(z).w * 0.75 + r * 0.5 + en.lateral * R), y: wy - r * 0.2, z, r, len: en.length, jet: true }); }
+    } else if (en.layout === 'ventral_nacelles') {
+      for (const s of [-1, 1]) { const r = en.diameter / 2, len = (en.to - en.from) * L; engines.push({ kind: 'nacelle', x: s * en.lateral * R, y: -0.35 * R, z: z0 + (en.from + en.to) / 2 * L, r, len, jet: true }); }
     }
-    if (fn.twin === 'tips' && sp.stab) { const tipY = sp.stab.y + Math.tan(sp.stab.dih) * (sp.stab.b - sp.stab.x0); for (const s of [-1, 1]) mkFin(s * sp.stab.b, tipY - finH * (fn.below || 0), 0, finH * (1 + (fn.below || 0)), 0); }
-    else if (fn.twin === 'booms') { for (const s of [-1, 1]) mkFin(s * d.booms.x * S, (sp.stab ? sp.stab.y : 0) - finH * (fn.below || 0), 0, finH * (1 + (fn.below || 0))); }
-    else if (fn.twin === 'body') { for (const s of [-1, 1]) { const x = s * (fn.xo || 1) * R; mkFin(x, topAt(finZ + finC * 0.4, x) - 0.08, -s * (fn.cant || 0), finH); } }
-    else mkFin(0, topAt(finZ + finC * 0.4) - 0.1, 0, finH + 0.1, fn.below || 0);
-    sp.ventral = fn.ventral ? { zLE: finZ + finC * 0.1, rc: finC * 0.6, h: finH * 0.28 } : null;
-    sp.dorsal = fn.dorsal || lk.has('dorsal');
-    // ---- engines
-    const engines = [];
-    const e = d.eng;
-    if (!jet) {
-      if (pl.eng === 1) engines.push({ kind: 'prop', x: 0, y: 0, z: z0 + L * 0.09, r: R * (RADIAL.includes(pl.id) ? 1.0 : 0.95), len: L * 0.18, radial: RADIAL.includes(pl.id) });
-      else { const xs = pl.eng === 2 ? [d.booms ? d.booms.x : big ? 0.17 : 0.18] : [0.12, 0.23];
-        for (const s of [-1, 1]) for (const fx of xs) { const x = s * fx * S, wa = sp.wingAt(sp.wingF(x)); const nr = Math.max(0.42, R * (pl.eng === 2 ? 0.72 : 0.62)), nl = Math.max(wa.c * 1.25, L * 0.22);
-          engines.push({ kind: 'propnac', x, y: wa.y + nr * 0.1, z: wa.le + wa.c * 0.35 - nl * 0.3, r: nr, len: nl, radial: pl.era >= 3 || pl.era === 2, boom: !!d.booms }); } }
-    } else if (e && (e.type === 'underwing' || e.type === 'wingnac')) {
-      for (const s of [-1, 1]) { const x = s * e.x * S, wa = sp.wingAt(sp.wingF(x)), r = e.r * L, len = e.len * L;
-        engines.push({ kind: e.type, x, y: e.type === 'underwing' ? wa.y - r * 0.85 : wa.y, z: wa.le + wa.c * 0.3 - len * 0.32, r, len, jet: true }); }
-    } else if (e && (e.type === 'rootnac' || e.type === 'sidenac' || e.type === 'nacelle')) {
-      for (const s of [-1, 1]) { const r = e.r * L, len = e.len ? e.len * L : (e.z1 - e.z0) * L, z = e.len ? z0 + e.z * L + len / 2 : z0 + (e.z0 + e.z1) / 2 * L;
-        const x = e.x ? s * e.x * R : s * (at(z).w + r * 0.35), y = e.type === 'nacelle' ? -0.35 * R : e.type === 'sidenac' ? wy - r * 0.5 : wy;
-        engines.push({ kind: e.type, x, y, z, r, len, jet: true }); }
-    } else if (e && e.type === 'pod') {
-      for (const s of [-1, 1]) engines.push({ kind: 'pod', x: s * e.x * L, y: e.y * R, z: z0 + e.z * L, r: e.r * L, len: e.len * L, jet: true });
-    } else {
-      // engines inside the fuselage, exhausting through tail nozzles
-      const nz = d.nz || (pl.eng === 2 ? [[-0.42, 0], [0.42, 0]] : [[0, 0]]), zEnd = d.nzz ? z0 + d.nzz * L : L / 2, sEnd = at(zEnd);
-      const rn = pl.eng === 2 ? Math.min(sEnd.w * 0.55, sEnd.h * 0.95, R * 0.5) : Math.min(sEnd.w, sEnd.h) * 0.98;
-      for (const [nx, ny] of nz) engines.push({ kind: 'fus', x: nx * R, y: sEnd.y + ny * R, z: zEnd - L * 0.16, r: rn, len: L * 0.32, jet: true, nozzle: zEnd, rect: !!d.nzRect });
-    }
-    // nozzles for nacelles / pods are at their rear ends
-    for (const en of engines) if (en.jet && en.nozzle === undefined) en.nozzle = en.z + en.len / 2;
+    for (const g of engines) if (g.jet && g.nozzle === undefined) g.nozzle = g.z + g.len / 2;
     sp.engines = engines;
-    sp.intake = d.intake ? Object.assign({ z: 0.3, len: 0.3, w: 0.5, h: 0.9 }, d.intake) : null;
-    if (!sp.intake && jet && (d.fus === 'jetNose' || d.fus === 'jetOval' || d.fus === 'lightning')) sp.intake = { type: 'nose' };
-    sp.extra = { lerx: !!d.lerx, canards: d.canards || null, booms: d.booms || null, gearPods: d.gearPods || null, gau8: !!d.gau8, cone: !!d.cone || (sp.intake && sp.intake.cone), belly: !!d.belly, cft: !!d.cft, duck: !!d.duck };
+    sp.intake = e.intakeProfile === 'none' || e.intakeProfile === 'nacelle' ? null : Object.assign({ type: e.intakeProfile }, e.intake);
+    sp.extra = { lerx: ex.has('lerx'), booms: en.layout === 'twin_boom_propellers' ? { x: en.positions[0] * b } : null, gearPods: ex.has('gearPods') ? [.13, .12] : null, gau8: ex.has('gau8'),
+      cone: !!(e.intake && e.intake.shockCone), belly: ex.has('ventralTank'), cft: ex.has('conformalTanks'), duck: ex.has('duckbillNose'),
+      canards: e.canardPresence ? { length: e.canardLength, sweep: e.canardSweep * D, offset: e.canardOffset, height: e.canardHeight } : null };
+    // ---- landing gear (also the datum for turning the published height into a fin height)
+    const fixed = sp.bi || ex.has('fixedGear');
+    const D2 = (R + H / 2) / 2; // gear sized from the mean fuselage half-size (width alone would put flat bodies on stilts)
+    const wheelR = Math.max(0.3, D2 * (sp.big ? 0.45 : 0.32)), gearLen = D2 * (jet ? 1.0 : 1.25) + 0.3;
+    const gearH = sp.bi ? D2 * 2.0 + 0.32 : fixed ? -(wy - D2 * 1.2 - 0.36) : -(wy - gearLen - wheelR);
+    sp.gear = { fixed, wheelR, gearLen, gearH, gearX: Math.max(R * 1.1, Math.min(S * 0.18, pl.eng >= 2 ? S * 0.18 : S * 0.12)), zMain: rootLE + rc * 0.35 };
+    // ---- tail
+    const tl = e.tail, finZ = z0 + tl.finLE * L, finSw = Math.tan(tl.finSweep * D);
+    sp.stab = null; sp.fins = [];
+    if (e.horizontalTail !== 'none') {
+      const sz = z0 + tl.stabLE * L, half = tl.stabSpan / 2;
+      let stabY = 0; if (e.horizontalTail === 'fuselage') { const s = at(sz + tl.stabChord / 2); stabY = s.y + tl.stabHeight * s.h; }
+      const rx = e.horizontalTail === 'fuselage' ? Math.max(0.05, sideAt(sz + tl.stabChord / 2, stabY) * 0.5) : 0.03;
+      sp.stab = { zLE: sz, rc: tl.stabChord, tc: tl.stabChord * tl.stabTaper, sw: Math.tan(tl.stabSweep * D), dih: tl.stabDihedral * D, y: stabY, x0: rx, b: Math.max(rx + 0.3, half), t: jet ? 0.05 : 0.1, mount: e.horizontalTail };
+    }
+    // fin height from the published overall height: tricycle types stand level; tail-wheel and skid types sit
+    // nose-up on the tail wheel / skid, so solve that three-point attitude for the fin tip
+    const finBase0 = topAt(finZ + tl.finChord * 0.4) - 0.1;
+    let yTopFin;
+    if (e.gear === 'tricycle') { yTopFin = e.dims.height - gearH; note('fin tip ' + yTopFin.toFixed(2) + ' m above the axis, from the published height ' + e.dims.height + ' m standing level on tricycle gear'); }
+    else {
+      yTopFin = tl.finTip;
+      // cross-check: sitting on the main wheels and the tail wheel / skid, the fin must not stand taller than the published overall height
+      const zM = sp.gear.zMain, yM = -gearH, zT = z0 + L * 0.92, yT = botAt(zT) - (e.gear === 'skid' ? 0.12 : 0.28);
+      const dz = zT - zM, dy = yT - yM, len = Math.hypot(dz, dy), nz = -dy / len, ny = dz / len; // ground normal (up) in the aircraft frame
+      const zf = finZ + finSw * Math.max(0, yTopFin - finBase0) + tl.finChord * tl.finTaper * 0.5, ground = (yTopFin - yM) * ny + (zf - zM) * nz;
+      if (ground > e.dims.height + 0.3) throw new Error('Airframe "' + pl.id + '": tail.finTip ' + yTopFin + ' m puts the fin ' + ground.toFixed(2) + ' m above the ground, taller than the published height ' + e.dims.height + ' m');
+      note('fin tip ' + yTopFin + ' m above the axis (side elevation); ' + ground.toFixed(2) + ' m above the ground sitting ' + (Math.atan2(dy, dz) / D).toFixed(1) + ' deg nose-up, within the published ' + e.dims.height + ' m');
+    }
+    const finH = Math.max(0.5, Math.min(L * 0.3, yTopFin - finBase0));
+    if (sp.stab && e.horizontalTail === 'fin_top') sp.stab.y = finBase0 + finH * 0.97;
+    if (sp.stab && e.horizontalTail === 'fin_mid') sp.stab.y = finBase0 + finH * tl.stabHeight;
+    if (sp.stab && e.horizontalTail === 'boom') { sp.stab.x0 = 0.02; sp.stab.b = en.positions[0] * b; }
+    const mkFin = (x, base, cant, h) => sp.fins.push({ x, base, cant: cant * D, h, below: 0, zLE: finZ, rc: tl.finChord, tc: tl.finChord * tl.finTaper, sw: finSw, t: jet ? 0.05 : 0.1, round: !jet });
+    switch (e.tailConfiguration) {
+      case 'twin_endplate': { const tipY = sp.stab.y + Math.tan(sp.stab.dih) * (sp.stab.b - sp.stab.x0), up = Math.max(0.5, yTopFin - tipY), hh = up / (1 - tl.finBelow);
+        for (const s of [-1, 1]) mkFin(s * sp.stab.b, tipY - hh * tl.finBelow, 0, hh); break; }
+      case 'twin_boom': { const up = Math.max(0.5, yTopFin - sp.stab.y), hh = up / (1 - tl.finBelow); for (const s of [-1, 1]) mkFin(s * sp.stab.b, sp.stab.y - hh * tl.finBelow, 0, hh); break; }
+      case 'twin_vertical_straight': case 'twin_vertical_canted': {
+        const cant = e.tailConfiguration === 'twin_vertical_canted' ? e.finCantDeg : 0;
+        for (const s of [-1, 1]) { const x = s * tl.finSpacing * R; mkFin(x, topAt(finZ + tl.finChord * 0.4, x) - 0.08, -s * cant, finH / Math.cos(cant * D)); } break; }
+      default: mkFin(0, finBase0, 0, finH + 0.1);
+    }
+    sp.ventral = ex.has('ventralFin') ? { zLE: finZ + tl.finChord * 0.1, rc: tl.finChord * 0.6, h: finH * 0.28 } : null;
+    sp.dorsal = ex.has('dorsalFin');
     return (cache[pl.id] = sp);
   }
-  return { spec, FUS, TYPES: T, RADIAL };
+  // validate every aircraft in the game (the mesh test reports the result)
+  function audit(list) { const out = []; for (const pl of list) { try { spec(pl); } catch (err) { out.push(err.message); } } return out; }
+  return { spec, audit, REGISTRY: REG, FUS, ENUM };
 })();
