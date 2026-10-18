@@ -5,7 +5,7 @@ A 3D browser dogfighting game, from WW1 biplanes to modern fighter jets. It uses
 ## Menus
 - **Top bar**: research XP, coins, and the pilot profile (level, XP to the next level, K/D ratio, other stats and settings). Each level needs 1.1× the XP of the one before it.
 - **Play**: Singleplayer or Multiplayer, then one of four modes:
-  - **Destroy**: two teams of 1–60 (some bots fly bombers and attack aircraft). Kills score 3; small, medium and big bases score 2, 3 and 5. The host sets the match length. The team with the most points wins.
+  - **Destroy**: two teams of 1–60 (some bots fly bombers and attack aircraft). Kills 3, bases 2/3/5, tanks 0.5. Most points at the end wins, or win early by destroying every enemy base, or by destroying the enemy's airfields (they can no longer respawn) and shooting down every enemy aircraft. Kills score 3; small, medium and big bases score 2, 3 and 5. The host sets the match length. The team with the most points wins.
   - **Dogfight**: 1v1 up to 8v8, with 0–12 respawns each. The last team flying wins.
   - **Missions**: historical missions for the nation of your aircraft, closest era first. Mission types are fighter sweeps, bomber intercepts, ground strikes and bomber escorts.
   - **Survival**: co-op waves of enemy fighters, with bombers every third wave.
@@ -15,6 +15,15 @@ A 3D browser dogfighting game, from WW1 biplanes to modern fighter jets. It uses
 - **Research**: spend XP on aircraft — fighters, bombers and attack aircraft (about 130 in all). In each nation you can research up to one era above the newest era you own in that nation. Every nation starts with one WW1 aircraft.
 - **Achievements**: 30 achievements with progress bars.
 - **Rewards**: XP and coins for kills, assists, damage, bases and winning. Assists add to your own score but never to the team score. Leaving a battle early forfeits the participation reward: you keep only what you earned.
+
+## Maps, weather and time of day
+Every mode lets the host pick the map (Countryside, Coastline, Pacific Islands, Desert, Winter, Alpine Valleys, Canyonlands, Farmland, Jungle Rivers, Arctic Sea, or random), its size (small / medium / large), the weather (clear, scattered clouds, overcast, rain, thunderstorm with lightning, snowfall, fog, or random) and night. Bad weather lowers visibility and brings turbulence; at night the bases and runways are lit.
+
+## Tanks
+Destroy battles have tanks from each team driving around their territory (era-appropriate models). Rifle-calibre rounds barely scratch them; heavy machine guns, cannon (best with AP rounds), rockets and bombs kill them. Each tank is worth 0.5 points.
+
+## Cockpit view
+Press C for the cockpit: an interior fixed to the aircraft with the real nose and wings ahead. WW1 open cockpits (ring-and-bead sight, gun breeches), WW2 framed canopies with reflector gunsights and round dials, early-jet gyro sights, and modern HUDs with multi-function displays. The instruments are live.
 
 ## Controls
 All controls can be rebound in **Profile → Controls** (keys or mouse buttons). Defaults:

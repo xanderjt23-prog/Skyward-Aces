@@ -85,7 +85,7 @@ const UI = (() => {
       const list = planesOf(hangarNation).filter(x => x.era === e); if (!list.length) continue;
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}</small></div><div class="planes">`;
       for (const pl of list) { const owned = p.owned[pl.id], flying = p.selected === pl.id;
-        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><img class="thumb" data-thumb="${pl.id}" alt=""><div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
+        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div>${Thumbs.tag(pl.id)}<div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
       h += `</div></div>`;
     }
     const pl = PLANES[hangarSel], owned = p.owned[pl.id];
@@ -112,7 +112,7 @@ const UI = (() => {
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}${reach ? '' : ' · locked: own ' + an(ERAS[e - 1].name) + ' aircraft of this nation first'}</small></div><div class="planes">`;
       for (const pl of list) {
         const owned = p.owned[pl.id], c = Profile.canResearch(pl.id);
-        h += `<div class="pc ${owned ? 'owned' : reach ? '' : 'locked'}" data-rid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div><img class="thumb" data-thumb="${pl.id}" alt=""><div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${owned ? 'Owned' : fmt(pl.cost) + ' XP'}</div>
+        h += `<div class="pc ${owned ? 'owned' : reach ? '' : 'locked'}" data-rid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div>${Thumbs.tag(pl.id)}<div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${owned ? 'Owned' : fmt(pl.cost) + ' XP'}</div>
           <div style="margin-top:8px">${owned ? '<span class="pill ok">Owned</span>' : c.ok ? `<button class="primary" data-buy="${pl.id}">Research</button>` : `<span class="small muted">${esc(c.why)}</span>`}</div></div>`;
       }
       h += `</div></div>`;
@@ -231,6 +231,8 @@ const UI = (() => {
     survival: { ic: '🌊', desc: 'Co-op: hold out against ever-larger waves of enemy aircraft and bombers.' },
   };
   const MAPS_OPT = [['', 'Random'], ...Object.entries(World.MAPS).map(([k, v]) => [k, v.name])];
+  const SIZE_OPT = Object.entries(World.SIZES).map(([k, v]) => [k, v.name]);
+  const WX_OPT = [['random', 'Random'], ...Object.entries(World.WEATHER).map(([k, v]) => [k, v.name])];
   function settingsForm(s, editable) {
     const dis = editable ? '' : 'disabled';
     const realistic = `<label class="row realistic"><input type="checkbox" id="s-real" ${s.realistic ? 'checked' : ''} ${dis}> <b>Realistic Mode</b> <span class="small muted">— take off from your team's airfield runway, land on it to refuel, rearm and repair. If a team's airfields are destroyed, it can no longer take off.</span></label>`;
@@ -255,6 +257,9 @@ const UI = (() => {
         <div class="small muted" style="margin:6px 0">${esc(m.brief)}</div><span class="pill">${{ sweep: 'Fighter sweep', intercept: 'Intercept bombers', strike: 'Ground strike', escort: 'Bomber escort' }[m.type]}</span> <span class="pill">vs ${NATIONS[m.enemy].name}</span></div>`;
       h += `</div>`;
     }
+    // map size, weather and time of day: every mode (missions keep their historical map)
+    h += `<div class="grid c3"><div class="field"><label>Map size</label>${sel('s-msize', SIZE_OPT, s.size || 'medium')}</div><div class="field"><label>Weather</label>${sel('s-wx', WX_OPT, s.weather || 'random')}</div>
+      <div class="field"><label>Time of day</label><label class="row"><input type="checkbox" id="s-night" ${s.night ? 'checked' : ''} ${dis}> Night</label></div></div>`;
     return realistic + h;
   }
   function bindSettings(s, onChange) {
@@ -262,7 +267,9 @@ const UI = (() => {
     on('sz0', 'oninput', v => { s.teamSize[0] = +v; $('#sz0v').textContent = v; }); on('sz1', 'oninput', v => { s.teamSize[1] = +v; $('#sz1v').textContent = v; });
     on('s-time', 'onchange', v => s.time = +v); on('s-map', 'onchange', v => s.map = v);
     on('s-size', 'onchange', v => s.teamSize = [+v, +v]);
-    const re = $('#s-real'); if (re) re.onchange = e => { s.realistic = e.target.checked; onChange && onChange(); }; on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
+    const re = $('#s-real'); if (re) re.onchange = e => { s.realistic = e.target.checked; onChange && onChange(); };
+    on('s-msize', 'onchange', v => s.size = v); on('s-wx', 'onchange', v => s.weather = v);
+    const ni = $('#s-night'); if (ni) ni.onchange = e => { s.night = e.target.checked; onChange && onChange(); }; on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
     $$('[data-mis]').forEach(c => c.onclick = () => { s.mission = c.dataset.mis; onChange && onChange(true); });
   }
   function modeCards(selMode) {
@@ -289,7 +296,7 @@ const UI = (() => {
       h += `<h3>Choose a game mode</h3>${modeCards(play.mode)}<div class="card" style="margin-top:14px">${settingsForm(play.settings, true)}</div>
         <div class="row" style="margin-top:14px"><button id="p-back">← Back</button><button class="primary" id="p-start" style="font-size:20px;padding:10px 30px">Take off</button></div>`;
       body(h);
-      $$('[data-mode]').forEach(c => c.onclick = () => { const re = play.settings.realistic; play.mode = c.dataset.mode; play.settings = defaults(play.mode); play.settings.realistic = re; renderPlay(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['realistic', 'size', 'weather', 'night'].map(k => [k, play.settings[k]]); play.mode = c.dataset.mode; play.settings = defaults(play.mode); for (const [k, v] of keep) play.settings[k] = v; renderPlay(); });
       bindSettings(play.settings, re => { if (re) renderPlay(); });
       $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
       $('#p-start').onclick = startSingle;
@@ -341,7 +348,7 @@ const UI = (() => {
     if ($('#lb-copy')) $('#lb-copy').onclick = () => { try { navigator.clipboard.writeText(L.code); toastMenu('Copied'); } catch (e) {} };
     if (!s) return;
     if (L.host) {
-      $$('[data-mode]').forEach(c => c.onclick = () => { const fill = s.fill, re = s.realistic; L.settings = defaults(c.dataset.mode); L.settings.fill = fill; L.settings.realistic = re; lobbySync(); renderLobby(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['fill', 'realistic', 'size', 'weather', 'night'].map(k => [k, s[k]]); L.settings = defaults(c.dataset.mode); for (const [k, v] of keep) L.settings[k] = v; lobbySync(); renderLobby(); });
       bindSettings(s, re => { lobbySync(); if (re) renderLobby(); });
       $('#fill-bots').onchange = e => { s.fill = e.target.checked; lobbySync(); };
       $$('[data-mv]').forEach(b => b.onclick = () => { const p = L.players.find(x => x.peer === b.dataset.mv); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } });
@@ -413,7 +420,7 @@ const UI = (() => {
     if (p && !p.alive && p.everSpawned && !m.over) {
       const can = m.canRespawn(p), wait = Math.max(0, Math.ceil(p.respawnAt - m.time));
       const lives = p.lives === Infinity ? '' : `<div class="muted">Respawns left: ${Math.max(0, p.lives)}</div>`;
-      const html = `<h2>Shot down</h2>${lives}${can ? (wait > 0 ? `<div>Respawn in ${wait}…</div>` : `<div><b>Click</b> or press <kbd>Space</kbd> to take off again</div>`) : '<div class="muted">Out of respawns — spectating</div><button id="rs-leave" style="margin-top:8px">Leave battle</button>'}`;
+      const html = `<h2>Shot down</h2>${lives}${can ? (wait > 0 ? `<div>Respawn in ${wait}…</div>` : `<div><b>Click</b> or press <kbd>Space</kbd> to take off again</div>`) : `<div class="muted">${(m.mode === 'destroy' && !m.airfieldsLeft(p.team)) || (m.groundTeam(p.team) && !m.homes(p.team).length) ? 'Your team’s airfields are destroyed — nobody can take off again' : 'Out of respawns'} — spectating</div><button id="rs-leave" style="margin-top:8px">Leave battle</button>`}`;
       if (rp.dataset.h !== html) { rp.innerHTML = html; rp.dataset.h = html; const lb = $('#rs-leave'); if (lb) lb.onclick = () => Game.leave(); }
       rp.classList.remove('hidden');
     } else rp.classList.add('hidden');
@@ -448,7 +455,7 @@ const UI = (() => {
       <div class="rewards"><div class="card"><span class="muted small">XP EARNED</span><b>+${fmt(rw.xp)}</b></div><div class="card"><span class="muted small">COINS EARNED</span><b>+${fmt(rw.coins)}</b></div><div class="card"><span class="muted small">ERA BONUS</span><b>×${ERAS[p.def.era].xpMul}</b></div></div>
       ${rw.levelUp ? `<h3>🎉 Level up! You are now level ${rw.levelUp}</h3>` : ''}
       ${rw.achievements.length ? `<h3>Achievements unlocked</h3><div class="row">${rw.achievements.map(a => `<span class="pill ok">${a.icon} ${a.name}</span>`).join(' ')}</div>` : ''}
-      <div class="row" style="margin:12px 0"><span class="pill">Kills ${s.kills}</span><span class="pill">Assists ${s.assists}</span><span class="pill">Deaths ${s.deaths}</span><span class="pill">Bases ${s.bases}</span><span class="pill">Damage dealt ${fmt(s.damage)}</span>${m.mode === 'survival' ? `<span class="pill">Waves ${Math.max(0, m.wave - 1)}</span>` : ''}</div>
+      <div class="row" style="margin:12px 0"><span class="pill">Kills ${s.kills}</span><span class="pill">Assists ${s.assists}</span><span class="pill">Deaths ${s.deaths}</span><span class="pill">Bases ${s.bases}</span><span class="pill">Tanks ${s.tanks || 0}</span><span class="pill">Damage dealt ${fmt(s.damage)}</span>${m.mode === 'survival' ? `<span class="pill">Waves ${Math.max(0, m.wave - 1)}</span>` : ''}</div>
       ${teams ? `<div class="grid c2"><div><h3 class="team0">Your team</h3>${table(my)}</div><div><h3 class="team1">Enemy team</h3>${table(1 - my)}</div></div>` : table(my)}
       <div class="row" style="margin-top:16px"><button class="primary" id="res-ok" style="font-size:20px;padding:10px 30px">Continue</button></div></div>`;
     $('#results').classList.remove('hidden'); $('#pause').classList.add('hidden');

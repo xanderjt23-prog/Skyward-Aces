@@ -46,6 +46,14 @@ const HUD = (() => {
         text(`${b.kind} · ${Math.ceil(b.hp)}`, s.x, s.y - 26, col, 10, 'center'); }
       for (const a of b.aa) if (a.hp > 0 && d < 3000 && enemy) { const sa = proj(a.pos, cam); if (sa) { g.fillStyle = 'rgba(255,90,79,0.8)'; g.fillRect(sa.x - 2, sa.y - 2, 4, 4); } }
     }
+    // tanks: a small marker, health bar up close
+    for (const v of m.vehicles.list) {
+      if (v.dead) continue; const d = cam.position.distanceTo(v.pos); if (d > 4500) continue;
+      const s = proj(v.pos.clone().add(new THREE.Vector3(0, 3, 0)), cam); if (!s) continue;
+      const col = !p || v.team !== p.team ? COL.enemy : COL.ally;
+      g.fillStyle = col; g.beginPath(); g.moveTo(s.x, s.y - 5); g.lineTo(s.x + 5, s.y); g.lineTo(s.x, s.y + 5); g.lineTo(s.x - 5, s.y); g.fill();
+      if (d < 1500) { const f = v.hp / v.max; g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(s.x - 15, s.y - 12, 30, 4); g.fillStyle = col; g.fillRect(s.x - 15, s.y - 12, 30 * f, 4); text(v.name, s.x, s.y + 16, col, 9, 'center'); }
+    }
     if (p && p.alive && !p.wreck) {
       // nose reticle (where the guns converge) and mouse-aim circle
       const conv = CONV[p.def.era];
@@ -134,6 +142,7 @@ const HUD = (() => {
     const pt = (pos) => { const dx = pos.x - p.pos.x, dz = pos.z - p.pos.z, c = Math.cos(-hd), s = Math.sin(-hd); const x = dx * c - dz * s, z = dx * s + dz * c, d = Math.hypot(x, z) / range * R; const a = Math.atan2(x, z); const r = Math.min(R - 3, d); return [cx + Math.sin(a) * r, cy + Math.cos(a) * r, d > R]; };
     // map edge
     for (const b of m.bases) { if (b.dead) continue; const [x, y] = pt(b.pos); g.fillStyle = b.team === p.team ? COL.ally : COL.enemy; g.fillRect(x - 3, y - 3, 6, 6); }
+    for (const v of m.vehicles.list) { if (v.dead) continue; const [x, y, out] = pt(v.pos); if (out) continue; g.fillStyle = v.team === p.team ? 'rgba(90,168,255,0.7)' : 'rgba(255,90,79,0.7)'; g.fillRect(x - 1.5, y - 1.5, 3, 3); }
     for (const c of m.crafts) { if (!c.alive || c === p || c.wreck) continue; const [x, y, out] = pt(c.pos); if (out) continue; g.fillStyle = c.team === p.team ? COL.ally : COL.enemy; g.beginPath(); g.arc(x, y, 2.5, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = COL.me; g.beginPath(); g.moveTo(cx, cy - 6); g.lineTo(cx - 4, cy + 4); g.lineTo(cx + 4, cy + 4); g.fill();
     text('N', ...(() => { const [x, y] = pt(p.pos.clone().add(new THREE.Vector3(0, 0, -range * 0.9))); return [x, y + 4]; })(), COL.dim, 10, 'center', true);

@@ -108,7 +108,7 @@ const Profile = (() => {
   // ---- end-of-battle rewards. r: { kills, assists, bases:{small,medium,big}, damage, deaths, won, era, mode, survivedWaves, missionWon }
   function rewards(r) {
     const mul = ERAS[r.era].xpMul;
-    const perf = r.kills * 180 + r.assists * 90 + r.basePoints * 90 + Math.round(r.damage * 0.25) + (r.score || 0) * 20 + (r.waves || 0) * 120;
+    const perf = r.kills * 180 + r.assists * 90 + (r.tanks || 0) * 60 + r.basePoints * 90 + Math.round(r.damage * 0.25) + (r.score || 0) * 20 + (r.waves || 0) * 120;
     // the participation reward is only paid for staying to the end of the battle: leaving early earns just what you did
     const base = r.left ? 0 : 150 + Math.round(Math.min(r.minutes, 30) * 25);
     const winB = r.won ? 1.35 : 1;
@@ -121,7 +121,7 @@ const Profile = (() => {
     p.totalXp += rw.xp; p.xp += rw.xp; p.coins += rw.coins;
     bump('coinsEarned', rw.coins); bump('battles', 1); bump('kills', r.kills); bump('deaths', r.deaths); bump('assists', r.assists);
     bump('bases', r.basesDestroyed); bump('bigBases', r.bigBases); bump('crewKills', r.crewKills); bump('wingKills', r.wingKills); bump('fires', r.fires);
-    bump('crashKills', r.crashKills); bump('missileKills', r.missileKills); bump('giantKills', r.giantKills); bump('flightTime', Math.round(r.minutes * 60));
+    bump('crashKills', r.crashKills); bump('tanks', r.tanks || 0); bump('missileKills', r.missileKills); bump('giantKills', r.giantKills); bump('flightTime', Math.round(r.minutes * 60));
     maxStat('bestKills', r.kills); if (r.waves) maxStat('bestWave', r.waves);
     if (r.won) { bump('wins', 1); if (r.mode === 'destroy') bump('destroyWins', 1); if (r.mode === 'dogfight') bump('dogfightWins', 1); if (r.mode === 'missions') bump('missions', 1);
       (p.stats.nationWins = p.stats.nationWins || {})[r.nation] = 1; }

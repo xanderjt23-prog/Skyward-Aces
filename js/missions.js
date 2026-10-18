@@ -121,6 +121,7 @@ const ACHIEVEMENTS = [
   { id: 'pilot_snipe', name: 'Pilot Sniper', desc: 'Kill 10 enemy aircraft by knocking out their crew.', icon: '🪖', stat: 'crewKills', goal: 10 },
   { id: 'wing_off', name: 'Wing Clipper', desc: 'Shear the wing off 10 enemy aircraft.', icon: '🪽', stat: 'wingKills', goal: 10 },
   { id: 'flamer', name: 'Flamer', desc: 'Set 20 enemy aircraft on fire.', icon: '🔥', stat: 'fires', goal: 20 },
+  { id: 'tank10', name: 'Tank Buster', desc: 'Destroy 10 tanks.', icon: '🛡', stat: 'tanks', goal: 10 },
   { id: 'base1', name: 'Demolition', desc: 'Destroy your first enemy base.', icon: '🏚️', stat: 'bases', goal: 1 },
   { id: 'base25', name: 'Scorched Earth', desc: 'Destroy 25 enemy bases.', icon: '💥', stat: 'bases', goal: 25 },
   { id: 'bigbase', name: 'Bunker Buster', desc: 'Destroy a big base.', icon: '🏭', stat: 'bigBases', goal: 1 },

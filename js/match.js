@@ -51,8 +51,10 @@ const Plan = {
     const eraAvg = Math.max(1, Math.min(7, Math.round(humans.reduce((a, h) => a + PLANES[h.plane].era, 0) / humans.length)));
     const mission = mode === 'missions' ? MISSIONS.find(m => m.id === settings.mission) || missionsFor(PLANES[humans[0].plane])[0] : null;
     const era = mission ? Math.max(1, Math.min(7, Math.round((eraAvg + mission.era) / 2))) : eraAvg;
-    const map = mission ? mission.map : settings.map || Plan.pick(['land', 'coast', 'islands', 'desert', 'snow']);
-    const half = MAP_HALF[era] * (mode === 'destroy' && Math.max(...settings.teamSize) > 20 ? 1.3 : 1);
+    const map = mission ? mission.map : settings.map || Plan.pick(Object.keys(World.MAPS));
+    const sizeMul = (World.SIZES[settings.size] || World.SIZES.medium).mul;
+    const half = MAP_HALF[era] * sizeMul * (mode === 'destroy' && Math.max(...settings.teamSize) > 20 ? 1.3 : 1);
+    const weather = settings.weather && settings.weather !== 'random' ? settings.weather : Plan.pick(['clear', 'scattered', 'scattered', 'overcast', 'rain', 'fog']);
     const roster = []; let nid = 1;
     const hum = humans.map(h => Object.assign({}, h, { id: nid++, bot: false }));
     const respawns = settings.respawns == null ? 3 : settings.respawns;
@@ -89,7 +91,7 @@ const Plan = {
       if (settings.fill !== false) for (let i = 0; i < Math.max(0, 3 - hum.length); i++) { const pl = Plan.pick(botPlanes(era)); roster.push(Plan.bot(nid++, 0, pl.id, { extra: { lives: 1 }, suffix: ' (wingman)' })); }
     }
     // bases
-    const bases = [], rnd = Models.mulberry(seed), water = map === 'islands';
+    const bases = [], rnd = Models.mulberry(seed), water = map === 'islands' || map === 'arctic';
     const place = (team, size, kind, zMin, zMax) => {
       for (let t = 0; t < 60; t++) {
         const x = (rnd() - 0.5) * half * 1.4, z = (team === 0 ? 1 : -1) * (zMin + rnd() * (zMax - zMin)) * half;
@@ -108,7 +110,7 @@ const Plan = {
     };
     if (mode === 'destroy') {
       const extra = Math.max(...settings.teamSize) > 20 ? 1 : 0;
-      for (const t of [0, 1]) { for (let i = 0; i < 3 + extra; i++) place(t, 'small', kindFor('small'), 0.15, 0.7); for (let i = 0; i < 2 + extra; i++) place(t, 'medium', kindFor('medium'), 0.2, 0.75); place(t, 'big', kindFor('big'), 0.45, 0.8); }
+      for (const t of [0, 1]) { for (let i = 0; i < 3 + extra; i++) place(t, 'small', kindFor('small'), 0.15, 0.7); for (let i = 0; i < 2 + extra; i++) place(t, 'medium', kindFor('medium'), 0.2, 0.75); place(t, 'big', water ? 'carrier' : 'airfield', 0.45, 0.8); } // every team flies from a main airfield (or carrier)
     } else if (mode === 'missions') {
       const tg = mission.targets || (mission.type === 'escort' ? [mission.target] : []);
       tg.forEach((t, i) => { const b = place(1, t.size, t.kind, 0.25, 0.65); b.objective = true; if (i === 0) b.id = 'T1'; });
@@ -118,6 +120,12 @@ const Plan = {
     } else if (mode === 'survival') {
       const b = place(0, 'big', water ? 'carrier' : 'airfield', 0.35, 0.5); b.objective = true; b.id = 'T0';
       place(0, 'small', kindFor('small'), 0.2, 0.5); place(0, 'medium', kindFor('medium'), 0.2, 0.6);
+    }
+    // tanks (Destroy): a few per team, starting around the team's bases
+    const vehicles = [];
+    if (mode === 'destroy') for (const t of [0, 1]) {
+      const own = bases.filter(b => b.team === t && b.kind !== 'ship' && b.kind !== 'carrier'), n = 6 + (Math.max(...settings.teamSize) > 20 ? 4 : 0);
+      for (let i = 0; i < n; i++) { const b = own[i % Math.max(1, own.length)] || { x: 0, z: (t === 0 ? 1 : -1) * half * 0.4 }; vehicles.push({ id: 'V' + vehicles.length, team: t, x: b.x + (rnd() - 0.5) * 700, z: b.z + (rnd() - 0.5) * 700, h: rnd() * 6.28 }); }
     }
     // Realistic mode: these teams take off from (and land on) their home airfields
     const homeTeams = settings.realistic ? (mode === 'destroy' || mode === 'dogfight' ? [0, 1] : [0]) : [];
@@ -130,7 +138,7 @@ const Plan = {
       if (!homes.length) homes = [place(t, 'medium', 'airfield', 0.55, 0.8)];
       homes.forEach(b => b.home = true);
     }
-    return { mode, seed, era, map, half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid, realistic: !!settings.realistic, homeTeams };
+    return { mode, seed, era, map, half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid, realistic: !!settings.realistic, homeTeams, vehicles, weather, night: !!settings.night, size: settings.size || 'medium' };
   },
 };
 
@@ -143,9 +151,10 @@ class Match {
     this.scores = [0, 0]; this.feed = []; this.events = []; this.wave = 0; this.waveT = 6; this.debris = [];
     // world + bases
     const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.flat, water: bm.water }; });
-    this.world = World.create(this.scene, { map: cfg.map, half: cfg.half, seed: cfg.seed, sites });
+    this.world = World.create(this.scene, { map: cfg.map, half: cfg.half, seed: cfg.seed, sites, weather: cfg.weather, night: cfg.night, lights: this.scene.userData.lights });
     this.bases = sites.map((s, i) => this.makeBase(s, i));
     this.combat = new Combat(this);
+    this.vehicles = new Vehicles(this, cfg.vehicles);
     this.crafts = []; this.byId = {};
     for (const r of cfg.roster) this.addCraft(r);
     this.player = this.crafts.find(c => c.id === opt.playerId) || null;
@@ -172,6 +181,13 @@ class Match {
     const objMul = !b.objective ? 1 : this.mode === 'survival' ? 3 : !this.mission ? 1 : { intercept: 1, escort: 1, strike: 0.8, sweep: 1 }[this.mission.type];
     const hp = BASE_HP[b.size] * ERA_HP[this.era] * objMul;
     const base = { id: b.id, idx: i, team: b.team, size: b.size, kind: b.kind, objective: b.objective, home: !!b.home, pos: new V3(b.x, gy + (b.kind === 'balloon' ? 262 : 0), b.z), radius: b.kind === 'balloon' ? 22 : s.bm.radius, hp, max: hp, dead: false, group: g, aa: [], log: {} };
+    if (this.world.night && !b.kind.startsWith('balloon')) {
+      const lp = [], rr = Models.mulberry(i * 13 + 5), R = s.bm.radius;
+      for (let k = 0; k < 30; k++) lp.push((rr() - 0.5) * R * 1.4, 2 + rr() * 6, (rr() - 0.5) * R * 1.4);
+      if (s.bm.runway) for (let k = 0; k < 24; k++) for (const sd of [-1, 1]) lp.push(s.bm.runway.x + sd * s.bm.runway.w / 2, 0.5, -s.bm.runway.len / 2 + k * s.bm.runway.len / 23);
+      const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+      g.add(new THREE.Points(lg, new THREE.PointsMaterial({ color: 0xffd28a, size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.9 })));
+    }
     if (s.bm.runway) { const r = s.bm.runway, rot = g.rotation.y, c = new V3(r.x, 0, r.z).applyAxisAngle(new V3(0, 1, 0), rot).add(g.position);
       base.runway = { c, dir: new V3(0, 0, -1).applyAxisAngle(new V3(0, 1, 0), rot), len: r.len, w: r.w }; }
     // anti-aircraft defences depend on the era (and on the size of the base)
@@ -227,9 +243,12 @@ class Match {
     c.vel.setLength(c.perf.vmax * 0.72);
     c.respawnAt = 0;
   }
+  // Destroy: a team can only keep sending up aircraft while it still has an airfield or carrier
+  airfieldsLeft(team) { return this.bases.filter(b => b.team === team && !b.dead && (b.kind === 'airfield' || b.kind === 'carrier')).length; }
   canRespawn(c) {
     if (this.over) return false;
     if (this.groundTeam(c.team) && !this.homes(c.team).length) return false; // every airfield of this team is destroyed
+    if (this.mode === 'destroy' && !this.airfieldsLeft(c.team)) return false;
     if (this.mode === 'destroy') return true;
     return c.lives > 0;
   }
@@ -255,6 +274,8 @@ class Match {
       } else c.remoteUpdate(dt);
     }
     this.updateWrecks(dt);
+    this.world.update(dt, this.cameraPos);
+    this.vehicles.update(dt);
     this.updateAA(dt);
     this.combat.update(dt);
     if (this.isHost) this.rules(dt);
@@ -366,6 +387,10 @@ class Match {
   // ---- ground damage (bases & AA); host applies
   groundHit(p, dmg, rad, owner, team, kind) {
     if (!this.isHost) { if (dmg > 2 || kind !== 'gun') this.send({ t: 'gh', p: [Math.round(p.x), Math.round(p.y), Math.round(p.z)], d: Math.round(dmg * 10) / 10, r: rad, a: owner ? owner.id : null, tm: team }); return; }
+    if (kind !== 'gun') for (const v of this.vehicles.list) {
+      if (v.dead || v.team === team) continue;
+      const d = v.pos.distanceTo(p); if (d < rad + 4) this.vehicles.hit(v, dmg * (d < 4 ? 1 : 1 - (d - 4) / rad) * (kind === 'rocket' ? 1.3 : 1), owner);
+    }
     for (const b of this.bases) {
       if (b.dead || b.team === team) continue;
       const dist = b.kind === 'balloon' ? b.pos.distanceTo(p) : Math.hypot(b.pos.x - p.x, b.pos.z - p.z) + Math.max(0, p.y - b.pos.y - 60);
@@ -445,6 +470,11 @@ class Match {
       if (this.mode === 'dogfight') { const lv = t => this.crafts.filter(c => c.team === t).reduce((a, c) => a + Math.max(0, c.lives) + (c.alive ? 1 : 0), 0); const a = lv(0), b = lv(1); return this.end(a === b ? (this.scores[0] === this.scores[1] ? -1 : this.scores[0] > this.scores[1] ? 0 : 1) : a > b ? 0 : 1, 'Time is up'); }
       if (this.mode === 'survival') return this.end(0, 'Time is up');
     }
+    if (this.mode === 'destroy' && this.time > 5) for (const t of [0, 1]) {
+      const own = this.bases.filter(b => b.team === t);
+      if (own.length && own.every(b => b.dead)) return this.end(1 - t, t === 0 ? 'All our bases were destroyed' : 'All enemy bases destroyed');
+      if (!this.airfieldsLeft(t) && !this.crafts.some(c => c.team === t && c.alive && !c.wreck)) return this.end(1 - t, t === 0 ? 'Our airfields are gone and every aircraft is down' : 'Enemy airfields destroyed and every enemy aircraft shot down');
+    }
     if (this.mode === 'dogfight') {
       for (const t of [0, 1]) { const out = this.crafts.filter(c => c.team === t).every(c => !c.alive && c.lives <= 0); if (out && this.time > 3) return this.end(1 - t, 'Enemy team eliminated'); }
     }
@@ -511,7 +541,7 @@ class Match {
         for (const c of this.crafts) { if (!c.everSpawned && !c.net) continue; st.push(c.local ? c.packState() : c.lastState || c.packState());
           if (c.dm && c.dmgVer !== c.sentDmgVer) { dmg[c.id] = c.local ? Damage.pack(c.dm) : c.lastDmg; c.sentDmgVer = c.dmgVer; } }
         const msg = { t: 'snap', tm: Math.round(this.time * 100) / 100, s: st, d: dmg, sc: this.scores, w: this.wave };
-        this.baseSnapT -= 0.1; if (this.baseSnapT <= 0) { this.baseSnapT = 0.5; msg.b = this.bases.map(b => Math.round(b.hp)); msg.aa = this.bases.map(b => b.aa.map(a => a.hp > 0 ? 1 : 0).join(''));
+        this.baseSnapT -= 0.1; if (this.baseSnapT <= 0) { this.baseSnapT = 0.5; msg.b = this.bases.map(b => Math.round(b.hp)); msg.v = this.vehicles.pack(); msg.aa = this.bases.map(b => b.aa.map(a => a.hp > 0 ? 1 : 0).join(''));
           msg.st = this.crafts.map(c => [c.id, c.stats.kills, c.stats.deaths, c.stats.score, c.lives === Infinity ? -1 : c.lives]); }
         Net.broadcast(msg);
       }
@@ -533,6 +563,7 @@ class Match {
         for (const s of m.s) { const c = this.byId[s[0]]; if (!c || c.local) continue; c.applyState(s, this.time); }
         for (const id in m.d) { const c = this.byId[id]; if (c && !c.local && m.d[id]) this.unpackDmg(c, m.d[id]); }
         if (m.b) m.b.forEach((hp, i) => { const b = this.bases[i]; if (!b) return; b.hp = hp; if (hp <= 0 && !b.dead) this.destroyBase(b, true); });
+        if (m.v) this.vehicles.unpack(m.v);
         if (m.aa) m.aa.forEach((s, i) => { const b = this.bases[i]; if (b) b.aa.forEach((a, k) => { if (s[k] === '0' && a.hp > 0) { a.hp = 0; a.mount.visible = false; } }); });
         if (m.st) for (const [id, k, d, sc, lv] of m.st) { const c = this.byId[id]; if (c && !c.local) { c.stats.kills = k; c.stats.deaths = d; c.stats.score = sc; c.lives = lv < 0 ? Infinity : lv; } else if (c && c.local) c.lives = lv < 0 ? Infinity : lv; }
         break; }
@@ -546,6 +577,8 @@ class Match {
       case 'gh': if (H) this.groundHit(new V3(...m.p), m.d, m.r, this.byId[m.a] || null, m.tm, 'net'); break;
       case 'dead': if (H) { const c = this.byId[m.d.id]; if (c && c.spec.owner === from) this.resolveKill(m.d); } break;
       case 'kill': if (!H) this.applyKill(m.d); break;
+      case 'vh': if (H) { const v = this.vehicles.list[m.i]; if (v) this.vehicles.hit(v, m.d, this.byId[m.a] || null); } break;
+      case 'vk': if (!H) { const v = this.vehicles.list[m.i]; if (v) this.vehicles.destroy(v, m.by); } break;
       case 'stat': if (!H) { const c = this.byId[m.id]; if (c) c.stats[m.k]++; } break;
       case 'base': if (!H) { const b = this.bases[m.id]; if (b) { const by = this.byId[m.by] || null; if (!b.dead) { b.log = {}; if (by) b.log[by.id] = 1; this.destroyBaseRemote(b, by); } } } break;
       case 'wave': if (!H) { this.wave = m.w; this.crafts = this.crafts.filter(c => !(c.team === 1 && !c.alive && c.lives <= 0 && (this.scene.remove(c.model), true))); for (const s of m.specs) if (!this.byId[s.id]) this.addCraft(s); this.events.push({ t: this.time, e: 'wave', text: `Wave ${m.w}` }); } break;
@@ -584,6 +617,7 @@ class Match {
     for (const c of this.crafts) this.scene.remove(c.model);
     for (const b of this.bases) { this.scene.remove(b.group); for (const a of b.aa) this.scene.remove(a.mount); }
     for (const d of this.debris) this.scene.remove(d.m);
+    this.vehicles.dispose();
     this.world.dispose(); this.scene.fog = null;
   }
 }

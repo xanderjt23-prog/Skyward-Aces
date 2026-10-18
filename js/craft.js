@@ -16,7 +16,7 @@ class Craft {
     this.pos = new V3(); this.vel = new V3(); this.quat = new THREE.Quaternion(); this.rates = new V3();
     this.ctl = { pitch: 0, roll: 0, yaw: 0, throttle: 1 };
     this.alive = false; this.everSpawned = false; this.deadT = 0; this.respawnAt = 0;
-    this.stats = { kills: 0, deaths: 0, assists: 0, bases: 0, basePoints: 0, score: 0, damage: 0, crewKills: 0, wingKills: 0, fires: 0, crashKills: 0, missileKills: 0, giantKills: 0, bigBases: 0, basesDestroyed: 0 };
+    this.stats = { kills: 0, deaths: 0, assists: 0, tanks: 0, bases: 0, basePoints: 0, score: 0, damage: 0, crewKills: 0, wingKills: 0, fires: 0, crashKills: 0, missileKills: 0, giantKills: 0, bigBases: 0, basesDestroyed: 0 };
     this.lives = spec.lives != null ? spec.lives : Infinity;
     this.model = Models.aircraft(this.def); this.model.visible = false; match.scene.add(this.model);
     this.smokeT = 0; this.fireFxT = 0; this.flareT = -99; this.lastHitT = -99; this.missileWarn = 0; this.lockT = 0; this.lockTarget = null;
@@ -81,6 +81,8 @@ class Craft {
     const m = this.match;
     if (this.dm.destroyed || this.dm.fx.ctrl === 0) { this.ctl.throttle = Math.min(this.ctl.throttle, this.dm.destroyed ? 0 : 1); }
     Flight.step(this, dt);
+    // rough air in bad weather
+    if (m.world.turb > 0 && !this.onGround) this.vel.addScaledVector(m.world.gust, dt * (0.6 + 400 / Math.max(400, this.mass) * 0.4));
     Damage.tick(this.dm, dt, this.speed / this.perf.vmax);
     // structural failure from over-G when the wings are already damaged
     if (this.gLoad > this.perf.gMax * 1.35) for (const c of this.dm.comps) if (c.type === 'wing' && !c.dead && c.hp / c.max < 0.5 && Math.random() < dt * 2) { Damage.apply(this.dm, [{ ci: this.dm.comps.indexOf(c), dmg: c.max }], { attacker: null, time: m.time }); }

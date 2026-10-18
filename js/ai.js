@@ -92,7 +92,13 @@ class BotBrain {
       // stick with an attack run unless jumped by a fighter
       const threat = m.nearestEnemy(c, 700), stay = this.mode === 'ground' && this.ground && !this.ground.dead && m.time - c.lastHitT > 3;
       if (stay || !threat || role === 'attack' || (this.mode !== 'air' && Math.random() < 0.7)) {
-        this.mode = 'ground'; if (!this.ground || this.ground.dead) this.ground = m.taskTarget(c) || m.nearestEnemyBase(c.team, c.pos); if (this.ground) return;
+        this.mode = 'ground';
+        if (!this.ground || this.ground.dead) {
+          this.ground = m.taskTarget(c) || m.nearestEnemyBase(c.team, c.pos);
+          const tank = m.vehicles.list.filter(v => !v.dead && v.team !== c.team).sort((a, b) => a.pos.distanceTo(c.pos) - b.pos.distanceTo(c.pos))[0];
+          if (tank && c.def.role !== 'bomber' && (!this.ground || tank.pos.distanceTo(c.pos) < this.ground.pos.distanceTo(c.pos) * 1.3 || Math.random() < 0.45)) this.ground = tank;
+        }
+        if (this.ground) return;
       }
     }
     this.mode = 'air';
@@ -172,7 +178,8 @@ class BotBrain {
       const impact = BotBrain.impact(c, b.pos.y), miss = Math.hypot(impact.x - b.pos.x, impact.z - b.pos.z);
       const wantAlt = b.pos.y + Math.max(250, Math.min(700, c.speed * 4));
       dir = new V3(rel.x, 0, rel.z).normalize(); dir.y = (wantAlt - c.pos.y) / 1500;
-      if (miss < b.radius * 0.55 && alt > 40) { c.dropBomb(); if (c.count('b') === 0) this.egress = 6; }
+      // small targets (tanks): release when the bombs' blast will reach them
+      if (miss < Math.max(b.radius, 28) * 0.55 && alt > 40) { c.dropBomb(); if (c.count('b') === 0) this.egress = 6; }
       else if (hd < 200) this.egress = 3;
       return { dir: dir.normalize(), throttle };
     }
@@ -183,7 +190,7 @@ class BotBrain {
     if (d < 1000 && off < 0.05) {
       if (hasRockets && this.rocketCd <= 0) { c.fireRockets(); this.rocketCd = 0.35; }
       else c.setTrigger(true);
-      if (hasBombs && alt < 300 && hd < 300) c.dropBomb();
+      if (hasBombs && alt > 40) { const ip = BotBrain.impact(c, b.pos.y); if (Math.hypot(ip.x - b.pos.x, ip.z - b.pos.z) < Math.max(b.radius, 28) * 0.6) c.dropBomb(); }
     }
     if (d < 380 || alt < 120) this.egress = 3.5;
     return { dir, throttle: 0.8 };

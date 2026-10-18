@@ -11,17 +11,18 @@ const Game = (() => {
   let yaw = 0, pitch = 0;
   const BASE_FOV = 65;
   function init() {
-    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true }); // log depth: no z-fighting across 100 km views
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); renderer.setSize(innerWidth, innerHeight);
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 1, 120000);
-    scene.add(new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 0.75));
+    camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.08, 150000);
+    const hemi = new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 0.75); scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff4e0, 0.95); sun.position.set(0.5, 1, 0.3); scene.add(sun);
-    FX.init(scene);
+    scene.userData.lights = { hemi, sun }; // weather and night dim / tint these
+    FX.init(scene); scene.add(camera);
     // menu backdrop: sky gradient, slowly turning aircraft
     menuScene = new THREE.Scene();
     menuScene.add(new THREE.HemisphereLight(0xdfeeff, 0x445566, 0.9)); const ms = new THREE.DirectionalLight(0xffffff, 0.9); ms.position.set(-0.6, 1, 0.8); menuScene.add(ms);
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 24, 12), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false,
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 24, 12), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false,
       vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: 'varying vec3 vp; void main(){ float t = clamp(vp.y*1.4+0.25,0.0,1.0); vec3 c = mix(vec3(0.82,0.66,0.48), vec3(0.18,0.34,0.58), pow(t,0.8)); gl_FragColor = vec4(c,1.0); }' }));
     menuScene.add(sky);
@@ -57,6 +58,7 @@ const Game = (() => {
   function startMatch(cfg, opt) {
     stopMatch();
     G.net = !!opt.net;
+    G.cockpit = null;
     G.match = new Match(cfg, { scene, isHost: opt.isHost !== false, net: opt.net, myPeer: opt.myPeer || 'H', playerId: opt.playerId });
     G.running = true; G.paused = false; G.endT = 0; G.target = null; G.oobT = 0; G.camMode = 'chase'; G.resultShown = false;
     const p = G.match.player; G.aimDir.set(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-G.aimDir.x, -G.aimDir.z); pitch = 0;
@@ -167,11 +169,16 @@ const Game = (() => {
     if (p && p.alive && !p.wreck) {
       const lay = Models.layout(p.def), dist = (Math.max(lay.S, lay.L) * 1.25 + 6) * G.camDist;
       if (G.camMode === 'nose') {
-        p.model.userData.body.visible = false; p.model.children[1].visible = false;
-        _off.set(0, lay.fr * 1.7, lay.cockZ - 0.6).applyQuaternion(p.quat); camera.position.copy(p.pos).add(_off);
+        // cockpit: the interior is fixed to the aircraft, the camera sits at the pilot's eye
+        if (!G.cockpit || G.cockpit.def !== p.def) { if (G.cockpit) G.cockpit.group.parent && G.cockpit.group.parent.remove(G.cockpit.group); G.cockpit = Cockpit.build(p.def); G.cockpit.def = p.def; p.model.add(G.cockpit.group); }
+        if (G.cockpit.group.parent !== p.model) p.model.add(G.cockpit.group);
+        G.cockpit.group.visible = true; p.model.userData.glass.visible = false;
+        G.cockpit.update(p, m.time);
+        _off.copy(G.cockpit.eye).applyQuaternion(p.quat); camera.position.copy(p.pos).add(_off);
         camera.quaternion.copy(p.quat); if (Input.down('freeLook')) { camera.rotateY(G.freeLook.yaw); camera.rotateX(G.freeLook.pitch); }
       } else {
-        p.model.userData.body.visible = true; p.model.children[1].visible = true;
+        if (G.cockpit) G.cockpit.group.visible = false;
+        p.model.userData.body.visible = true; p.model.userData.glass.visible = true;
         let dir = G.aimDir.clone();
         if (Input.down('freeLook')) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), G.freeLook.yaw).applyAxisAngle(new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), G.freeLook.pitch);
         camera.position.copy(p.pos).addScaledVector(dir, -dist).add(_look.set(0, dist * 0.2, 0));
@@ -181,7 +188,7 @@ const Game = (() => {
       G.deathCam = null;
     } else if (p) {
       // shot down: orbit the wreck / crash site
-      p.model.userData.body.visible = true; p.model.children[1].visible = true;
+      p.model.userData.body.visible = true; p.model.userData.glass.visible = true; if (G.cockpit) G.cockpit.group.visible = false;
       if (!G.deathPos || p.alive) G.deathPos = p.pos.clone();
       if (p.wreck) G.deathPos.copy(p.pos);
       const t = performance.now() / 4000, r = 90;
@@ -200,7 +207,7 @@ const Game = (() => {
     const p = m.player, r = m.result || { winner: -2, reason: 'Left the battle', scores: m.scores };
     const won = !left && (m.mode === 'survival' ? m.wave >= 5 : r.winner === p.team);
     const s = p.stats;
-    const reward = Profile.applyBattle({ left: !!left, kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,
+    const reward = Profile.applyBattle({ left: !!left, tanks: s.tanks || 0, kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,
       minutes: m.time / 60, waves: m.mode === 'survival' ? Math.max(0, m.wave - 1) : 0, score: 0, nation: p.def.nation, plane: p.def.id,
       basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills });
     document.exitPointerLock && document.exitPointerLock();

@@ -27,13 +27,17 @@ const Thumbs = (() => {
   }
   let queue = [], busy = false;
   function fill(root) {
-    queue = [...(root || document).querySelectorAll('img[data-thumb]:not([src])')];
+    queue = [...(root || document).querySelectorAll('img[data-thumb]')];
     if (!busy) step();
   }
   function step() {
     busy = queue.length > 0; if (!busy) return;
-    for (let i = 0; i < 4 && queue.length; i++) { const img = queue.shift(); if (img.isConnected) img.src = get(img.dataset.thumb); }
+    for (let i = 0; i < 4 && queue.length; i++) { const img = queue.shift(); if (img.isConnected) { img.src = get(img.dataset.thumb); img.removeAttribute('data-thumb'); } }
     requestAnimationFrame(step);
   }
-  return { get, fill };
+  const has = id => !!cache[id];
+  // an <img> tag for a card: the picture if it's ready, else an invisible placeholder that fill() completes
+  const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+  const tag = id => cache[id] ? `<img class="thumb" src="${cache[id]}" alt="">` : `<img class="thumb" data-thumb="${id}" src="${BLANK}" alt="">`;
+  return { get, fill, has, tag };
 })();

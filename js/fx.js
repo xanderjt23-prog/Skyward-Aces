@@ -17,8 +17,15 @@ const FX = (() => {
     g.setAttribute('size', new THREE.BufferAttribute(size, 1)); g.setAttribute('alpha', new THREE.BufferAttribute(alpha, 1));
     const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       uniforms: { map: { value: t }, scale: { value: 600 } },
-      vertexShader: 'attribute float size; attribute float alpha; attribute vec3 color; varying vec3 vc; varying float va; uniform float scale; void main(){ vc = color; va = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(512.0, size * scale / max(1.0, -mv.z)); gl_Position = projectionMatrix * mv; }',
-      fragmentShader: 'uniform sampler2D map; varying vec3 vc; varying float va; void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vc, t.a * va); if (gl_FragColor.a < 0.01) discard; }' });
+      vertexShader: `#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute float size; attribute float alpha; attribute vec3 color; varying vec3 vc; varying float va; uniform float scale; void main(){ vc = color; va = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(512.0, size * scale / max(1.0, -mv.z)); gl_Position = projectionMatrix * mv;
+#include <logdepthbuf_vertex>
+}`,
+      fragmentShader: `#include <logdepthbuf_pars_fragment>
+uniform sampler2D map; varying vec3 vc; varying float va; void main(){
+#include <logdepthbuf_fragment>
+vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vc, t.a * va); if (gl_FragColor.a < 0.01) discard; }` });
     const pts = new THREE.Points(g, m); pts.frustumCulled = false;
     const P = []; for (let i = 0; i < n; i++) P.push({ life: 0 });
     return { pts, g, P, n, next: 0, alive: 0 };

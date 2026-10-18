@@ -11,6 +11,7 @@ const Models = (() => {
     if (matCache[kind]) return matCache[kind];
     let m;
     if (kind === 'vc') m = new THREE.MeshLambertMaterial({ vertexColors: true });
+    else if (kind === 'vc2') m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     else if (kind === 'glass') m = new THREE.MeshPhongMaterial({ color: 0x223344, shininess: 90, specular: 0x8899aa, transparent: true, opacity: 0.85 });
     else if (kind === 'prop') m = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
     else if (kind === 'glow') m = new THREE.MeshBasicMaterial({ color: 0xff9a40, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -82,7 +83,7 @@ const Models = (() => {
       const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI); flat(g, 0xcc1111, size, 0.02); return; }
     if (nation === 'usa' && era === 1) { flat(disc, 0xb22234, size * 0.5, 0.01); flat(disc, 0x1c2f6e, size * 0.34, 0.02); flat(disc, 0xffffff, size * 0.16, 0.03); return; }
     if (nation === 'usa') { flat(disc, 0x1c2f6e, size * 0.45, 0.01); const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.17 : 0.42; s[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
-      const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); flat(g, 0xffffff, size, 0.02); return; }
+      const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); flat(g, 0xffffff, size, 0.035); return; }
     flat(disc, N.roundel[2], size * 0.5, 0.01); flat(disc, N.roundel[1], size * 0.34, 0.02); flat(disc, N.roundel[0], size * 0.18, 0.03);
   }
 
@@ -123,7 +124,7 @@ const Models = (() => {
   function aircraft(pl) {
     const lay = layout(pl), { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ } = lay, pt = paint(pl), sh = pl.shape;
     const camo = [pt.top, pt.bot], dark = 0x2a2a2a, metal = 0x55585c;
-    const body = new Builder(), wl = new Builder(), wr = new Builder();
+    const body = new Builder(), wl = new Builder(), wr = new Builder(), mkB = new Builder(), mkL = new Builder(), mkR = new Builder(); // mk*: national markings
     // fuselage: nose section + tapering tail cone
     if (lay.jet) {
       body.add(zcyl(fr * 0.25, fr, L * 0.22), camo, [0, 0, -L * 0.39]); // radome / nose
@@ -203,9 +204,16 @@ const Models = (() => {
     for (const t of pl.turrets) { const tp = turretPos(pl, t[2]); body.add(new THREE.SphereGeometry(Math.max(0.35, fr * 0.35), 8, 6), 0x8899aa, [tp.x, tp.y, tp.z]); }
     // markings
     const insS = Math.min(S * 0.12, 1.8);
-    for (const s of [-1, 1]) { const b = s < 0 ? wl : wr, topY = (sh === 'bi' || sh === 'tri' ? wingsAt[wingsAt.length - 1][0] : wingY) + thick / 2 + 0.01;
-      insignia(b, pl.nation, insS, [s * S * 0.33, topY + Math.tan(dih) * S * 0.3, wingZ + sweep * 0.6], 'y', pl.era); }
-    for (const s of [-1, 1]) insignia(body, pl.nation, Math.min(fr * 1.4, 1.6), [s * fr * 0.95, 0, L * 0.22], 'x', pl.era);
+    // wing markings sit exactly on the top surface of the (top) wing panel at ~2/3 span
+    { const [y0, dz] = wingsAt[wingsAt.length - 1], hs = sh === 'tri' ? half * (1 - (wingsAt.length - 1) * 0.04) : half;
+      const f = Math.min(0.8, Math.max(0.3, (S * 0.33 - fr * 0.5) / hs)), chordAt = chord * (1 - f) + tipC * ellipseTip * f;
+      const yTop = y0 + Math.tan(dih) * hs * f + (thick / 2) * (1 - 0.4 * f) + 0.025, size = Math.min(insS, chordAt * 0.85);
+      for (const s of [-1, 1]) insignia(s < 0 ? mkL : mkR, pl.nation, size, [s * (fr * 0.5 + hs * f), yTop, wingZ + dz + sweep * f], 'y', pl.era); }
+    // fuselage markings on the side of the fuselage at its real radius there (the tail cone tapers)
+    { let x, y = 0, z, size;
+      if (lay.jet) { z = L * 0.12; const boxed = pl.eng === 2 && sh !== 'jet_s2' && sh !== 'jet_bomber'; x = (boxed ? fr * 1.3 : fr) + 0.025; size = Math.min(fr * 1.2, 1.5); if (boxed) y = -fr * 0.1; }
+      else { z = L * 0.12; const t = (z + L * 0.18) / (L * 0.68), r = fr * (1 - 0.78 * t); x = r + 0.02; y = fr * 0.1; size = Math.min(r * 1.4, 1.5); }
+      for (const s of [-1, 1]) insignia(mkB, pl.nation, size, [s * x, y, z], 'x', pl.era); }
 
     const g = new THREE.Group();
     let gearMesh = null;
@@ -219,8 +227,10 @@ const Models = (() => {
     const bodyMesh = new THREE.Mesh(body.build(), mat('vc')); g.add(bodyMesh);
     const glass = new THREE.Mesh(glassB.build(), mat('glass')); g.add(glass);
     const wingL = new THREE.Mesh(wl.build(), mat('vc')), wingR = new THREE.Mesh(wr.build(), mat('vc')); g.add(wingL, wingR);
+    if (mkL.parts.length) wingL.add(new THREE.Mesh(mkL.build(), mat('vc2'))); if (mkR.parts.length) wingR.add(new THREE.Mesh(mkR.build(), mat('vc2')));
+    const marks = mkB.parts.length ? new THREE.Mesh(mkB.build(), mat('vc2')) : null; if (marks) g.add(marks);
     for (const p of props) g.add(p); for (const gl of glows) g.add(gl);
-    g.userData = { props, glows, wingL, wingR, body: bodyMesh, lay, gear: gearMesh };
+    g.userData = { props, glows, wingL, wingR, body: bodyMesh, glass, marks, lay, gear: gearMesh };
     return g;
   }
   function turretPos(pl, arc) {
@@ -271,7 +281,7 @@ const Models = (() => {
       flag(R * 0.3, R * 0.3); for (let i = 0; i < 2 + sc; i++) { const a = i / (2 + sc) * Math.PI * 2 + 0.4; aa.push(new V(Math.cos(a) * R * 0.75, 0, Math.sin(a) * R * 0.75)); }
     } else {
       if (kind === 'airfield') { const rl = RUNWAY[era], grass = era <= 2; runway = { x: -R * 0.6, z: 0, len: rl, w: grass ? 60 : 30 };
-        b.add(box(runway.w, 0.3, rl), grass ? 0x6f7d4a : 0x4a4a48, [-R * 0.6, 0.15, 0]); if (!grass) { b.add(box(1, 0.32, rl * 0.9), 0xdddddd, [-R * 0.6, 0.16, 0]); for (const e of [-1, 1]) b.add(box(26, 0.33, 4), 0xdddddd, [-R * 0.6, 0.165, e * (rl / 2 - 12)]); }
+        b.add(box(runway.w, 0.16, rl), grass ? 0x6f7d4a : 0x4a4a48, [-R * 0.6, 0.08, 0]); if (!grass) { b.add(box(1, 0.04, rl * 0.9), 0xdddddd, [-R * 0.6, 0.18, 0]); for (const e of [-1, 1]) b.add(box(26, 0.04, 4), 0xdddddd, [-R * 0.6, 0.18, e * (rl / 2 - 12)]); }
         for (let i = 0; i < sc * 1.5; i++) { const hz = (i - sc * 0.6) * 34; b.add(cyl(11, 11, 30, 12, 1), 0x7a7f74, [R * 0.15, 0, hz], [Math.PI / 2, 0, 0], [1, 1, 0.75]); } }
       if (kind === 'factory') { for (let i = 0; i < 2 + sc * 2; i++) { const x = (rnd() - 0.5) * R * 1.4, z = (rnd() - 0.5) * R * 1.4; b.add(box(26, 10, 18), 0x8a6a55, [x, 5, z]); b.add(box(27, 1, 19), 0x555555, [x, 10.5, z]); }
         for (let i = 0; i < 1 + sc; i++) b.add(cyl(1.6, 2.2, 32, 8), 0x7b5040, [(rnd() - 0.5) * R, 16, (rnd() - 0.5) * R]); }

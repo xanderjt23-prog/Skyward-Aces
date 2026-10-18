@@ -46,6 +46,11 @@ class Combat {
       b.v.y -= 9.81 * dt; b.v.multiplyScalar(1 - 0.12 * dt);
       b.p.addScaledVector(b.v, dt);
       let dead = b.life <= 0;
+      // tanks (only for rounds near the ground)
+      if (!dead && b.real && !b.aa && m.vehicles.list.length && b.p.y - w.groundAt(b.p.x, b.p.z) < 25) {
+        const v = m.vehicles.traceBullet(b);
+        if (v) { dead = true; FX.puff(b.shell.he ? 'hehit' : 'spark', b.p, null, 0.6); m.vehicles.hit(v, b.shell.dmg * Vehicles.armourFactor(b.shell) * (b.shell.struct || 1), b.owner); }
+      }
       if (!dead) {
         const gy = w.groundAt(b.p.x, b.p.z);
         if (b.p.y < gy) { dead = true; if (m.cameraPos && m.cameraPos.distanceToSquared(b.p) < 1.5e6) FX.puff(gy < 1 ? 'splash' : 'dust', b.p, null, 0.3);
