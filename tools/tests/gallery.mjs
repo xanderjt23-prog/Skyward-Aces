@@ -14,7 +14,7 @@ export default async function (t) {
       r.setScissorTest(true); r.autoClear = true;
       const ids = ${JSON.stringify(chunk)};
       ids.forEach((id, i) => { const m = Models.aircraft(PLANES[id]); sc.add(m); const s = Math.max(PLANES[id].span, PLANES[id].len);
-        const cl = ${process.env.CLOSE ? 1 : 0}, cz = cl ? Models.layout(PLANES[id]).cockZ : 0, k = cl ? 0.32 : 1.2;
+        const cl = ${process.env.CLOSE ? 1 : 0}, cz = ${process.env.TZ ? `PLANES[id].len * ${process.env.TZ}` : `cl ? Models.layout(PLANES[id]).cockZ : 0`}, k = ${process.env.K || 0} || (cl ? 0.32 : 0.85);
         const cv = ${JSON.stringify((process.env.CAM || (process.env.FRONT ? '1,0.5,-1' : '1,0.5,1')).split(',').map(Number))}; cam.position.set(s * k * cv[0], s * k * cv[1], cz + s * k * cv[2]); cam.lookAt(0, 0, cz);
         const x = (i % cols) * w, y = H - (Math.floor(i / cols) + 1) * h; r.setViewport(x, y, w, h); r.setScissor(x, y, w, h); r.render(sc, cam); sc.remove(m); });
       r.setScissorTest(false); r.setViewport(0, 0, W, H);

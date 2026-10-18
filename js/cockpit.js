@@ -20,7 +20,7 @@ const Cockpit = (() => {
   // eye position in the aircraft frame: head just above the fuselage top line, in the canopy
   function eye(def) {
     const lay = Models.layout(def), st = style(def);
-    return new V(def.crew.includes('copilot') ? -0.45 : 0, lay.fr + (st === 'ww1' ? 0.32 : 0.22), lay.cockZ + (st === 'ww1' ? 0.25 : 0.05));
+    return new V(def.crew.includes('copilot') ? -0.45 : 0, lay.eyeY, lay.cockZ + (st === 'ww1' ? 0.25 : 0.05));
   }
   const M = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {}));
   const MB = (c, o) => new THREE.MeshBasicMaterial(Object.assign({ color: c }, o || {}));

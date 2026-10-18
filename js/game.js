@@ -17,6 +17,7 @@ const Game = (() => {
     camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.08, 150000);
     const hemi = new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 0.75); scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff4e0, 0.95); sun.position.set(0.5, 1, 0.3); scene.add(sun);
+    hemi.layers.enable(1); sun.layers.enable(1); // they also light the cockpit pass (layer 1)
     scene.userData.lights = { hemi, sun }; // weather and night dim / tint these
     FX.init(scene); scene.add(camera);
     // menu backdrop: sky gradient, slowly turning aircraft
@@ -198,7 +199,7 @@ const Game = (() => {
       const lay = Models.layout(p.def), dist = (Math.max(lay.S, lay.L) * 1.25 + 6) * G.camDist;
       if (G.camMode === 'nose') {
         // cockpit: the interior is fixed to the aircraft, the camera sits at the pilot's eye
-        if (!G.cockpit || G.cockpit.def !== p.def) { if (G.cockpit) G.cockpit.group.parent && G.cockpit.group.parent.remove(G.cockpit.group); G.cockpit = Cockpit.build(p.def); G.cockpit.def = p.def; p.model.add(G.cockpit.group); }
+        if (!G.cockpit || G.cockpit.def !== p.def) { if (G.cockpit) G.cockpit.group.parent && G.cockpit.group.parent.remove(G.cockpit.group); G.cockpit = Cockpit.build(p.def); G.cockpit.def = p.def; G.cockpit.group.traverse(o => o.layers.set(1)); p.model.add(G.cockpit.group); }
         if (G.cockpit.group.parent !== p.model) p.model.add(G.cockpit.group);
         G.cockpit.group.visible = true; p.model.userData.glass.visible = false;
         G.cockpit.update(p, m.time);
@@ -227,7 +228,13 @@ const Game = (() => {
     const wantFov = p && p.alive && Input.down('zoom') ? BASE_FOV * 0.5 : BASE_FOV;
     if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov += (wantFov - camera.fov) * 0.2; camera.updateProjectionMatrix(); }
     FX.update(1 / 60, camera, innerHeight);
-    renderer.render(scene, camera);
+    if (G.cockpit && G.cockpit.group.visible) {
+      // the cockpit interior sits inside the fuselage skin, and is always nearer than anything outside it should cover:
+      // draw the world, then the cockpit (layer 1) over it with a fresh depth buffer
+      camera.layers.set(0); renderer.render(scene, camera);
+      renderer.autoClear = false; renderer.clearDepth(); camera.layers.set(1); renderer.render(scene, camera);
+      renderer.autoClear = true; camera.layers.set(0);
+    } else renderer.render(scene, camera);
     HUD.draw(G);
   }
   // ---- results and rewards

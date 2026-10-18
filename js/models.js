@@ -38,7 +38,7 @@ const Models = (() => {
         const fn = typeof p.color === 'function' ? p.color : null;
         if (fn) { /* per-vertex paint */ } else if (Array.isArray(p.color)) { c.setHex(p.color[0]); c2.setHex(p.color[1]); } else c.setHex(p.color);
         for (let i = 0; i < pa.count; i++, o++) {
-          if (fn) { const h = fn(pa.getX(i), pa.getY(i), pa.getZ(i), na.getY(i)); c.setHex(h); c2.setHex(h); }
+          if (fn) { const h = fn(pa.getX(i), pa.getY(i), pa.getZ(i), na.getY(i), na.getZ(i)); c.setHex(h); c2.setHex(h); }
           pos[o * 3] = pa.getX(i); pos[o * 3 + 1] = pa.getY(i); pos[o * 3 + 2] = pa.getZ(i);
           nor[o * 3] = na.getX(i); nor[o * 3 + 1] = na.getY(i); nor[o * 3 + 2] = na.getZ(i);
           // camouflage: top colour on upward faces, underside colour on downward faces
@@ -101,37 +101,20 @@ const Models = (() => {
   const layoutCache = {};
   function layout(pl) {
     if (layoutCache[pl.id]) return layoutCache[pl.id];
-    const L = pl.len, S = pl.span, sh = pl.shape, jet = pl.kind === 'jet';
-    const bi = sh === 'bi' || sh === 'tri' || !!pl.bi, big = sh.startsWith('bomber') || sh === 'jet_bomber';
-    const fr = jet ? Math.max(0.45, L * 0.055) : Math.max(0.4, L * (big ? 0.07 : 0.065));
-    let chord = S * (bi ? 0.17 : sh === 'mono' || sh === 'twin' ? 0.17 : 0.15), tipC = chord * 0.6, sweep = 0;
-    let wingZ = jet ? 0.02 * L : -0.1 * L, wingY = bi ? -fr * 0.7 : -fr * 0.45;
-    if (sh === 'jet_sw' || sh === 'jet_sw2' || sh === 'jet_tt' || sh === 'jet_bomber') { chord = Math.max(S * 0.24, L * 0.22); tipC = chord * 0.35; sweep = S * 0.5 * 0.65; wingZ = L * 0.06; }
-    if (sh === 'jet_d' || sh === 'jet_dc') { chord = L * 0.5; tipC = chord * 0.08; sweep = chord * 0.45; wingZ = L * 0.12; wingY = -fr * 0.2; }
-    if (sh === 'jet_s' || sh === 'jet_s2') { chord = S * 0.17; tipC = chord * 0.55; }
-    if (sh === 'jet_tt' && pl.span > 12) wingZ = L * 0.08;
-    if (sh === 'jet_tt') { chord = Math.max(S * 0.27, L * 0.25); tipC = chord * 0.28; sweep = S * 0.5 * 0.55; } // big, blended wings of the modern twin-fin fighters
-    // where the wing joins the fuselage (low / mid / shoulder / high), from the aircraft's real layout
-    const lk = typeof look === 'function' ? look(pl) : new Set();
-    if (!bi) { if (lk.has('lowwing')) wingY = -fr * 0.55; else if (lk.has('midwing')) wingY = -fr * 0.05; else if (lk.has('shoulder')) wingY = fr * 0.45; else if (lk.has('highwing')) wingY = fr * 0.85; }
-    const tailZ = L * 0.5 - chord * 0.25;
-    const cockZ = jet ? -L * 0.3 : big ? -L * 0.38 : -L * 0.02 + (bi ? 0.3 : 0);
-    const engines = [];
-    if (pl.kind !== 'jet') {
-      if (pl.eng === 1) engines.push({ x: 0, y: 0, z: -L / 2 + L * 0.09, r: fr * 1.05, len: L * 0.18 });
-      else if (pl.eng === 2) for (const s of [-1, 1]) engines.push({ x: s * S * 0.18, y: wingY + 0.1, z: wingZ - chord * 0.55, r: fr * 0.7, len: L * 0.22 });
-      else for (const s of [-1, 1]) for (const f of [0.14, 0.3]) engines.push({ x: s * S * f, y: wingY + 0.1, z: wingZ - chord * 0.5, r: fr * 0.55, len: L * 0.16 });
-    } else if (sh === 'jet_s2' || sh === 'jet_bomber') for (const s of [-1, 1]) engines.push({ x: s * (sh === 'jet_bomber' ? fr * 1.3 : S * 0.2), y: wingY, z: wingZ, r: fr * 0.6, len: L * 0.3 });
-    else if (lk.has('pods')) for (const s of [-1, 1]) engines.push({ x: s * fr * 1.35, y: fr * 1.2, z: L * 0.22, r: fr * 0.62, len: L * 0.24, pod: true }); // A-10: engines in pods on the rear fuselage
-    else if (pl.eng === 2) for (const s of [-1, 1]) engines.push({ x: s * fr * 0.65, y: 0, z: L * 0.3, r: fr * 0.62, len: L * 0.32, jet: true });
-    else engines.push({ x: 0, y: 0, z: L * 0.3, r: fr * 0.8, len: L * 0.32, jet: true });
-    const lay = { L, S, fr, chord, tipC, sweep, wingZ, wingY, tailZ, cockZ, engines, bi, big, jet, upperY: fr * 1.75, look: lk,
-      hasStab: !(sh === 'jet_d' || sh === 'jet_dc') || lk.has('deltatail') };
+    // everything comes from the parametric airframe (airframe.js), so hit boxes, gear, stores and the cockpit eye match the model
+    const sp = Airframe.spec(pl), w = sp.wing, root = sp.wingAt(0), tip = sp.wingAt(1), L = sp.L, S = sp.S, fr = sp.R, jet = sp.jet;
+    const st = sp.stab, fin = sp.fins[0];
+    const lay = { L, S, fr, chord: w.rc, tipC: w.tc, sweep: (tip.le + tip.c / 2) - (root.le + root.c / 2), wingZ: root.le + root.c / 2, wingY: w.y,
+      tailZ: st ? st.zLE + st.rc / 2 : fin.zLE + fin.rc / 2, cockZ: sp.canopy.z,
+      engines: sp.engines.map(e => ({ x: e.x, y: e.y, z: e.z, r: e.r, len: e.len, jet: !!e.jet && (e.kind === 'fus' || e.kind === 'nacelle'), pod: e.kind === 'pod' })),
+      bi: sp.bi, big: sp.big, jet, upperY: sp.wings[sp.wings.length - 1].y, look: sp.look, hasStab: !!st, spec: sp,
+      tail: { hsSpan: st ? st.b : 0, hsChord: st ? (st.rc + st.tc) / 2 : 0, tailY: st ? st.y : 0, finH: fin.h, finTop: fin.base + fin.h, finX: Math.max(...sp.fins.map(f => Math.abs(f.x))), finC: fin.rc } };
+    lay.eyeY = sp.canopy.type === 'open' ? sp.topAt(sp.canopy.z) + 0.34 : sp.topAt(sp.canopy.z, sp.canopy.x) + Math.min(0.48, sp.canopy.h * 0.5);
     // landing gear: fixed gear (biplanes etc.) or retractable main gear under the wings; gearH = height of the CG above the ground when sitting on the wheels
-    lay.fixed = bi || !!pl.fixedGear;
-    lay.wheelR = Math.max(0.3, fr * (big ? 0.45 : 0.32));
+    lay.fixed = sp.bi || !!pl.fixedGear;
+    lay.wheelR = Math.max(0.3, fr * (sp.big ? 0.45 : 0.32));
     lay.gearLen = fr * (jet ? 1.0 : 1.25) + 0.3;
-    lay.gearH = bi ? fr * 2.0 + 0.32 : pl.fixedGear ? -(wingY - fr * 1.2 - 0.3) : -(wingY - lay.gearLen - lay.wheelR);
+    lay.gearH = sp.bi ? fr * 2.0 + 0.32 : pl.fixedGear ? -(w.y - fr * 1.2 - 0.36) : -(w.y - lay.gearLen - lay.wheelR);
     lay.gearX = Math.max(fr * 1.1, Math.min(S * 0.18, pl.eng >= 2 ? S * 0.18 : S * 0.12));
     return (layoutCache[pl.id] = lay);
   }
