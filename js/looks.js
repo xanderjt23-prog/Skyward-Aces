@@ -6,14 +6,14 @@
 //   wing:     lowwing | midwing | shoulder | highwing ; ellip | invgull | gull | sesqui (small lower wing) | wire (wire-braced)
 //   tail:     twinfin | ttail | cruciform | deltatail (delta wing that still has a tailplane) | f4 (anhedral tail, dihedral tips)
 //   intakes:  noseint | chinint | sideint | rootint | ventint (under the wings) | pods (engines high on the rear fuselage)
-//   other:    spats | tiptanks | hump | bellyscoop | chinrad | wingrad | stepped | roundnose (fully glazed nose) | anhedral
+//   other:    dorsal (fin fillet) | spats | tiptanks | hump | bellyscoop | chinrad | wingrad | stepped | roundnose (fully glazed nose) | anhedral
 // ============================================================================
 const LOOKS = {
   // ---- USA
   spad13us: 'open', n28: 'open', dh4: 'open', p12: 'open', p26: 'open lowwing wire spats',
-  b10: 'greenhouse midwing roundnose', p40e: 'razor lowwing chinrad', p51d: 'bubble lowwing bellyscoop', p47d: 'bubble lowwing ellip',
-  p38l: 'bubble midwing', f4u1d: 'framed lowwing invgull', sbd: 'greenhouse lowwing', b25j: 'stepped shoulder twinfin', b17g: 'stepped lowwing',
-  b29: 'roundnose midwing', a1h: 'bubble lowwing', f80c: 'bubble lowwing sideint tiptanks', f86f: 'bubble lowwing noseint', f100d: 'bubble lowwing noseint',
+  b10: 'greenhouse midwing roundnose', p40e: 'razor lowwing chinrad', p51d: 'bubble lowwing bellyscoop dorsal', p47d: 'bubble lowwing ellip dorsal',
+  p38l: 'bubble midwing', f4u1d: 'framed lowwing invgull', sbd: 'greenhouse lowwing', b25j: 'stepped shoulder twinfin', b17g: 'stepped lowwing dorsal',
+  b29: 'roundnose midwing dorsal', a1h: 'bubble lowwing dorsal', f80c: 'bubble lowwing sideint tiptanks', f86f: 'bubble lowwing noseint', f100d: 'bubble lowwing noseint',
   f105: 'bubble midwing rootint', a4: 'bubble lowwing deltatail sideint', f4e: 'framed lowwing sideint f4', f15c: 'bubble shoulder sideint', f16c: 'bubble midwing chinint',
   fa18e: 'bubble midwing sideint', f111f: 'sbs shoulder sideint', a10a: 'bubble lowwing twinfin pods', f22a: 'bubble midwing sideint', f15e: 'bubble shoulder sideint',
   // ---- Germany

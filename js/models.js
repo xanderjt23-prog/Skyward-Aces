@@ -10,9 +10,10 @@ const Models = (() => {
   function mat(kind) {
     if (matCache[kind]) return matCache[kind];
     let m;
-    if (kind === 'vc') m = new THREE.MeshLambertMaterial({ vertexColors: true });
+    if (kind === 'vc') m = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 22, specular: 0x1c1c1c }); // a little sheen, like painted metal
+    else if (kind === 'lamp') m = new THREE.MeshBasicMaterial({ vertexColors: true });
     else if (kind === 'vc2') m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    else if (kind === 'glass') m = new THREE.MeshPhongMaterial({ color: 0x223344, shininess: 90, specular: 0x8899aa, transparent: true, opacity: 0.85 });
+    else if (kind === 'glass') m = new THREE.MeshPhongMaterial({ color: 0x2c4050, shininess: 110, specular: 0xaabbcc, transparent: true, opacity: 0.55, depthWrite: false });
     else if (kind === 'prop') m = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
     else if (kind === 'glow') m = new THREE.MeshBasicMaterial({ color: 0xff9a40, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
     return (matCache[kind] = m);
@@ -34,12 +35,14 @@ const Models = (() => {
       let o = 0; const c = new THREE.Color(), c2 = new THREE.Color();
       for (const p of this.parts) {
         const pa = p.g.attributes.position, na = p.g.attributes.normal;
-        if (Array.isArray(p.color)) { c.setHex(p.color[0]); c2.setHex(p.color[1]); } else c.setHex(p.color);
+        const fn = typeof p.color === 'function' ? p.color : null;
+        if (fn) { /* per-vertex paint */ } else if (Array.isArray(p.color)) { c.setHex(p.color[0]); c2.setHex(p.color[1]); } else c.setHex(p.color);
         for (let i = 0; i < pa.count; i++, o++) {
+          if (fn) { const h = fn(pa.getX(i), pa.getY(i), pa.getZ(i), na.getY(i)); c.setHex(h); c2.setHex(h); }
           pos[o * 3] = pa.getX(i); pos[o * 3 + 1] = pa.getY(i); pos[o * 3 + 2] = pa.getZ(i);
           nor[o * 3] = na.getX(i); nor[o * 3 + 1] = na.getY(i); nor[o * 3 + 2] = na.getZ(i);
           // camouflage: top colour on upward faces, underside colour on downward faces
-          const cc = Array.isArray(p.color) ? (na.getY(i) < -0.25 ? c2 : c) : c;
+          const cc = fn ? c : Array.isArray(p.color) ? (na.getY(i) < -0.25 ? c2 : c) : c;
           col[o * 3] = cc.r; col[o * 3 + 1] = cc.g; col[o * 3 + 2] = cc.b;
         }
       }
@@ -78,10 +81,17 @@ const Models = (() => {
     const flat = (g, c, s, off) => { const p = pos.slice(); if (normalAxis === 'x') p[0] += off * Math.sign(pos[0] || 1); else p[1] += off; b.add(g, c, p, rot, [s, 1, s]); };
     const disc = cyl(1, 1, 0.02, 16);
     if (nation === 'ger') { flat(box(1, 0.02, 0.3), 0xffffff, size, 0.01); flat(box(0.3, 0.02, 1), 0xffffff, size, 0.01); flat(box(0.8, 0.02, 0.18), 0x111111, size, 0.02); flat(box(0.18, 0.02, 0.8), 0x111111, size, 0.02); return; }
-    if (nation === 'jpn') { flat(disc, 0xc8102e, size * 0.5, 0.01); return; }
+    if (nation === 'jpn') { if (era >= 3 && normalAxis === 'x') flat(disc, 0xffffff, size * 0.56, 0.005); flat(disc, 0xc8102e, size * 0.5, 0.01); return; } // white-outlined hinomaru on dark-green fuselages
     if (nation === 'ussr') { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.2 : 0.5; s[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
       const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI); flat(g, 0xcc1111, size, 0.02); return; }
     if (nation === 'usa' && era === 1) { flat(disc, 0xb22234, size * 0.5, 0.01); flat(disc, 0x1c2f6e, size * 0.34, 0.02); flat(disc, 0xffffff, size * 0.16, 0.03); return; }
+    if (nation === 'usa' && era >= 3) { // star and bar (1943 on), with the red stripe from 1947
+      const bar = (l, h) => normalAxis === 'x' ? box(h, 0.02, l) : box(l, 0.02, h);
+      flat(bar(1.9, 0.3), 0x1c2f6e, size, 0.004); flat(bar(1.78, 0.2), 0xffffff, size, 0.007); if (era >= 4) flat(bar(1.78, 0.07), 0xb22234, size, 0.009); }
+    if (nation === 'uk' && era === 3) { // WW2 RAF: yellow-ringed type C1 on the fuselage, type B (no white) on the upper wings
+      if (normalAxis === 'x') { flat(disc, 0xd8b030, size * 0.56, 0.005); flat(disc, N.roundel[2], size * 0.5, 0.01); flat(disc, N.roundel[1], size * 0.3, 0.02); flat(disc, N.roundel[0], size * 0.22, 0.03); }
+      else { flat(disc, N.roundel[2], size * 0.5, 0.01); flat(disc, N.roundel[0], size * 0.22, 0.03); }
+      return; }
     if (nation === 'usa') { flat(disc, 0x1c2f6e, size * 0.45, 0.01); const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.17 : 0.42; s[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
       const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); flat(g, 0xffffff, size, 0.035); return; }
     flat(disc, N.roundel[2], size * 0.5, 0.01); flat(disc, N.roundel[1], size * 0.34, 0.02); flat(disc, N.roundel[0], size * 0.18, 0.03);
@@ -100,6 +110,7 @@ const Models = (() => {
     if (sh === 'jet_d' || sh === 'jet_dc') { chord = L * 0.5; tipC = chord * 0.08; sweep = chord * 0.45; wingZ = L * 0.12; wingY = -fr * 0.2; }
     if (sh === 'jet_s' || sh === 'jet_s2') { chord = S * 0.17; tipC = chord * 0.55; }
     if (sh === 'jet_tt' && pl.span > 12) wingZ = L * 0.08;
+    if (sh === 'jet_tt') { chord = Math.max(S * 0.27, L * 0.25); tipC = chord * 0.28; sweep = S * 0.5 * 0.55; } // big, blended wings of the modern twin-fin fighters
     // where the wing joins the fuselage (low / mid / shoulder / high), from the aircraft's real layout
     const lk = typeof look === 'function' ? look(pl) : new Set();
     if (!bi) { if (lk.has('lowwing')) wingY = -fr * 0.55; else if (lk.has('midwing')) wingY = -fr * 0.05; else if (lk.has('shoulder')) wingY = fr * 0.45; else if (lk.has('highwing')) wingY = fr * 0.85; }

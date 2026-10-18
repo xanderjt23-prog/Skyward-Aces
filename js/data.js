@@ -18,7 +18,7 @@ const MAX_ERA = 7;
 const NATIONS = {
   usa: { id: 'usa', name: 'USA', flag: '🇺🇸', colors: [0x5b6b4a, 0x9aa7b0], roundel: [0x1c2f6e, 0xffffff, 0xb22234], bloc: 'west' },
   ger: { id: 'ger', name: 'Germany', flag: '🇩🇪', colors: [0x6f7863, 0x9fb0bf], roundel: [0x111111, 0xffffff, 0x111111], bloc: 'west' },
-  uk:  { id: 'uk',  name: 'Britain', flag: '🇬🇧', colors: [0x5d5a3f, 0x8e8a6a], roundel: [0x1c2f6e, 0xffffff, 0xc8102e], bloc: 'west' },
+  uk:  { id: 'uk',  name: 'Britain', flag: '🇬🇧', colors: [0x5d5a3f, 0x8e8a6a], roundel: [0xc8102e, 0xffffff, 0x1c2f6e], bloc: 'west' }, // roundel: centre, middle, outer ring
   ussr:{ id: 'ussr',name: 'USSR / Russia', flag: '🇷🇺', colors: [0x52623d, 0x8fa7b8], roundel: [0xcc1111, 0xffffff, 0xcc1111], bloc: 'east' },
   jpn: { id: 'jpn', name: 'Japan', flag: '🇯🇵', colors: [0x4f5d3a, 0xb9b7a4], roundel: [0xffffff, 0xc8102e, 0xc8102e], bloc: 'west' },
   fra: { id: 'fra', name: 'France', flag: '🇫🇷', colors: [0x6b6a52, 0x9aa6ad], roundel: [0x0055a4, 0xffffff, 0xef4135], bloc: 'west' },
