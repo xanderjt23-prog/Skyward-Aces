@@ -83,8 +83,10 @@ class BotBrain {
     if (this.pullOut <= 0) { const minY = agl < 500 ? -0.2 : agl < 1500 ? -0.45 : -0.8; if (dir.y < minY) { dir = dir.clone(); dir.y = minY; dir.normalize(); } }
     if (c.speed > P.vmax * 1.05 && c.vel.y < -20) throttle = Math.min(throttle, 0.3);
     Flight.steer(c, dir, c.ctl, { keepBank, allowPush: false });
-    // rookies over-control
-    c.ctl.pitch = Math.max(-1, Math.min(1, c.ctl.pitch * (0.75 + this.skill * 0.35)));
+    // pilots fly within their skill: a rookie uses only about half of the aircraft's turn, an ace all of it
+    c.ctl.pitch = Math.max(-1, Math.min(0.45 + this.skill * 0.6, c.ctl.pitch));
+    // combat flaps in a slow turning fight, up again when fast
+    if (c.def.combatFlaps && !c.flapsBroken) c.flaps = this.mode === 'air' && c.speed < P.vs * 2 && c.ctl.pitch > 0.5 ? 1 : 0;
     // bots feel G too: they unload before blacking out
     if (c.gStress > 0.5 && c.ctl.pitch > 0.3) c.ctl.pitch = 0.3;
     c.ctl.throttle = c.def.ab ? throttle : Math.min(throttle, 1.1);
@@ -148,7 +150,7 @@ class BotBrain {
     // bullets inherit our own velocity: lead by the relative velocity, and lift for the drop
     const ms = g ? g.g.ms : 800, tof = d / ms;
     const lead = t.pos.clone().addScaledVector(t.vel.clone().sub(c.vel), tof * (0.85 + this.skill * 0.2)).add(new V3(0, 9.81 * tof * tof * 0.5, 0));
-    const dir = (d > 1800 ? t.pos.clone().sub(c.pos) : lead.sub(c.pos)).normalize().add(this.noise).normalize();
+    const dir = (d > 1800 ? t.pos.clone().sub(c.pos) : lead.sub(c.pos)).normalize().add(this.noise.clone().multiplyScalar(1 + (1 - this.skill) * 2)).normalize();
     // energy: climb above a far target, use the throttle to avoid overshooting a close one
     if (d > 2500) dir.y += Math.max(-0.2, Math.min(0.25, (t.pos.y + 300 - c.pos.y) / 3000));
     let throttle = d > 1500 ? 1.1 : 1;

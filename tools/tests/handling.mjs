@@ -24,7 +24,7 @@ export default async function (t) {
   for (const pl of ['f22a', 'su27', 'p51d']) {
     await start(pl); await t.eval("(() => { const p = Game.match.player; p.vel.setLength(118); p.ctl.throttle = 1; return 1; })()"); await run(1, 30);
     await t.eval("Input.keys.ArrowDown = true; 1"); const c1 = await run(2.5, 6); await t.eval("Input.keys.ArrowDown = false; 1"); const c2 = await run(4, 15);
-    console.log(pl, 'cobra  alpha:', f(c1, 'alpha'), '| pitch:', f(c1, 'pitch'), '| spd:', f(c1, 'spd'), ' -> after: alpha', f(c2, 'alpha'), 'spd', f(c2, 'spd'), 'pitch', f(c2, 'pitch'));
+    console.log(pl, 'cobra G:', c1.map(x => x.g.toFixed(1)).join(' '), 'stress', c1.map(x => x.stress.toFixed(1)).join(' '), 'gloc', c1.map(x => x.gloc ? 'X' : '.').join(''), ' alpha:', f(c1, 'alpha'), '| pitch:', f(c1, 'pitch'), '| spd:', f(c1, 'spd'), ' -> after: alpha', f(c2, 'alpha'), 'spd', f(c2, 'spd'), 'pitch', f(c2, 'pitch'));
   }
   // 4. G: sustained manual pull in a P-51 at speed, then in an F-16
   for (const pl of ['p51d', 'f16c']) {

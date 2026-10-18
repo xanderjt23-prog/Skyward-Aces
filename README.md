@@ -23,6 +23,8 @@ Every mode lets the host pick the map (Countryside, Coastline, Pacific Islands, 
 Destroy battles have tanks from each team driving around their territory (era-appropriate models). Rifle-calibre rounds barely scratch them; heavy machine guns, cannon (best with AP rounds), rockets and bombs kill them. Each tank is worth 0.5 points.
 
 ## Flying
+Gunnery assist (Profile settings, on by default): put the aim circle on the red lead marker and the instructor tracks it; the marker turns into a white FIRE cue when your guns are on target and in range. Arrows at the screen edge point to nearby enemies off screen. Bot skill can be set from Rookie to Ace.
+
 The mouse-aim autopilot works like War Thunder's instructor: it flies the aircraft towards the aim circle with damped, rate-based inputs, keeps the angle of attack below the stall and eases off when the pilot is greying out. The manual pitch keys override all of that.
 - **Post-stall manoeuvres:** high-AoA jets (Su-27, MiG-29, F/A-18) and thrust-vectoring jets (F-22, Su-35, Su-57) can be hauled far past the stall with the manual pull: a Pugachev's Cobra (pull hard at ~400 km/h and let go) bleeds a lot of speed; holding it on a thrust-vectoring jet flips it into a Kulbit. Other aircraft simply stall.
 - **G-forces:** above the pilot's tolerance the view narrows and greys (no G-suit before the jet age: ~4.5-5 G; G-suits: 5.5-7.5 G). Pull ~2 G beyond that and it builds up to G-LOC: the screen goes black and the pilot is unconscious for ~5 s. Strong negative G reddens the view. Bots feel G too.
@@ -42,7 +44,11 @@ All controls can be rebound in **Profile → Controls** (keys or mouse buttons).
 | A / D | roll (ramps in smoothly; let go and the aircraft holds that bank in a level turn until you move the mouse) |
 | Q / E | rudder |
 | Arrow down / up | manual pull / push: bypasses the autopilot's stall and G protection (stalls, spins, cobra) |
-| Space | drop bombs (a yellow diamond on the HUD shows where they will land) |
+| Space | drop bombs (CCIP bomb sight: the pipper shows where they will hit, with the blast radius ring, time of fall and a RELEASE cue) |
+| Z / H | flaps down / up a notch (combat, take-off, landing; too fast and they tear off) |
+| B | air brake in flight (jets, dive bombers), wheel brakes on the ground |
+| T | switch guns: all / machine guns only / cannons only |
+| Middle mouse (hold) | keep the camera on your target |
 | R | fire rockets |
 | F | fire missile (wait for the lock tone) |
 | X | flares |

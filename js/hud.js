@@ -66,22 +66,57 @@ const HUD = (() => {
       if (t && t.alive) {
         const gun = p.guns[0], ms = gun ? gun.g.ms : 800, d = t.pos.distanceTo(p.pos);
         // bullets inherit our velocity, so lead by the relative velocity and lift for the drop
-        if (d < LEAD_RANGE[p.def.era]) { const tof = d / ms, lp = t.pos.clone().addScaledVector(t.vel.clone().sub(p.vel), tof).add(new THREE.Vector3(0, 4.9 * tof * tof, 0)); const ls = proj(lp, cam);
-          if (ls) { ring(ls.x, ls.y, 6, COL.enemy, 2); g.beginPath(); g.moveTo(ls.x - 9, ls.y); g.lineTo(ls.x + 9, ls.y); g.moveTo(ls.x, ls.y - 9); g.lineTo(ls.x, ls.y + 9); g.strokeStyle = COL.enemy; g.lineWidth = 1; g.stroke(); } }
+        if (d < LEAD_RANGE[p.def.era]) { const lp = p.leadPoint(t), ls = proj(lp, cam);
+          const onNose = Math.acos(Math.max(-1, Math.min(1, lp.clone().sub(p.pos).normalize().dot(fwd)))) < Math.max(0.012, 8 / d), inRange = d < (p.def.era <= 2 ? 400 : p.def.era <= 4 ? 700 : 1000);
+          if (ls) { const c = onNose && inRange ? '#ffffff' : COL.enemy; ring(ls.x, ls.y, onNose && inRange ? 9 : 6, c, 2); if (onNose && inRange) { g.fillStyle = 'rgba(255,90,79,0.55)'; g.beginPath(); g.arc(ls.x, ls.y, 9, 0, Math.PI * 2); g.fill(); text('FIRE', ls.x, ls.y - 14, '#ffffff', 10, 'center', true); }
+            g.beginPath(); g.moveTo(ls.x - 9, ls.y); g.lineTo(ls.x + 9, ls.y); g.moveTo(ls.x, ls.y - 9); g.lineTo(ls.x, ls.y + 9); g.strokeStyle = c; g.lineWidth = 1; g.stroke();
+            if (game.assisting) text('ASSIST', ls.x, ls.y + 22, 'rgba(255,255,255,0.7)', 9, 'center'); } }
       }
       // bomb sight: where bombs released now would hit
-      if (p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) {
-        const ip = p.bombImpact(), bs = ip && proj(ip, cam);
-        if (bs) { for (const [col, w] of [['rgba(0,0,0,0.6)', 4], ['#ffd34d', 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(bs.x, bs.y - 10); g.lineTo(bs.x + 10, bs.y); g.lineTo(bs.x, bs.y + 10); g.lineTo(bs.x - 10, bs.y); g.closePath(); g.stroke(); }
-          text('BOMBS', bs.x, bs.y + 24, '#ffd34d', 10, 'center', true); }
-      }
+      if (p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) bombSight(game, p, cam);
       // missile seeker
       if (game.seeker) { const ss = proj(game.seeker.pos, cam); if (ss) { g.strokeStyle = game.locked ? '#ff3b30' : '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.arc(ss.x, ss.y, 18, 0, Math.PI * 2); g.stroke(); if (game.locked) text('LOCK', ss.x, ss.y - 24, '#ff3b30', 11, 'center', true); } }
       if (m.hitMarker && m.time - m.hitMarker < 0.12 && ns) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2; for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.beginPath(); g.moveTo(ns.x + a * 8, ns.y + b * 8); g.lineTo(ns.x + a * 15, ns.y + b * 15); g.stroke(); } }
-      gauges(game, p); damageView(p); radar(game, p); warnings(game, p);
+      offscreen(game, p, cam); gauges(game, p); damageView(p); radar(game, p); warnings(game, p);
     }
     topBar(game);
     if (p && p.alive && document.pointerLockElement !== document.getElementById('view') && !game.paused && !m.over) text('Click to take control (mouse aim)', W / 2, H * 0.62, '#ffd34d', 18, 'center', true);
+  }
+  // ---- bomb sight: continuously computed impact point (CCIP). The pipper shows where bombs released now will hit,
+  // joined to the flight-path marker by the bomb-fall line; the ring is the blast radius on the ground.
+  function bombSight(game, p, cam) {
+    const m = game.match, ip = p.bombImpact(); if (!ip) return;
+    const st = p.stationsOf('b').sort((a, b) => b.s.mass - a.s.mass)[0], rad = st ? st.s.rad : 30;
+    const jet = p.def.era >= 4, col = jet ? '#7dff8a' : '#ffb347';
+    // is the pipper on a target?
+    let onTarget = false;
+    for (const b of m.bases) if (!b.dead && b.team !== p.team && Math.hypot(b.pos.x - ip.x, b.pos.z - ip.z) < b.radius * 0.8 + rad * 0.3) onTarget = true;
+    for (const v of m.vehicles.list) if (!v.dead && v.team !== p.team && Math.hypot(v.pos.x - ip.x, v.pos.z - ip.z) < rad * 0.6) onTarget = true;
+    const c2 = onTarget ? '#ff5a4f' : col;
+    // blast ring on the ground
+    g.beginPath(); let first = true;
+    for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2, q = proj(new THREE.Vector3(ip.x + Math.cos(a) * rad, ip.y + 0.5, ip.z + Math.sin(a) * rad), cam); if (!q) { first = true; continue; } if (first) g.moveTo(q.x, q.y); else g.lineTo(q.x, q.y); first = false; }
+    g.strokeStyle = c2; g.lineWidth = 1.2; g.setLineDash([4, 4]); g.stroke(); g.setLineDash([]);
+    const bs = proj(ip, cam), fpm = proj(p.pos.clone().addScaledVector(p.vel.clone().normalize(), 1500), cam);
+    if (fpm) { // flight-path marker
+      for (const [cc, w] of [['rgba(0,0,0,0.6)', 3.5], [col, 1.6]]) { g.strokeStyle = cc; g.lineWidth = w; g.beginPath(); g.arc(fpm.x, fpm.y, 6, 0, Math.PI * 2); g.moveTo(fpm.x - 14, fpm.y); g.lineTo(fpm.x - 6, fpm.y); g.moveTo(fpm.x + 6, fpm.y); g.lineTo(fpm.x + 14, fpm.y); g.moveTo(fpm.x, fpm.y - 6); g.lineTo(fpm.x, fpm.y - 11); g.stroke(); } }
+    if (!bs) return;
+    if (fpm) { g.strokeStyle = col; g.lineWidth = 1.2; g.beginPath(); g.moveTo(fpm.x, fpm.y + 6); g.lineTo(bs.x, bs.y); g.stroke(); } // bomb-fall line
+    for (const [cc, w] of [['rgba(0,0,0,0.6)', 4], [c2, 2]]) { g.strokeStyle = cc; g.lineWidth = w; g.beginPath(); g.arc(bs.x, bs.y, 9, 0, Math.PI * 2); g.stroke(); }
+    g.fillStyle = c2; g.beginPath(); g.arc(bs.x, bs.y, 2, 0, Math.PI * 2); g.fill();
+    text(`${onTarget ? 'RELEASE' : 'BOMB'} · ${ip.tti.toFixed(1)} s`, bs.x + 14, bs.y + 4, c2, 11, 'left', true);
+  }
+  // ---- arrows at the screen edge for enemies that are off screen
+  function offscreen(game, p, cam) {
+    const m = game.match, list = m.crafts.filter(c => c.alive && !c.wreck && c.team !== p.team && c.pos.distanceTo(p.pos) < 5000).sort((a, b) => a.pos.distanceTo(p.pos) - b.pos.distanceTo(p.pos)).slice(0, 4);
+    const camInv = cam.quaternion.clone().invert();
+    for (const c of list) {
+      const s = proj(c.pos, cam); if (s && s.x > 30 && s.x < W - 30 && s.y > 60 && s.y < H - 60) continue;
+      const rel = c.pos.clone().sub(cam.position).applyQuaternion(camInv); const ang = Math.atan2(-rel.y, rel.x);
+      const r = Math.min(W, H) * 0.38, x = W / 2 + Math.cos(ang) * r, y = H / 2 + Math.sin(ang) * r;
+      g.save(); g.translate(x, y); g.rotate(ang); g.fillStyle = c === game.target ? '#ffd34d' : COL.enemy; g.beginPath(); g.moveTo(12, 0); g.lineTo(-6, -8); g.lineTo(-6, 8); g.closePath(); g.fill(); g.restore();
+      const d = c.pos.distanceTo(p.pos); text(d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1) + ' km', x, y + 20, COL.enemy, 10, 'center');
+    }
   }
   // ---- bottom-centre flight data and weapons
   function gauges(game, p) {
@@ -97,7 +132,11 @@ const HUD = (() => {
     if (p.def.kind === 'jet') { text('M', cx + 185, y - 4, COL.dim, 10); text((p.speed / 340).toFixed(2), cx + 185, y + 14, COL.white, 16, 'left', true); }
     // weapons line
     const parts = [];
-    const ga = p.totalAmmo(); parts.push(`GUNS ${ga.a | 0}`);
+    if (p.gunGroups()) { const mg = p.guns.filter(g => !g.pod && g.g.cal < 20).reduce((a, g) => a + g.ammo, 0), cn = p.guns.filter(g => !g.pod && g.g.cal >= 20).reduce((a, g) => a + g.ammo, 0);
+      parts.push(`${['ALL GUNS', 'MG ONLY', 'CANNON ONLY'][p.gunMode]} [${Input.label(Input.bind('guns'))}]  MG ${mg | 0} · CAN ${cn | 0}`); }
+    else { const ga = p.totalAmmo(); parts.push(`GUNS ${ga.a | 0}`); }
+    if (p.flaps) parts.push('FLAPS ' + Craft.FLAP_NAMES[p.flaps].toUpperCase()); else if (p.flapsBroken) parts.push('FLAPS DAMAGED');
+    if (p.airbrakeOut) parts.push('AIRBRAKE');
     for (const g2 of p.guns) if (g2.pod) parts.push(`POD ${Math.max(0, g2.pod.gunAmmo | 0)}`);
     const nb = p.count('b'), nr = p.count('r'), nm = p.count('m');
     if (nb) parts.push(`BOMBS ${nb} [${Input.label(Input.bind('bombs'))}]`); if (nr) parts.push(`ROCKETS ${nr} [${Input.label(Input.bind('rockets'))}]`);

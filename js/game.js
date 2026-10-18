@@ -92,6 +92,9 @@ const Game = (() => {
           if (act === 'missile') { if (G.locked && G.seeker) { if (p.fireMissile(G.seeker)) { G.lockT = 0; G.locked = false; } } else UI.toast('No missile lock'); }
           if (act === 'flares') p.dropFlares();
           if (act === 'gear') p.toggleGear && p.toggleGear();
+          if (act === 'flapsDown') p.setFlaps(1);
+          if (act === 'flapsUp') p.setFlaps(-1);
+          if (act === 'guns') p.cycleGuns();
         }
       }
       if (p && !p.alive && (code === 'Space' || code === 'Enter' || code === 'Mouse0')) UI.tryRespawn();
@@ -132,7 +135,12 @@ const Game = (() => {
   function controlPlayer(dt, p) {
     const m = G.match;
     G.aimDir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-    Flight.steer(p, G.aimDir, p.ctl, { allowPush: false });
+    let steerDir = G.aimDir; G.assisting = false;
+    if (Profile.get().settings.assist !== false && G.target && G.target.alive) {
+      const d = G.target.pos.distanceTo(p.pos);
+      if (d < 1500) { const ld = p.leadPoint(G.target).sub(p.pos).normalize(); if (Math.acos(Math.max(-1, Math.min(1, ld.dot(G.aimDir)))) < 0.07) { steerDir = ld; G.assisting = true; } }
+    }
+    Flight.steer(p, steerDir, p.ctl, { allowPush: false });
     // on the wheels the aim steers the nose wheel; the wings stay level
     if (p.onGround) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); const hErr = Math.atan2(f.x * G.aimDir.z - f.z * G.aimDir.x, f.x * G.aimDir.x + f.z * G.aimDir.z); p.ctl.yaw = Math.max(-1, Math.min(1, hErr * 3)); p.ctl.roll = 0; }
     // ---- keyboard: A/D roll, Q/E rudder, arrows pitch. The inputs ramp in (~0.4 s), and the pitch keys are a
@@ -165,7 +173,7 @@ const Game = (() => {
     if (I('throttleUp')) { if (p.ctl.throttle < 1) p.ctl.throttle = Math.min(1, p.ctl.throttle + dt * 0.6); else { G.wepT = (G.wepT || 0) + dt; if (G.wepT > 0.25) p.ctl.throttle = 1.1; } }
     else { G.wepT = 0; if (p.ctl.throttle > 1) p.ctl.throttle = 1; }
     if (I('throttleDown')) p.ctl.throttle = Math.max(0, Math.min(1, p.ctl.throttle) - dt * 0.6);
-    p.brakes = I('brakes');
+    p.brakes = I('brakes'); p.airbrakeOut = I('brakes') && p.def.airbrake && !p.onGround;
     if (I('fire')) p.setTrigger(true);
     // target for the lead indicator: the enemy closest to the aim
     let best = null, bs = 0.2;
@@ -200,6 +208,7 @@ const Game = (() => {
         if (G.cockpit) G.cockpit.group.visible = false;
         p.model.userData.body.visible = true; p.model.userData.glass.visible = true;
         let dir = G.aimDir.clone();
+        if (Input.down('lookTarget') && G.target && G.target.alive) dir = G.target.pos.clone().sub(p.pos).normalize();
         if (Input.down('freeLook')) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), G.freeLook.yaw).applyAxisAngle(new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), G.freeLook.pitch);
         camera.position.copy(p.pos).addScaledVector(dir, -dist).add(_look.set(0, dist * 0.2, 0));
         const gy = m.world.groundAt(camera.position.x, camera.position.z) + 3; if (camera.position.y < gy) camera.position.y = gy;

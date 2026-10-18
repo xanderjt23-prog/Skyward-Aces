@@ -20,8 +20,12 @@ const Input = (() => {
     ['rockets', 'Fire rockets', 'KeyR', 'press'],
     ['missile', 'Fire missile', 'KeyF', 'press'],
     ['flares', 'Release flares', 'KeyX', 'press'],
+    ['flapsDown', 'Flaps down one notch (combat / take-off / landing)', 'KeyZ', 'press'],
+    ['flapsUp', 'Flaps up one notch', 'KeyH', 'press'],
+    ['brakes', 'Brakes: air brake in flight, wheel brakes on the ground', 'KeyB', 'hold'],
+    ['guns', 'Switch guns (all / machine guns / cannons)', 'KeyT', 'press'],
+    ['lookTarget', 'Look at target (hold)', 'Mouse1', 'hold'],
     ['gear', 'Landing gear (Realistic mode)', 'KeyG', 'press'],
-    ['brakes', 'Wheel brakes (Realistic mode)', 'KeyB', 'hold'],
     ['camera', 'Change camera', 'KeyC', 'press'],
     ['scoreboard', 'Scoreboard', 'Tab', 'hold'],
   ];

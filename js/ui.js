@@ -200,6 +200,7 @@ const UI = (() => {
       <div class="field"><label>Mouse sensitivity: <span id="pf-sv">${st.sens.toFixed(2)}</span></label><input type="range" id="pf-sens" min="0.3" max="2.5" step="0.05" value="${st.sens}"></div>
       <div class="field"><label>Volume</label><input type="range" id="pf-vol" min="0" max="1" step="0.05" value="${st.volume}"></div>
       <div class="field"><label><input type="checkbox" id="pf-inv" ${st.invert ? 'checked' : ''}> Invert mouse Y</label></div>
+      <div class="field"><label><input type="checkbox" id="pf-assist" ${st.assist !== false ? 'checked' : ''}> Gunnery assist — when your aim circle is on the red lead marker, the instructor tracks it for you</label></div>
       <div class="field"><label>Crosshair colour</label><div class="row"><input type="color" id="pf-cross" value="${st.cross || '#ffffff'}"><span class="small muted">Pick a colour that stands out against snow, sea or sky.</span></div></div>
       <h3 style="margin-top:18px">Controls</h3><p class="small muted">Mouse moves the aim circle and the aircraft follows it. Click a binding, then press a key or mouse button (Esc cancels).</p>
       <div id="binds">${Input.ACTIONS.map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
@@ -210,6 +211,7 @@ const UI = (() => {
     $('#pf-vol').oninput = e => { st.volume = +e.target.value; Sound.setVolume(st.volume); Profile.save(); };
     $('#pf-inv').onchange = e => { st.invert = e.target.checked; Profile.save(); };
     $('#pf-cross').oninput = e => { st.cross = e.target.value; Profile.save(); };
+    $('#pf-assist').onchange = e => { st.assist = e.target.checked; Profile.save(); };
     $('#pf-binds-reset').onclick = () => { Input.reset(); renderProfile(); };
     $$('[data-bind]').forEach(b => b.onclick = () => captureBind(b));
     $('#pf-reset').onclick = () => { if (confirm('Reset all progress? This cannot be undone.')) { Profile.reset(); refresh(); renderProfile(); Game.showPlane(P().selected); } };
@@ -259,7 +261,8 @@ const UI = (() => {
     }
     // map size, weather and time of day: every mode (missions keep their historical map)
     h += `<div class="grid c3"><div class="field"><label>Map size</label>${sel('s-msize', SIZE_OPT, s.size || 'medium')}</div><div class="field"><label>Weather</label>${sel('s-wx', WX_OPT, s.weather || 'random')}</div>
-      <div class="field"><label>Time of day</label><label class="row"><input type="checkbox" id="s-night" ${s.night ? 'checked' : ''} ${dis}> Night</label></div></div>`;
+      <div class="field"><label>Time of day</label><label class="row"><input type="checkbox" id="s-night" ${s.night ? 'checked' : ''} ${dis}> Night</label></div></div>
+      <div class="field"><label>Bot skill</label>${sel('s-diff', [['rookie', 'Rookie'], ['regular', 'Regular'], ['veteran', 'Veteran'], ['ace', 'Ace']], s.difficulty || 'regular')}</div>`;
     return realistic + h;
   }
   function bindSettings(s, onChange) {
@@ -268,7 +271,7 @@ const UI = (() => {
     on('s-time', 'onchange', v => s.time = +v); on('s-map', 'onchange', v => s.map = v);
     on('s-size', 'onchange', v => s.teamSize = [+v, +v]);
     const re = $('#s-real'); if (re) re.onchange = e => { s.realistic = e.target.checked; onChange && onChange(); };
-    on('s-msize', 'onchange', v => s.size = v); on('s-wx', 'onchange', v => s.weather = v);
+    on('s-msize', 'onchange', v => s.size = v); on('s-diff', 'onchange', v => s.difficulty = v); on('s-wx', 'onchange', v => s.weather = v);
     const ni = $('#s-night'); if (ni) ni.onchange = e => { s.night = e.target.checked; onChange && onChange(); }; on('s-resp', 'oninput', v => { s.respawns = +v; $('#rsv').textContent = v; });
     $$('[data-mis]').forEach(c => c.onclick = () => { s.mission = c.dataset.mis; onChange && onChange(true); });
   }
@@ -296,7 +299,7 @@ const UI = (() => {
       h += `<h3>Choose a game mode</h3>${modeCards(play.mode)}<div class="card" style="margin-top:14px">${settingsForm(play.settings, true)}</div>
         <div class="row" style="margin-top:14px"><button id="p-back">← Back</button><button class="primary" id="p-start" style="font-size:20px;padding:10px 30px">Take off</button></div>`;
       body(h);
-      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['realistic', 'size', 'weather', 'night'].map(k => [k, play.settings[k]]); play.mode = c.dataset.mode; play.settings = defaults(play.mode); for (const [k, v] of keep) play.settings[k] = v; renderPlay(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['realistic', 'size', 'weather', 'night', 'difficulty'].map(k => [k, play.settings[k]]); play.mode = c.dataset.mode; play.settings = defaults(play.mode); for (const [k, v] of keep) play.settings[k] = v; renderPlay(); });
       bindSettings(play.settings, re => { if (re) renderPlay(); });
       $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
       $('#p-start').onclick = startSingle;
@@ -348,7 +351,7 @@ const UI = (() => {
     if ($('#lb-copy')) $('#lb-copy').onclick = () => { try { navigator.clipboard.writeText(L.code); toastMenu('Copied'); } catch (e) {} };
     if (!s) return;
     if (L.host) {
-      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['fill', 'realistic', 'size', 'weather', 'night'].map(k => [k, s[k]]); L.settings = defaults(c.dataset.mode); for (const [k, v] of keep) L.settings[k] = v; lobbySync(); renderLobby(); });
+      $$('[data-mode]').forEach(c => c.onclick = () => { const keep = ['fill', 'realistic', 'size', 'weather', 'night', 'difficulty'].map(k => [k, s[k]]); L.settings = defaults(c.dataset.mode); for (const [k, v] of keep) L.settings[k] = v; lobbySync(); renderLobby(); });
       bindSettings(s, re => { lobbySync(); if (re) renderLobby(); });
       $('#fill-bots').onchange = e => { s.fill = e.target.checked; lobbySync(); };
       $$('[data-mv]').forEach(b => b.onclick = () => { const p = L.players.find(x => x.peer === b.dataset.mv); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } });

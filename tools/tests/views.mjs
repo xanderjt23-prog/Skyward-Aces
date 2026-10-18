@@ -13,7 +13,9 @@ export default async function (t) {
       Game.camMode = '${cam}' === 'nose' ? 'nose' : 'chase';
       if ('${cam}' === 'tank') { const v = m.vehicles.list.find(v => !v.dead); if (v) { const pl = m.player; pl.pos.copy(v.pos).add(new THREE.Vector3(60, 45, 90)); const d = v.pos.clone().sub(pl.pos).normalize(); pl.quat.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d); pl.vel.copy(d).multiplyScalar(80); Game.aimReset(); } }
       if ('${cam}' === 'nose') { const pl = m.player; Game.aimReset(); }
-      Game.update(1/30); Game.render(); return 'ok ' + m.world.weather.name + ' tanks ' + m.vehicles.list.length; })()`);
+      if ('${cam}'.startsWith('base')) { const kind = '${cam}'.slice(5); const b = m.bases.find(x => x.kind === kind) || m.bases[0]; const pl = m.player; const d = Math.max(400, b.radius * 2.2);
+        pl.pos.copy(b.pos).add(new THREE.Vector3(d * 0.8, d * 0.7, d * 0.8)); pl.pos.y = Math.max(pl.pos.y, m.world.groundAt(pl.pos.x, pl.pos.z) + 150); const dir = b.pos.clone().sub(pl.pos).normalize(); pl.quat.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir); pl.vel.copy(dir).multiplyScalar(60); Game.aimReset(); Game.camDist = 0.6; }
+      if (!'${cam}'.startsWith('base')) Game.update(1/30); Game.render(); return 'ok ' + m.world.weather.name + ' tanks ' + m.vehicles.list.length; })()`);
     console.log(cs, r);
     await t.shot('view-' + cs.replace(/:/g, '_'));
     await t.eval('Game.leave(); document.querySelector("#res-ok") && document.querySelector("#res-ok").click(); 1');

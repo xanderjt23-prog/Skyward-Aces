@@ -42,11 +42,14 @@ const Plan = {
   bot(id, team, plane, opt) {
     const pl = PLANES[plane], names = PILOT_NAMES[pl.nation] || PILOT_NAMES.usa;
     const task = opt.task || (pl.role === 'bomber' ? 'bomb' : pl.role === 'attack' ? 'ground' : Math.random() < (opt.groundChance || 0) ? 'ground' : 'air');
-    return Object.assign({ id, team, name: names[Math.floor(Math.random() * names.length)] + (opt.suffix || ''), plane, bot: true, owner: 'H', skill: opt.skill == null ? 0.35 + Math.random() * 0.5 : opt.skill, task, loadout: Plan.botLoadout(pl, task) }, opt.extra || {});
+    const range = Plan.SKILL[Plan.difficulty] || Plan.SKILL.regular;
+    return Object.assign({ id, team, name: names[Math.floor(Math.random() * names.length)] + (opt.suffix || ''), plane, bot: true, owner: 'H', skill: opt.skill == null ? range[0] + Math.random() * (range[1] - range[0]) : opt.skill, task, loadout: Plan.botLoadout(pl, task) }, opt.extra || {});
   },
   pick(list) { return list[Math.floor(Math.random() * list.length)]; },
   // humans: [{ id, name, plane, loadout, owner, team }]  settings: { mode, teamSize:[a,b], time, respawns, mission, fill, map }
+  SKILL: { rookie: [0.1, 0.3], regular: [0.3, 0.6], veteran: [0.55, 0.8], ace: [0.8, 0.97] },
   build(settings, humans) {
+    Plan.difficulty = settings.difficulty || 'regular';
     const mode = settings.mode, seed = 1 + Math.floor(Math.random() * 1e6);
     const eraAvg = Math.max(1, Math.min(7, Math.round(humans.reduce((a, h) => a + PLANES[h.plane].era, 0) / humans.length)));
     const mission = mode === 'missions' ? MISSIONS.find(m => m.id === settings.mission) || missionsFor(PLANES[humans[0].plane])[0] : null;
@@ -93,10 +96,10 @@ const Plan = {
     // bases
     const bases = [], rnd = Models.mulberry(seed), water = map === 'islands' || map === 'arctic';
     const place = (team, size, kind, zMin, zMax) => {
-      for (let t = 0; t < 60; t++) {
+      for (let t = 0; t < 150; t++) { // (spacing relaxes a little with every failed try, for small maps)
         const x = (rnd() - 0.5) * half * 1.4, z = (team === 0 ? 1 : -1) * (zMin + rnd() * (zMax - zMin)) * half;
         if (map === 'coast' && (kind === 'ship' || kind === 'carrier') !== (x > half * 0.35)) continue;
-        if (bases.some(b => Math.hypot(b.x - x, b.z - z) < half * 0.16)) continue;
+        const R = Models.BASE_R[size] || 200; if (bases.some(b => Math.hypot(b.x - x, b.z - z) < (R + (Models.BASE_R[b.size] || 200) + 400) * (1 - t / 220))) continue;
         bases.push({ id: 'B' + bases.length, team, size, kind, x, z }); return bases[bases.length - 1];
       }
       const b = { id: 'B' + bases.length, team, size, kind, x: (rnd() - 0.5) * half, z: (team === 0 ? 1 : -1) * half * zMax }; bases.push(b); return b;
@@ -150,7 +153,7 @@ class Match {
     this.spawnAlt = SPAWN_ALT[this.era]; this.patrolAlt = this.spawnAlt; this.ceiling = this.spawnAlt * 2.6 + 1500;
     this.scores = [0, 0]; this.feed = []; this.events = []; this.wave = 0; this.waveT = 6; this.debris = [];
     // world + bases
-    const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.flat, water: bm.water }; });
+    const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.water ? bm.flat * 3 : bm.flat, water: bm.water }; }); // ships get open sea around them
     this.world = World.create(this.scene, { map: cfg.map, half: cfg.half, seed: cfg.seed, sites, weather: cfg.weather, night: cfg.night, lights: this.scene.userData.lights });
     this.bases = sites.map((s, i) => this.makeBase(s, i));
     { let hi = 0; for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) hi = Math.max(hi, this.world.groundAt((i / 16 - 0.5) * this.half * 1.6, (j / 16 - 0.5) * this.half * 1.6));
@@ -203,7 +206,7 @@ class Match {
       else if (e === 5) type = b.size === 'big' && k === 0 ? 'sam' : 'radar';
       else type = (b.size !== 'small' && k % 2 === 0) ? 'sam' : 'radar';
       const wp = sp.clone().applyAxisAngle(new V3(0, 1, 0), g.rotation.y).add(new V3(b.x, 0, b.z));
-      wp.y = s.water ? 7 : this.world.groundAt(wp.x, wp.z);
+      wp.y = s.water ? sp.y : this.world.groundAt(wp.x, wp.z);
       const mount = Models.aaMount(e, type === 'heavy' || type === 'sam' || type === 'archie'); mount.position.copy(wp); this.scene.add(mount);
       const ahp = 160 * Math.sqrt(ERA_HP[e] + 0.3);
       base.aa.push({ isAA: true, team: b.team, id: 'aa', baseIdx: i, type, pos: wp.clone().add(new V3(0, 1.5, 0)), hp: ahp, max: ahp, cd: Math.random() * 2, target: null, retarget: 0, burst: 0, mount, local: this.isHost, vel: new V3() });

@@ -58,7 +58,13 @@ const TYPES = { gotha: 'Heavy bomber', ho400: 'Heavy bomber', he111: 'Medium bom
   tu16: 'Jet bomber', f105: 'Fighter-bomber', a4: 'Attack aircraft', su24: 'Strike aircraft', f15e: 'Strike fighter', il2: 'Ground-attack aircraft',
   f104g: 'Interceptor', f104j: 'Interceptor', lightning: 'Interceptor', tornadof3: 'Interceptor', mig15: 'Interceptor', me262: 'Jet fighter', p38l: 'Heavy fighter', p47d: 'Fighter-bomber',
   typhoon1b: 'Fighter-bomber', f4u1d: 'Fighter-bomber', f4e: 'Multirole fighter', f4ej: 'Multirole fighter', f15c: 'Air superiority fighter', f15j: 'Air superiority fighter', su27: 'Air superiority fighter', f22a: 'Air superiority fighter' };
+const DIVE_BRAKES = ['ju87', 'sbd', 'd3a', 'pe2', 'a1h'];
 for (const p of PLANE_LIST) {
+  // flaps: none on WW1 / biplanes; automatic manoeuvre flaps on 4th/5th-generation jets; otherwise selectable
+  // (fighters get a "combat" notch, bombers and jets only take-off / landing)
+  p.flaps = p.era === 1 || p.shape === 'bi' || p.shape === 'tri' || p.bi ? 'none' : p.kind === 'jet' && p.era >= 6 ? 'auto' : 'manual';
+  p.combatFlaps = p.flaps === 'manual' && p.kind !== 'jet' && p.role !== 'bomber';
+  p.airbrake = (p.kind === 'jet' && p.era >= 4) || DIVE_BRAKES.includes(p.id);
   if (TYPES[p.id]) p.type = TYPES[p.id];
   if (!p.type) p.type = p.role === 'bomber' ? 'Bomber' : p.role === 'attack' ? 'Attack aircraft' : p.kind === 'jet' ? (p.era >= 6 ? 'Multirole fighter' : 'Jet fighter') : p.shape === 'bi' || p.shape === 'tri' ? 'Biplane fighter' : 'Fighter';
   // short name (without the maker) for markers and cards

@@ -304,6 +304,20 @@ const Models = (() => {
   function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   function missile(len, r) { const b = new Builder(); b.add(zcyl(r, r, len, 6), 0xdddddd, [0, 0, 0]); b.add(zcyl(0.01, r, r * 3, 6), 0x999999, [0, 0, -len / 2 - r * 1.5]);
     for (let i = 0; i < 4; i++) b.add(box(r * 4, 0.02, r * 3), 0xbbbbbb, [0, 0, len / 2 - r * 1.5], [0, 0, i * Math.PI / 4 * 2]); return new THREE.Mesh(b.build(), mat('vc')); }
+  // a store as it hangs on a pylon (bomb, rocket pod / rails, missile, gun pod); userData.r / len for placement
+  function storeMesh(s, id) {
+    let m, r, len;
+    if (s.kind === 'b') { m = bomb(s.mass); r = 0.12 * Math.cbrt(s.mass / 20) * 0.6; len = r * 9; if (s.guided) { const b2 = new Builder(); b2.add(box(r * 3, 0.02, r * 1.2), 0x555555, [0, 0, -len * 0.45]); m.add(new THREE.Mesh(b2.build(), mat('vc'))); } }
+    else if (s.kind === 'm') { len = Math.min(4.2, 1.6 + s.mass / 90); r = 0.06 + s.mass / 2600; m = missile(len, r); }
+    else if (s.kind === 'g') { len = 2.4 + s.mass / 600; r = 0.22 + s.mass / 4000; const b2 = new Builder(); b2.add(zcyl(r * 0.6, r, len, 12), 0x5c6268, [0, 0, 0]); b2.add(zcyl(0.03, 0.03, 0.6, 6), 0x222222, [0, -r * 0.3, -len / 2 - 0.3]); m = new THREE.Mesh(b2.build(), mat('vc')); }
+    else { // rockets: a pod for many small rockets, rails for a few big ones
+      const pod = s.count >= 6 || /pod/i.test(s.name), b2 = new Builder();
+      if (pod) { len = 1.8; r = 0.24; b2.add(zcyl(r * 0.8, r, len, 12), 0x55605a, [0, 0, 0]); b2.add(cyl(r * 0.8, r * 0.8, 0.02, 12), 0x222222, [0, 0, -len / 2 - 0.01], [Math.PI / 2, 0, 0]); }
+      else { len = 1.6; r = 0.08; b2.add(box(0.06, 0.04, len), 0x444444, [0, r + 0.03, 0]); b2.add(zcyl(r, r, len, 8), 0x7a7a6a, [0, 0, 0]); b2.add(zcyl(0.01, r, 0.25, 8), 0x9a9a8a, [0, 0, -len / 2 - 0.12]); }
+      m = new THREE.Mesh(b2.build(), mat('vc'));
+    }
+    m.userData.r = r; m.userData.len = len; return m;
+  }
   function bomb(mass) { const r = 0.12 * Math.cbrt(mass / 20), b = new Builder(); b.add(zcyl(r * 0.6, r * 0.5, r * 5, 8), 0x4a5040, [0, 0, 0]); b.add(new THREE.SphereGeometry(r, 8, 6), 0x4a5040, [0, 0, -r * 2.5]); b.add(box(r * 2, 0.02, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); b.add(box(0.02, r * 2, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); return new THREE.Mesh(b.build(), mat('vc')); }
-  return { aircraft, layout, turretPos, paint, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
+  return { aircraft, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
 })();

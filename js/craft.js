@@ -8,6 +8,7 @@ const CONV = [0, 150, 220, 300, 400, 500, 500, 500]; // gun convergence by era (
 
 class Craft {
   static SERVICE_TIME = 12;
+  static FLAP_NAMES = ['up', 'combat', 'take-off', 'landing'];
   constructor(match, spec) {
     this.match = match; this.spec = spec;
     this.id = spec.id; this.team = spec.team; this.name = spec.name; this.isBot = !!spec.bot; this.human = !spec.bot;
@@ -28,7 +29,7 @@ class Craft {
   spawn(pos, heading, speed) {
     const d = this.def;
     this.dm = Damage.create(d, this.lo.mods, { hpMul: this.spec.hpMul });
-    this.loadStores();
+    this.loadStores(); this.buildStoreMeshes();
     this.perf = Flight.perf(d, this.lo.mods, this.mass);
     this.fuel = 1; this.endurance = d.kind === 'jet' ? 900 : 1500;
     this.pos.copy(pos); this.quat.setFromEuler(new THREE.Euler(0, heading, 0, 'YXZ'));
@@ -39,7 +40,7 @@ class Craft {
     this.flares = d.flares * (this.lo.mods.flares ? 2 : 1);
     this.alive = true; this.everSpawned = true; this.wreck = false; this.spawnT = this.match.time; this.model.visible = true;
     const u = this.model.userData; u.wingL.visible = u.wingR.visible = true; this.model.rotation.set(0, 0, 0);
-    this.gVision = 0; this.gStress = 0; this.glocT = 0;
+    this.gVision = 0; this.gStress = 0; this.glocT = 0; this.flaps = 0; this.flapsBroken = false; this.flapOver = 0; this.airbrakeOut = false; this.gunMode = 0;
     this.crashed = false; this.dmgVer++; this.onGround = false; this.gearDown = false; this.serviceT = 0; this.serviced = false; this.brakes = false; this.missileWarn = 0; this.lockTarget = null; this.lockT = 0;
     if (this.ai) this.ai.reset();
   }
@@ -85,6 +86,8 @@ class Craft {
     if (this.glocT > 0) { this.ctl.pitch = this.ctl.roll = this.ctl.yaw = 0; this.ctl.manual = false; }
     Flight.step(this, dt);
     this.gTick(dt);
+    // flaps down too fast get torn off (or jam)
+    if (this.flaps && this.speed > this.perf.vmax * Flight.FLAP_VFE[this.flaps]) { this.flapOver += dt; if (this.flapOver > 1.5) { this.flaps = 0; this.flapsBroken = true; if (this === m.player) m.events.push({ t: m.time, e: 'flaps', text: 'Flaps torn off — too fast!' }); } } else this.flapOver = 0;
     // rough air in bad weather
     if (m.world.turb > 0 && !this.onGround) this.vel.addScaledVector(m.world.gust, dt * (0.6 + 400 / Math.max(400, this.mass) * 0.4));
     Damage.tick(this.dm, dt, this.speed / this.perf.vmax);
@@ -149,6 +152,20 @@ class Craft {
     else if (this.speed > 8) { this.serviceT = 0; this.serviced = false; }
     this.atHome = !!home;
   }
+  setFlaps(dir) {
+    const d = this.def, m = this.match;
+    if (d.flaps !== 'manual') { if (this === m.player) UI.toast(d.flaps === 'auto' ? 'This aircraft has automatic manoeuvre flaps' : 'This aircraft has no flaps'); return; }
+    if (this.flapsBroken) { if (this === m.player) UI.toast('The flaps are damaged'); return; }
+    const notches = d.combatFlaps ? [0, 1, 2, 3] : [0, 2, 3], i = notches.indexOf(this.flaps);
+    this.flaps = notches[Math.max(0, Math.min(notches.length - 1, (i < 0 ? 0 : i) + dir))];
+    if (this === m.player) { UI.toast('Flaps: ' + Craft.FLAP_NAMES[this.flaps]); Sound.clunk(); }
+  }
+  // gun groups: 0 all, 1 machine guns only, 2 cannons only (>= 20 mm)
+  gunGroups() { const mg = this.guns.some(g => g.g.cal < 20), can = this.guns.some(g => g.g.cal >= 20); return mg && can; }
+  cycleGuns() {
+    if (!this.gunGroups()) { if (this === this.match.player) UI.toast('All guns fire together on this aircraft'); return; }
+    this.gunMode = (this.gunMode + 1) % 3; if (this === this.match.player) UI.toast('Guns: ' + ['all', 'machine guns only', 'cannons only'][this.gunMode]);
+  }
   toggleGear() {
     const m = this.match;
     if (!m.cfg.realistic) return;
@@ -159,12 +176,48 @@ class Craft {
   // refuel, rearm and repair (Realistic mode, after landing at home)
   resupply() {
     this.dm = Damage.create(this.def, this.lo.mods, { hpMul: this.spec.hpMul });
-    this.loadStores(); this.perf = Flight.perf(this.def, this.lo.mods, this.mass);
+    this.loadStores(); this.buildStoreMeshes(); this.perf = Flight.perf(this.def, this.lo.mods, this.mass);
     this.guns = this.buildGuns(); this.turrets = this.buildTurrets();
     this.flares = this.def.flares * (this.lo.mods.flares ? 2 : 1); this.fuel = 1;
     const u = this.model.userData; u.wingL.visible = u.wingR.visible = true;
     this.dmgVer++;
     if (this === this.match.player) this.match.events.push({ t: this.match.time, e: 'service', text: 'Refuelled, rearmed and repaired' });
+  }
+  // ---- ordnance hanging on the pylons, shown until it is released
+  buildStoreMeshes() {
+    if (this.storeGroup) { this.model.remove(this.storeGroup); this.storeGroup = null; }
+    const d = this.def, lay = Models.layout(d), grp = new THREE.Group(); let wingIdx = 0;
+    const pylonMat = Models.mat('vc');
+    for (const st of this.stations) {
+      const label = st.label.toLowerCase(), si = d.hp.findIndex(h => h[0] === st.label);
+      if (/bay|bays/.test(label)) { st.meshes = []; continue; } // carried internally
+      const fuselage = /centre|belly|fuselage|well|cft|intake|nose/.test(label) || (st.pylons === 1 && !/wing/.test(label));
+      let f = /tip/.test(label) ? 0.98 : /outer/.test(label) ? 0.7 : /mid/.test(label) ? 0.5 : /inner|stub|glove/.test(label) ? 0.3 : 0.3 + (wingIdx++) * 0.18;
+      f = Math.min(0.98, f);
+      st.meshes = [];
+      const per = Math.max(1, st.pylons), sides = fuselage ? per : Math.max(1, Math.floor(per / 2)) * 2;
+      for (let k = 0; k < per; k++) {
+        const s = st.s, mk = Models.storeMesh(s, st.id);
+        let x, y, z;
+        if (fuselage) { x = per === 1 ? 0 : (k % 2 ? 1 : -1) * lay.fr * 0.55; y = -lay.fr - mk.userData.r - 0.15; z = lay.wingZ - lay.chord * 0.2 + Math.floor(k / 2) * Math.max(1.5, mk.userData.len * 1.1) - (per > 2 ? mk.userData.len * 0.5 : 0); }
+        else {
+          const side = k % 2 ? 1 : -1, row = Math.floor(k / 2), fk = Math.min(0.98, f + row * 0.09 * (f > 0.9 ? -1 : 1));
+          x = side * (lay.fr * 0.5 + (lay.S / 2 - lay.fr * 0.5) * fk); z = lay.wingZ + lay.sweep * fk - (lay.chord * (1 - fk) + lay.tipC * fk) * 0.1;
+          y = fk > 0.95 ? lay.wingY : lay.wingY - 0.18 - mk.userData.r - (lay.jet ? 0.1 : 0.05);
+        }
+        mk.position.set(x, y, z); grp.add(mk);
+        if (!(f > 0.95 && !fuselage)) { const py = new THREE.Mesh(new THREE.BoxGeometry(0.08, Math.max(0.05, (fuselage ? -lay.fr : lay.wingY) - y - mk.userData.r), Math.min(1.2, mk.userData.len * 0.4)), pylonMat); py.position.set(x, (y + mk.userData.r + (fuselage ? -lay.fr : lay.wingY)) / 2, z); py.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Array(py.geometry.attributes.position.count * 3).fill(0.3), 3)); grp.add(py); }
+        st.meshes.push(mk);
+      }
+      st.full = st.n;
+    }
+    this.storeGroup = grp; this.model.add(grp);
+  }
+  // hide released stores (outer pylons empty first)
+  updateStoreMeshes() {
+    for (const st of this.stations || []) { if (!st.meshes || !st.meshes.length) continue;
+      const per = st.full / st.meshes.length, left = Math.ceil(st.n / Math.max(1, per) - 1e-6);
+      st.meshes.forEach((m, i) => { m.visible = i < left; }); }
   }
   loadStores() {
     const d = this.def;
@@ -203,7 +256,7 @@ class Craft {
     Sound.fire(this.id + ':' + this.guns.indexOf(g), g.g, g.bar.length, this.pos, this === this.match.player);
     this.firingGuns = this.match.time;
   }
-  setTrigger(on) { if (on) for (const g of this.guns) g.firing = true; }
+  setTrigger(on) { if (on) for (const g of this.guns) if (this.gunMode === 0 || (this.gunMode === 1) === (g.g.cal < 20)) g.firing = true; }
   totalAmmo() { let a = 0, m = 0; for (const g of this.guns) if (!g.pod) { a += g.ammo; m += g.max; } return { a, m }; }
   // ---- defensive gunners (also on the player's aircraft): automatic
   updateTurret(t, dt) {
@@ -250,8 +303,13 @@ class Craft {
   // where a bomb released now would land (same ballistics as Combat's bombs), or null
   bombImpact() {
     const p = this.pos.clone(), v = this.vel.clone(), w = this.match.world;
-    for (let i = 0; i < 600; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); const gy = w.groundAt(p.x, p.z); if (p.y <= gy) { p.y = gy; return p; } }
+    for (let i = 0; i < 600; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); const gy = w.groundAt(p.x, p.z); if (p.y <= gy) { p.y = gy; p.tti = (i + 1) * 0.1; return p; } }
     return null;
+  }
+  // where to put the nose so the guns hit the target now (bullets inherit our velocity; drop lifted)
+  leadPoint(t) {
+    const g = this.guns.find(x => x.ammo > 0) || this.guns[0], ms = g ? g.g.ms : 800, d = t.pos.distanceTo(this.pos), tof = d / ms;
+    return t.pos.clone().addScaledVector(t.vel.clone().sub(this.vel), tof).add(new V3(0, 4.9 * tof * tof, 0));
   }
   fireRockets() {
     const st = this.stationsOf('r')[0]; if (!st || this.dm.destroyed) return false;
@@ -300,6 +358,7 @@ class Craft {
     o.visible = true; o.position.copy(this.pos); o.quaternion.copy(this.quat);
     const u = o.userData, thr = this.ctl.throttle * (this.dm ? Math.max(...this.dm.fx.thrust, 0) : 1);
     for (const p of u.props) p.rotation.z += dt * (12 + thr * 60);
+    this.updateStoreMeshes();
     if (u.gear) u.gear.visible = !!(this.gearDown || (this.netFlags & 16) && !this.local);
     const ab = this.afterburner || (this.netFlags & 4);
     for (const gl of u.glows) { gl.visible = !!ab && !this.wreck; if (ab) gl.scale.set(1, 1, 0.8 + Math.random() * 0.4); }
@@ -343,7 +402,7 @@ class Craft {
   }
   remoteSpawn() {
     this.dm = Damage.create(this.def, this.lo.mods, { hpMul: this.spec.hpMul }); this.perf = Flight.perf(this.def, this.lo.mods, this.def.mass);
-    this.guns = this.buildGuns(); this.turrets = this.buildTurrets(); this.stations = [];
+    this.loadStores(); this.buildStoreMeshes(); this.guns = this.buildGuns(); this.turrets = this.buildTurrets();
     const u = this.model.userData; u.wingL.visible = u.wingR.visible = true; this.everSpawned = true; this.spawnT = this.match.time;
   }
   // smooth remote motion: dead-reckon from the last state and ease out the error
