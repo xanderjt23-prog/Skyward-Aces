@@ -35,7 +35,14 @@ class BotBrain {
     const low = ahead.y < gAhead + minAlt || c.pos.y - gAhead < need + 60;
     if (low || this.pullOut > 0) {
       if (low) this.pullOut = 1.5; else this.pullOut -= dt;
-      dir = new V3(fwd.x, 0, fwd.z).normalize(); dir.y = 0.9; dir.normalize(); throttle = 1.1;
+      // turn towards the lowest terrain ahead (scan seven headings) while climbing as hard as the speed allows
+      const hd = Math.atan2(-fwd.x, -fwd.z); let best = null, bh = Infinity;
+      for (const da of [0, -0.6, 0.6, -1.2, 1.2, -1.9, 1.9]) {
+        const h = hd + da, dx = -Math.sin(h), dz = -Math.cos(h); let mx = 0;
+        for (let d = 200; d <= Math.max(1200, c.speed * 10); d += 200) mx = Math.max(mx, m.world.groundAt(c.pos.x + dx * d, c.pos.z + dz * d));
+        const score = mx + Math.abs(da) * 60; if (score < bh) { bh = score; best = new V3(dx, 0, dz); }
+      }
+      dir = best; dir.y = c.speed > P.vs * 1.7 ? 0.7 : 0.25; dir.normalize(); throttle = 1.1;
     }
     // ---- bounds
     const H = m.half * 0.92;
@@ -78,6 +85,8 @@ class BotBrain {
     Flight.steer(c, dir, c.ctl, { keepBank, allowPush: false });
     // rookies over-control
     c.ctl.pitch = Math.max(-1, Math.min(1, c.ctl.pitch * (0.75 + this.skill * 0.35)));
+    // bots feel G too: they unload before blacking out
+    if (c.gStress > 0.5 && c.ctl.pitch > 0.3) c.ctl.pitch = 0.3;
     c.ctl.throttle = c.def.ab ? throttle : Math.min(throttle, 1.1);
     if (fire) c.setTrigger(true);
     // avoid stalling: unload when slow

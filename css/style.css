@@ -95,6 +95,7 @@ i.nat { position: relative; display: inline-block; width: 16px; height: 16px; bo
 
 /* ---- battle overlay */
 #battle-ui { position: fixed; inset: 0; pointer-events: none; }
+#gfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
 #feed { position: fixed; top: 70px; right: 16px; width: 430px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 #feed div { background: rgba(8, 14, 22, 0.6); padding: 4px 9px; border-radius: 6px; font-size: 12px; }
 #feed div.me { border-left: 3px solid var(--accent); }

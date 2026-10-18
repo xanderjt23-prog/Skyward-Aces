@@ -39,6 +39,7 @@ class Craft {
     this.flares = d.flares * (this.lo.mods.flares ? 2 : 1);
     this.alive = true; this.everSpawned = true; this.wreck = false; this.spawnT = this.match.time; this.model.visible = true;
     const u = this.model.userData; u.wingL.visible = u.wingR.visible = true; this.model.rotation.set(0, 0, 0);
+    this.gVision = 0; this.gStress = 0; this.glocT = 0;
     this.crashed = false; this.dmgVer++; this.onGround = false; this.gearDown = false; this.serviceT = 0; this.serviced = false; this.brakes = false; this.missileWarn = 0; this.lockTarget = null; this.lockT = 0;
     if (this.ai) this.ai.reset();
   }
@@ -80,7 +81,10 @@ class Craft {
     if (!this.alive) return;
     const m = this.match;
     if (this.dm.destroyed || this.dm.fx.ctrl === 0) { this.ctl.throttle = Math.min(this.ctl.throttle, this.dm.destroyed ? 0 : 1); }
+    // a pilot blacked out by G (G-LOC) lets go of the stick
+    if (this.glocT > 0) { this.ctl.pitch = this.ctl.roll = this.ctl.yaw = 0; this.ctl.manual = false; }
     Flight.step(this, dt);
+    this.gTick(dt);
     // rough air in bad weather
     if (m.world.turb > 0 && !this.onGround) this.vel.addScaledVector(m.world.gust, dt * (0.6 + 400 / Math.max(400, this.mass) * 0.4));
     Damage.tick(this.dm, dt, this.speed / this.perf.vmax);
@@ -98,6 +102,20 @@ class Craft {
       else { this.pos.y = gy + 1.5; m.onCrash(this, gy < 1); return; }
     } else if (this.onGround && this.pos.y > gy + clear + 0.4) this.onGround = false;
     if (this.pos.y > 15000) this.vel.y = Math.min(this.vel.y, 0);
+  }
+  // ---- the pilot's G tolerance (grey-out / tunnel vision, G-LOC blackout, red-out)
+  //  above gTol the vision narrows and greys; holding more than ~2 G beyond it builds up towards G-LOC (unconscious ~5 s);
+  //  below -2.5 G the vision reddens and -3.5 G and worse builds up too
+  gTick(dt) {
+    const g = this.gLoad || 1, tol = this.perf.gTol, hard = tol + 2;
+    const target = g > tol ? Math.min(1, (g - tol) / 2.2) : g < -2.5 ? -Math.min(1, (-g - 2.5) / 1.5) : 0;
+    const v = this.gVision || 0, k = Math.abs(target) > Math.abs(v) ? dt / 1.1 : dt / 0.7; // blood drains slower than it returns
+    this.gVision = v + (target - v) * Math.min(1, k);
+    let s = this.gStress || 0;
+    if (g > hard) s += (g - hard) * 0.45 * dt; else if (g < -3.5) s += (-g - 3.5) * 0.5 * dt; else s -= 0.22 * dt;
+    this.gStress = Math.max(0, s);
+    if (this.glocT > 0) { this.glocT -= dt; if (this.glocT <= 0) this.gStress = 0.45; }
+    else if (this.gStress >= 1 && this.dm.fx.ctrl) { this.glocT = 4.5 + Math.random() * 1.5; if (this === this.match.player) this.match.events.push({ t: this.match.time, e: 'gloc', text: 'G-LOC — blacked out!' }); }
   }
   canTouchDown(gy) {
     const m = this.match; if (!m.cfg.realistic || this.dm.destroyed || this.wreck) return false;

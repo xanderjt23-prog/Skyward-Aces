@@ -415,8 +415,14 @@ const UI = (() => {
     while (feedN < m.feed.length) { const f = m.feed[feedN++]; const d = document.createElement('div'); d.textContent = f.text; d.className = (f.me ? 'me ' : '') + 'team' + (m.player && f.team === m.player.team ? 0 : 1); $('#feed').prepend(d); setTimeout(() => d.remove(), 9000); }
     while ($('#feed').children.length > 7) $('#feed').lastChild.remove();
     while (evN < m.events.length) { const e = m.events[evN++]; if (e.text) msg(e.text); else if (EV_TEXT[e.e]) msg(EV_TEXT[e.e]); }
-    // respawn panel
     const p = m.player, rp = $('#respawn');
+    // G effects: grey tunnel vision closing in, black at G-LOC; red-out under negative G
+    const gx = $('#gfx');
+    if (p && p.alive && !p.wreck && (p.glocT > 0 || Math.abs(p.gVision || 0) > 0.02)) {
+      const v = p.glocT > 0 ? 1 : Math.abs(p.gVision), red = (p.gVision || 0) < 0 && !(p.glocT > 0), inner = Math.max(0, 60 - v * 75), col = red ? '120,0,0' : p.glocT > 0 ? '0,0,0' : '20,20,22';
+      gx.style.opacity = 1; gx.style.background = p.glocT > 0 ? '#000' : `radial-gradient(circle at 50% 50%, rgba(${col},${v * 0.35}) ${inner}%, rgba(${col},${Math.min(1, 0.4 + v * 0.65)}) ${inner + 35}%)`;
+    } else gx.style.opacity = 0;
+    // respawn panel
     if (p && !p.alive && p.everSpawned && !m.over) {
       const can = m.canRespawn(p), wait = Math.max(0, Math.ceil(p.respawnAt - m.time));
       const lives = p.lives === Infinity ? '' : `<div class="muted">Respawns left: ${Math.max(0, p.lives)}</div>`;

@@ -112,6 +112,7 @@ const Game = (() => {
       const st = Profile.get().settings, s = 0.0022 * st.sens * (camera.fov / BASE_FOV), inv = st.invert ? -1 : 1;
       if (Input.down('freeLook')) { G.freeLook.yaw -= e.movementX * s; G.freeLook.pitch = Math.max(-1.3, Math.min(1.3, G.freeLook.pitch - e.movementY * s)); return; }
       yaw -= e.movementX * s; pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * s * inv));
+      G.mouseMoved = (G.mouseMoved || 0) + Math.abs(e.movementX) + Math.abs(e.movementY);
     });
     addEventListener('wheel', e => { if (G.running) G.camDist = Math.max(0.6, Math.min(2.5, G.camDist * (e.deltaY > 0 ? 1.1 : 0.9))); }, { passive: true });
     document.addEventListener('pointerlockchange', () => { if (!G.running || !G.match || G.match.over) return; const locked = document.pointerLockElement === view; if (!locked) for (const k in Input.keys) Input.keys[k] = false; G.paused = !locked; UI.pause(!locked); });
@@ -134,13 +135,32 @@ const Game = (() => {
     Flight.steer(p, G.aimDir, p.ctl, { allowPush: false });
     // on the wheels the aim steers the nose wheel; the wings stay level
     if (p.onGround) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); const hErr = Math.atan2(f.x * G.aimDir.z - f.z * G.aimDir.x, f.x * G.aimDir.x + f.z * G.aimDir.z); p.ctl.yaw = Math.max(-1, Math.min(1, hErr * 3)); p.ctl.roll = 0; }
-    // keyboard overrides (and keyboard-only flying)
+    // ---- keyboard: A/D roll, Q/E rudder, arrows pitch. The inputs ramp in (~0.4 s), and the pitch keys are a
+    // manual override: they bypass the autopilot's AoA / G limits (that's how you stall, spin or cobra).
     const I = Input.down;
-    if (I('rollLeft')) p.ctl.roll = -1; if (I('rollRight')) p.ctl.roll = 1;
-    if (I('yawLeft')) p.ctl.yaw = -1; if (I('yawRight')) p.ctl.yaw = 1;
-    if (I('pitchDown')) p.ctl.pitch = -1; if (I('pitchUp')) p.ctl.pitch = 1;
-    // keyboard stick moves the aim with the aircraft so mouse aim doesn't fight it
-    if (I('rollLeft') || I('rollRight') || I('pitchUp') || I('pitchDown') || I('yawLeft') || I('yawRight')) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); }
+    const kr = (I('rollRight') ? 1 : 0) - (I('rollLeft') ? 1 : 0), kp = (I('pitchUp') ? 1 : 0) - (I('pitchDown') ? 1 : 0), ky = (I('yawRight') ? 1 : 0) - (I('yawLeft') ? 1 : 0);
+    const ramp = (v, t, r) => v + Math.max(-r, Math.min(r, t - v));
+    G.kr = ramp(G.kr || 0, kr, dt * (kr ? 2.5 : 6)); G.kp = ramp(G.kp || 0, kp, dt * (kp ? 2.5 : 6)); G.ky = ramp(G.ky || 0, ky, dt * (ky ? 3 : 6));
+    const lim = Flight.limits(p), ax = Flight.axes(p), bank = Math.atan2(-ax.right.y, ax.up.y);
+    // the pull that holds the flight path level at the current bank (a coordinated level turn)
+    const levelPull = () => { const b = Math.max(-1.3, Math.min(1.3, bank)), v = Math.max(30, p.speed); return Math.max(-0.5, Math.min(1, ((9.81 / v) * Math.sin(b) * Math.tan(b) - p.vel.y * 0.004) / Math.max(lim.q, 0.05))); };
+    // the aim point glides along with the nose while flying by hand, so the view follows smoothly
+    const followNose = r => { const f = ax.fwd; const ty = Math.atan2(-f.x, -f.z), tp = Math.asin(Math.max(-1, Math.min(1, f.y))); let d = ty - yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; yaw += d * Math.min(1, r); pitch += (tp - pitch) * Math.min(1, r); };
+    if (kr || kp || ky) {
+      if (kr || Math.abs(G.kr) > 0.02) p.ctl.roll = G.kr;
+      if (kp || Math.abs(G.kp) > 0.02) { p.ctl.pitch = G.kp; p.ctl.manual = G.kp > 0.6; } else p.ctl.pitch = levelPull();
+      if (ky) p.ctl.yaw = G.ky;
+      followNose(dt * 5); G.byHand = true; G.bankHold = null;
+    } else if (G.byHand) {
+      // keys released: hold the bank you rolled to in a level turn, until the mouse moves again
+      G.byHand = false; followNose(1); G.mouseMoved = 0;
+      G.bankHold = Math.abs(bank) > 0.09 && Math.abs(bank) < 2.0 ? bank : null;
+    }
+    if (G.bankHold != null && !kr && !kp && !ky) {
+      if (G.mouseMoved > 12) G.bankHold = null;
+      else { let d = G.bankHold - bank; p.ctl.roll = Math.max(-1, Math.min(1, d * 2.6 / Math.max(lim.p, 0.3))); p.ctl.pitch = levelPull(); p.ctl.yaw = 0; followNose(dt * 5); }
+    }
+    if (p.glocT > 0) { p.ctl.pitch = p.ctl.roll = p.ctl.yaw = 0; p.ctl.manual = false; }
     // throttle: hold past 100% for WEP / afterburner
     if (I('throttleUp')) { if (p.ctl.throttle < 1) p.ctl.throttle = Math.min(1, p.ctl.throttle + dt * 0.6); else { G.wepT = (G.wepT || 0) + dt; if (G.wepT > 0.25) p.ctl.throttle = 1.1; } }
     else { G.wepT = 0; if (p.ctl.throttle > 1) p.ctl.throttle = 1; }

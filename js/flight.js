@@ -13,6 +13,7 @@ const Flight = (() => {
   //  - drag is set so the listed top speed is reached at the altitude the type was fastest at:
   //    low for WW1 / interwar types and subsonic jets, ~5 km for WW2 fighters, ~10 km with afterburner
   const SONIC = 330;
+  const TVC = ['f22a', 'su35s', 'su57']; // thrust-vectoring nozzles
   const PROP_FV = r => 0.65 + 1.6 * Math.pow(Math.max(0, 1 - r), 2); // propeller thrust vs speed (fraction of vmax): ~2.3x cruise thrust when static
   const wave = M => 1 + 4.5 * Math.min(0.32, Math.max(0, M - 0.9)); // transonic drag rise
   function engine(P, v, rho, throttle) {
@@ -53,11 +54,22 @@ const Flight = (() => {
     P.vc = Math.max(vs * Math.sqrt(P.gMax), 1);
     P.cI = 1.5 * (jet ? P.a0dry * 1.2 : P.a0) / (P.gMax * G * P.gMax * G);
     P.roll = def.roll * Math.PI / 180; P.aoa = def.aoa * Math.PI / 180;
+    P.tvc = TVC.includes(def.id); P.superman = P.tvc || def.aoa >= 40;
+    P.wPost = P.tvc ? 1.7 : 1.1; // pitch rate the nose can be hauled through post-stall (manual override only)
+    // G tolerance of the pilot: no G-suit before the jet age, G-suits and straining technique after
+    P.gTol = [0, 4.5, 4.8, 5.0, 5.5, 6.0, 7.0, 7.5][def.era];
     return P;
   }
   const _q = new Q(), _v = new V3(), _w = new V3(), up = new V3(), fwd = new V3(), right = new V3(), vhat = new V3(), acc = new V3(), tmp = new V3();
   function axes(c) { fwd.set(0, 0, -1).applyQuaternion(c.quat); up.set(0, 1, 0).applyQuaternion(c.quat); right.set(1, 0, 0).applyQuaternion(c.quat); }
 
+  // rates (rad/s) that a full stick deflection gives right now: pitch (pull), roll, yaw
+  function limits(c) {
+    const P = c.perf, v = Math.max(c.speed || 0, 1), rho = Math.exp(-Math.max(0, c.pos.y) / 9000), qn = (v / P.vs) * (v / P.vs) * rho;
+    const lowSpeed = Math.min(1, Math.max(0.25, (v / P.vs - 0.5)));
+    const compress = P.jet ? 1 : Math.max(0.55, 1 - Math.max(0, v / P.vmax - 1.0) * 2);
+    return { q: Math.min(P.wInst, G * P.gMax / Math.max(v, 20), G * Math.max(qn, 0.3) / Math.max(v, 20) * 1.15) * compress, p: P.roll * lowSpeed * compress, r: P.wInst * 0.22 * lowSpeed, qn };
+  }
   // one integration step. c: { pos, vel, quat, rates(V3 local p/q/r smoothed), ctl{pitch,roll,yaw,throttle}, perf, fx, gearDown }
   function step(c, dt) {
     const P = c.perf, fx = c.fx, ctl = c.ctl;
@@ -81,7 +93,8 @@ const Flight = (() => {
     const compress = P.jet ? 1 : Math.max(0.55, 1 - Math.max(0, v / P.vmax - 1.0) * 2); // control forces stiffen in very fast dives
     let pc = ctl.pitch * auth * fx.elev, rc = ctl.roll * auth * fx.ail, yc = ctl.yaw * auth * fx.rud;
     if (!ctrlOk) { pc = fx.drift[0]; rc = fx.drift[1]; yc = 0; }
-    const tp = pc * (pc > 0 ? lim : lim * 0.5) * compress;
+    let tp = pc * (pc > 0 ? lim : lim * 0.5) * compress;
+    if (ctl.manual && P.superman && pc > 0.6) tp = Math.max(tp, pc * P.wPost * (P.tvc ? Math.max(0.4, Math.min(1, ctl.throttle)) : Math.min(1, v / (P.vs * 2.2))));
     const tr = rc * P.roll * lowSpeed * compress * Math.min(fx.ailL, fx.ailR) / Math.max(0.35, (fx.ailL + fx.ailR) / 2);
     const ty = yc * P.wInst * 0.22 * lowSpeed;
     const k = 1 - Math.exp(-dt * 6);
@@ -90,8 +103,8 @@ const Flight = (() => {
     let pr = c.rates.x, rr = c.rates.z, yr = c.rates.y;
     const stalled = Math.abs(alpha) > P.aoa;
     c.stalled = stalled && v > 5;
-    if (stalled) pr -= Math.sign(alpha) * (Math.abs(alpha) - P.aoa) * 2.2;
-    pr -= Math.sin(alpha) * 0.4 * Math.min(1.5, v / P.vs) * (ctl.pitch === 0 ? 1 : 0.3) * fx.stab;
+    if (stalled) pr -= Math.sign(alpha) * (Math.abs(alpha) - P.aoa) * (P.tvc ? (ctl.manual ? 0.15 : 1.2) : P.superman ? (ctl.manual ? 0.4 : 1.6) : 2.2);
+    pr -= Math.sin(alpha) * 0.3 * Math.min(1.5, v / P.vs) * fx.stab * (ctl.manual && P.superman ? 0.3 : 1);
     yr += Math.sin(beta) * 1.6 * Math.min(1.5, v / P.vs) * fx.finStab;
     const liftAsym = (fx.liftL - fx.liftR) * Math.min(2.5, qn * 0.6);
     rr -= liftAsym * 1.6; // weaker left wing -> rolls left
@@ -112,7 +125,7 @@ const Flight = (() => {
     acc.addScaledVector(fwd, thrust);
     // lift: grows linearly with AoA up to the critical angle, drops sharply past it
     const aAbs = Math.abs(alpha);
-    const cl = aAbs < P.aoa ? alpha / P.aoa : Math.sign(alpha) * Math.max(0.35, 1 - (aAbs - P.aoa) * 2.5);
+    const cl = aAbs < P.aoa ? alpha / P.aoa : Math.sign(alpha) * Math.max(Math.abs(Math.sin(2 * alpha)) * 0.65, 1 - (aAbs - P.aoa) * 2.5);
     const wingLift = (fx.liftL + fx.liftR) / 2;
     let L = cl * qn * G * wingLift;
     const Lmax = P.gMax * G * 1.5; if (Math.abs(L) > Lmax) L = Math.sign(L) * Lmax;
@@ -123,55 +136,59 @@ const Flight = (() => {
     acc.addScaledVector(tmp, -Math.sin(beta) * qn * G * 0.4);
     // drag: parasitic + induced (lift-dependent) + airbrake from damage / gear
     const ind = P.cI * L * L * Math.min(3, (P.vc * P.vc) / Math.max(v * v, 1)) / Math.max(rho, 0.2);
-    const drag = P.kd * v * v * rho * fx.dragMul * (P.jet ? wave(v / SONIC) : 1) * (c.gearDown ? 1.35 : 1) + ind + (stalled ? 0.15 * v * v / (P.vmax * P.vmax) * P.a0 * 3 : 0);
+    const drag = P.kd * v * v * rho * fx.dragMul * (P.jet ? wave(v / SONIC) : 1) * (c.gearDown ? 1.35 : 1) + ind + G * qn * 0.85 * Math.max(0, Math.sin(aAbs) ** 2 - Math.sin(Math.min(P.aoa * 0.8, 0.35)) ** 2);
     acc.addScaledVector(vhat, -Math.min(drag, v / dt * 0.5 + 50));
     c.vel.addScaledVector(acc, dt);
     c.pos.addScaledVector(c.vel, dt);
-    c.gLoad = L / G + up.y;
+    c.gLoad = L / G + thrust / G * Math.sin(alpha);
     // fuel burn
     if (c.fuel > 0) c.fuel = Math.max(0, c.fuel - dt * throttle * (c.afterburner ? 3 : 1) / c.endurance - (fx.leak || 0) * dt);
   }
 
-  // ---- autopilot: point the nose along a world direction. Returns {pitch, roll, yaw}.
-  const loc = new V3();
-  // Two regimes, blended by how far off the nose the aim is:
-  //  - gentle (aim within ~50 deg): bank in proportion to the heading error, push/pull the nose with the elevator,
-  //    fine-tune with rudder. Small mouse moves give small, smooth corrections - never a roll.
-  //  - aggressive (aim far off / behind): roll the aim over the canopy and pull hard.
-  const wdir = new V3(), hf = new V3(), ht = new V3();
+  // ---- autopilot ("instructor"): point the nose along a world direction. Returns {pitch, roll, yaw}.
+  // Works in turn rates with damped gains (time constant ~0.35 s), so it settles without wobbling:
+  //  - gentle (aim within ~50 deg): bank towards the heading error, pull / push the nose onto the aim, rudder for the last degrees
+  //  - aggressive (aim far off or behind): roll the aim over the canopy and pull
+  // It holds the angle of attack below the stall and backs off the pull when the pilot is greying out.
+  const loc = new V3(), wdir = new V3(), hf = new V3(), ht = new V3();
   function steer(c, dir, out, opt) {
     out = out || {}; opt = opt || {};
+    const P = c.perf, lim = limits(c);
     wdir.copy(dir).normalize();
     loc.copy(wdir).applyQuaternion(_q.copy(c.quat).invert());
     const off = Math.acos(Math.max(-1, Math.min(1, -loc.z)));
     axes(c);
     const phi = Math.atan2(-right.y, up.y); // current bank, >0 = right wing down
     const pv = Math.atan2(loc.y, -loc.z), hv = Math.atan2(loc.x, -loc.z);
-    const near = Math.max(0, Math.min(1, 1 - (off - 0.015) / 0.07));
-    // gentle regime, in world terms
-    hf.set(fwd.x, 0, fwd.z); ht.set(wdir.x, 0, wdir.z);
-    let gentleOk = hf.lengthSq() > 0.02 && ht.lengthSq() > 0.02 && loc.z < 0;
+    const near = Math.max(0, Math.min(1, 1 - (off - 0.02) / 0.08));
     let gRoll = 0, gPitch = 0;
+    hf.set(fwd.x, 0, fwd.z); ht.set(wdir.x, 0, wdir.z);
+    const gentleOk = hf.lengthSq() > 0.02 && ht.lengthSq() > 0.02 && loc.z < 0;
     if (gentleOk) {
       hf.normalize(); ht.normalize();
       const psi = Math.atan2(hf.x * ht.z - hf.z * ht.x, hf.dot(ht)); // heading error, >0 = aim to the right
-      const maxBank = 1.4; // ~80 deg
-      const want = Math.max(-maxBank, Math.min(maxBank, psi * 8));
+      // faster aircraft need more bank for the same correction
+      const want = Math.max(-1.35, Math.min(1.35, psi * 4 * Math.max(1, Math.min(3, (c.speed || 0) / 150))));
       let dphi = want - phi; if (dphi > Math.PI) dphi -= 2 * Math.PI; if (dphi < -Math.PI) dphi += 2 * Math.PI;
-      gRoll = Math.max(-1, Math.min(1, dphi * 2.2));
-      gPitch = Math.max(-0.6, Math.min(1, pv * (6 + 8 * near)));
+      gRoll = Math.max(-1, Math.min(1, dphi * 2.6 / Math.max(lim.p, 0.3)));
+      gPitch = Math.max(-0.5, Math.min(1, pv * 2.8 / Math.max(lim.q, 0.05)));
     }
-    // aggressive regime
     const rollErr = Math.atan2(loc.x, loc.y);
-    const aRoll = Math.max(-1, Math.min(1, rollErr * 2.2));
-    let aPitch = Math.min(1, off * 3.5 * Math.max(0.12, Math.cos(rollErr)));
+    const aRoll = Math.max(-1, Math.min(1, rollErr * 2.6 / Math.max(lim.p, 0.3)));
+    let aPitch = Math.min(1, off * 2.8 / Math.max(lim.q, 0.05) * Math.max(0.1, Math.cos(rollErr)));
     if (Math.abs(rollErr) > 2.4 && off > 1.0 && opt.allowPush) aPitch = -0.4;
     const w = gentleOk ? Math.max(0, Math.min(1, (off - 0.85) / 0.4)) : 1;
     let roll = gRoll * (1 - w) + aRoll * w, pitch = gPitch * (1 - w) + aPitch * w;
     if (opt.keepBank && w < 1) roll = roll * 0.5 + aRoll * 0.5;
-    const yaw = hv * 20 * near;
-    out.pitch = Math.max(-1, Math.min(1, pitch)); out.roll = Math.max(-1, Math.min(1, roll)); out.yaw = Math.max(-1, Math.min(1, yaw));
-    out.off = off; return out;
+    let yaw = Math.max(-1, Math.min(1, hv * 2.5 / Math.max(lim.r, 0.05))) * near;
+    // stall protection: keep the angle of attack below ~90% of critical (and below 26 deg on high-AoA jets)
+    const aMax = Math.min(P.aoa * 0.9, 0.45);
+    if (pitch > 0 && c.alpha > aMax * 0.7) pitch *= Math.max(0, Math.min(1, (aMax - c.alpha) / (aMax * 0.3)));
+    // a pilot greying out eases off the stick
+    if (pitch > 0 && c.gStress > 0.35) pitch *= Math.max(0.35, 1 - (c.gStress - 0.35) * 1.5);
+    if (pitch > 0 && c.gVision > 0.6) pitch *= 0.75;
+    out.pitch = Math.max(-1, Math.min(1, pitch)); out.roll = Math.max(-1, Math.min(1, roll)); out.yaw = yaw;
+    out.off = off; out.manual = false; return out;
   }
-  return { perf, step, steer, axes: c => { axes(c); return { fwd: fwd.clone(), up: up.clone(), right: right.clone() }; }, STALL_FRAC };
+  return { perf, step, steer, limits, axes: c => { axes(c); return { fwd: fwd.clone(), up: up.clone(), right: right.clone() }; }, STALL_FRAC };
 })();

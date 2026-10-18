@@ -153,6 +153,7 @@ const HUD = (() => {
     const ahead = p.pos.clone().addScaledVector(p.vel, 4);
     if (ahead.y < m.world.groundAt(ahead.x, ahead.z) + 20 && p.vel.y < -5) w.push(['PULL UP', '#ff3b30', true]);
     if (p.stalled) w.push(['STALL', '#ffc04d']);
+    if (p.glocT > 0) w.push(['G-LOC — UNCONSCIOUS', '#ff3b30', true]); else if ((p.gVision || 0) > 0.45) w.push(['HIGH G — EASE OFF', '#ffc04d']); else if ((p.gVision || 0) < -0.4) w.push(['NEGATIVE G', '#ff3b30']);
     if (Math.abs(p.pos.x) > m.half || Math.abs(p.pos.z) > m.half) w.push([`OUT OF BOUNDS ${Math.max(0, Math.ceil(20 - game.oobT))}`, '#ffc04d', true]);
     if (p.dm.fx.ctrl === 0) w.push(['PILOT KNOCKED OUT', '#ff3b30']);
     // Realistic mode: take-off, landing and servicing prompts

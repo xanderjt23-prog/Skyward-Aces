@@ -153,6 +153,8 @@ class Match {
     const sites = cfg.bases.map(b => { const bm = Models.base(b.kind, b.size, b.team, this.era); return { b, bm, x: b.x, z: b.z, radius: bm.flat, water: bm.water }; });
     this.world = World.create(this.scene, { map: cfg.map, half: cfg.half, seed: cfg.seed, sites, weather: cfg.weather, night: cfg.night, lights: this.scene.userData.lights });
     this.bases = sites.map((s, i) => this.makeBase(s, i));
+    { let hi = 0; for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) hi = Math.max(hi, this.world.groundAt((i / 16 - 0.5) * this.half * 1.6, (j / 16 - 0.5) * this.half * 1.6));
+      this.terrainTop = hi; this.patrolAlt = Math.max(this.spawnAlt, hi * 0.7 + 450); this.ceiling = Math.max(this.ceiling, hi + 2500); }
     this.combat = new Combat(this);
     this.vehicles = new Vehicles(this, cfg.vehicles);
     this.crafts = []; this.byId = {};
@@ -213,7 +215,11 @@ class Match {
   // ---- spawning
   spawnPoint(team, i) {
     const s = team === 0 ? 1 : -1, row = Math.floor(i / 8), col = i % 8;
-    return { pos: new V3((col - 3.5) * 140 + (Math.random() - 0.5) * 40, this.spawnAlt + (col % 3) * 60 + row * 30, s * this.half * 0.7 + s * row * 160), heading: team === 0 ? 0 : Math.PI };
+    const pos = new V3((col - 3.5) * 140 + (Math.random() - 0.5) * 40, this.spawnAlt + (col % 3) * 60 + row * 30, s * this.half * 0.7 + s * row * 160);
+    // never inside a mountain: clear the terrain here and for the first ~2 km ahead
+    let top = 0; for (let d = 0; d <= 2000; d += 250) top = Math.max(top, this.world.groundAt(pos.x, pos.z - s * d));
+    pos.y = Math.max(pos.y, top + 450 + (col % 3) * 60);
+    return { pos, heading: team === 0 ? 0 : Math.PI };
   }
   // Realistic mode: airfields this team can still take off from
   homes(team) { return this.cfg.realistic && this.cfg.homeTeams.includes(team) ? this.bases.filter(b => b.home && b.team === team && !b.dead && b.runway) : null; }
@@ -235,7 +241,7 @@ class Match {
     const sp = this.spawnPoint(c.team, i);
     if (this.mission && this.mission.type === 'intercept' && c.team === 0) { sp.pos.z = this.half * 0.25 + Math.floor(i / 8) * 160; sp.pos.y = this.spawnAlt * 1.2 + (i % 3) * 60; }
     if (c.def.role === 'bomber' || c.spec.task === 'bomb') {
-      sp.pos.y = this.spawnAlt * 1.3 + (i % 4) * 40;
+      sp.pos.y = Math.max(sp.pos.y, this.spawnAlt * 1.3 + (i % 4) * 40);
       // raids start far out, giving the defenders time to climb and intercept
       if (first) sp.pos.z = (c.team === 0 ? 1 : -1) * this.half * (this.mode === 'missions' ? 1.6 : 1.0) + (c.team === 0 ? 1 : -1) * Math.floor(i / 8) * 160;
     }
