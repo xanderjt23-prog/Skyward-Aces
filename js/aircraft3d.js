@@ -8,6 +8,13 @@
 //                  shock cones)
 //   loftSurface  - NACA-section stations lofted along the span (wings, tailplanes,
 //                  fins, canards), with root and tip caps
+//   loftPrism    - polygon sections lofted along Z with every face kept flat and every
+//                  edge creased (chined stealth fuselages, caret intakes)
+// The fuselage itself is built by one of three architectures (registry: fuselageArchitecture):
+//   SINGLE_TUBE        one central lofted fuselage
+//   TWIN_NACELLE_DECK  narrow cockpit pod + two distinct engine tunnels from the intake mouths
+//                      to the nozzles, joined by a flat deck; fins on the tunnel tops; LEX shelves
+//   CHINED_STEALTH     hexagonal prism section with a continuous chine into the wing roots
 // orient() then checks each part's signed volume and makes every triangle face
 // outwards, so no face is inside-out from any angle; Airframe.check collects the
 // parts for the mesh test (tools/tests/meshcheck.mjs). Nothing is placed by eye:
@@ -79,6 +86,23 @@
     }
     return orient(indexed(pos, idx), name);
   }
+  // polygon sections ([[x, y], ...] corners in the same rotational order at every station) lofted along Z; each face strip
+  // has its own vertices so the edges stay sharp, and the ends are closed with flat caps
+  function loftPrism(secs, name) {
+    const pos = [], idx = [], K = secs[0].c.length;
+    for (let k = 0; k < K; k++) {
+      const base = pos.length / 3;
+      for (const sc of secs) { const a = sc.c[k], b = sc.c[(k + 1) % K]; pos.push(a[0], a[1], sc.z, b[0], b[1], sc.z); }
+      for (let i = 0; i < secs.length - 1; i++) { const a = base + i * 2, b = a + 1, c = a + 3, d = a + 2; idx.push(a, b, c, a, c, d); }
+    }
+    for (const [k, back] of [[0, false], [secs.length - 1, true]]) {
+      const sc = secs[k], base = pos.length / 3; let cx = 0, cy = 0; for (const [x, y] of sc.c) { cx += x / K; cy += y / K; }
+      pos.push(cx, cy, sc.z); for (const [x, y] of sc.c) pos.push(x, y, sc.z);
+      for (let j = 0; j < K; j++) { const p0 = base + 1 + j, q = base + 1 + (j + 1) % K; if (back) idx.push(base, p0, q); else idx.push(base, q, p0); }
+    }
+    const g = indexed(pos, idx); orient(g, name); g.deleteAttribute('normal'); const ng = g.toNonIndexed(); ng.computeVertexNormals(); // flat facets
+    if (Airframe.check) Airframe.check[Airframe.check.length - 1].g = g; return ng;
+  }
   // mirror across the centre plane: negate X and reverse every triangle so the copy still faces outwards
   function mirrorX(g) {
     const h = g.clone(), p = h.attributes.position;
@@ -136,7 +160,7 @@
 
     // ---------------- fuselage
     const tEnd = sp.rows[sp.rows.length - 1][0], NS = 40, secs = [];
-    const boxSides = rule(e0.intakeProfile === 'side_box', 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
+    const boxSides = rule(e0.intakeProfile === 'side_box' && sp.arch !== 'TWIN_NACELLE_DECK', 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
     const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
     for (let i = 0; i <= NS; i++) { const u = (1 - Math.cos(Math.PI * i / NS)) / 2, z = z0 + u * tEnd * L, s = sp.at(z);
       const k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // ramps over 0.6 m at each end
@@ -152,7 +176,24 @@
       if (glare && ny > 0.55 && z > z0 + L * (sp.jet ? 0.1 : 0.05) && z < sp.canopy.z - sp.canopy.len * 0.5) return 0x2f3229;
       return ny < -0.25 ? pt.bot : pt.top;
     };
-    body.add(loftBody(secs, 28, sp.n, 'fuselage'), fusPaint);
+    if (rule(sp.arch === 'CHINED_STEALTH', 'CHINED_STEALTH: hexagonal hard-edged fuselage with a continuous chine')) {
+      // the same stations as a hexagon: flat top and bottom faces, side walls angled out to the chine
+      body.add(loftPrism(secs.map(q => { const k = sp.chine.hex(q); return { z: q.z, c: [[q.w, k.cy], [k.wt, k.top], [-k.wt, k.top], [-q.w, k.cy], [-k.wb, k.bot], [k.wb, k.bot]] }; }), 'fuselage'), fusPaint);
+    } else body.add(loftBody(secs, 28, sp.n, sp.arch === 'TWIN_NACELLE_DECK' ? 'cockpit pod' : 'fuselage'), fusPaint);
+    if (rule(sp.arch === 'TWIN_NACELLE_DECK', 'TWIN_NACELLE_DECK: cockpit pod + two engine tunnels joined by a flat deck')) {
+      const tun = sp.tunnel, NT = 18, rake = Math.tan(e0.intake.rake * Math.PI / 180), dz = (tun.zB - tun.zA) / NT;
+      for (const sd of [-1, 1]) { // each tunnel runs from its intake mouth to its nozzle
+        const ts = []; for (let i = 0; i <= NT; i++) { const z = tun.zA + i * dz, q = tun.at(z); ts.push({ z, w: q.w, h: q.h, y: q.y, x: sd * q.x }); }
+        const g = loftBody(ts, 24, 4, 'engine tunnel'), pa = g.attributes.position, q0 = tun.at(tun.zA);
+        for (let i = 0; i < pa.count; i++) { const f = Math.max(0, 1 - (pa.getZ(i) - tun.zA) / (L * 0.12)); pa.setZ(i, pa.getZ(i) - rake * (pa.getY(i) - q0.y) * f); } // raked intake lip
+        g.computeVertexNormals();
+        body.add(g, (px, py, pz, ny, nz) => nz < -0.6 && pz < tun.zA + 0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
+      }
+      // the flat deck between the tunnels, its top flush with the tunnel tops, from just behind the intakes to the tail
+      const zD0 = tun.zA + L * 0.08, zD1 = tun.zB - 0.4, ds = [];
+      for (let i = 0; i <= 10; i++) { const z = zD0 + (zD1 - zD0) * i / 10, q = tun.at(z), th = q.h * 0.5; ds.push({ z, w: q.x, h: th, y: q.y + q.h - th - 0.04 }); }
+      body.add(loftBody(ds, 20, 5, 'deck'), camo);
+    }
 
     // ---------------- nose: intake lip and shock cone / radar pitot / propeller hub
     if (noseDark) {
@@ -177,7 +218,7 @@
     };
     const nacelle = (e, prof, name) => body.add(loftBody(prof.map(([t, k, ky]) => ({ z: e.z - e.len / 2 + t * e.len, w: e.r * k, h: e.r * (ky || k), y: e.y, x: e.x })), 20, 2, name), (x, y, z, ny, nz) => nz < -0.98 ? 0x101010 : ny < -0.25 ? pt.bot : pt.top);
     for (const e of sp.engines) {
-      if (e.kind === 'fus') nozzle(e, e.x, e.y, e.nozzle);
+      if (e.kind === 'fus' || e.kind === 'tunnel') nozzle(e, e.x, e.y, e.nozzle);
       else if (e.kind === 'underwing' || e.kind === 'wingnac' || e.kind === 'pod') {
         nacelle(e, [[0, 0.86], [0.05, 0.97], [0.25, 1], [0.7, 0.94], [1, 0.72]], e.kind);
         const zf = e.z - e.len / 2;
@@ -234,7 +275,19 @@
       if (rake) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const f = Math.max(0, 1 - (p.getZ(i) - zi) / len); p.setZ(i, p.getZ(i) - rake * (p.getY(i) - y) * f); } g.computeVertexNormals(); }
       body.add(g, (px, py, pz, ny, nz) => nz < -0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
     };
-    if (it && it.type !== 'nose_cone') {
+    rule(sp.arch === 'TWIN_NACELLE_DECK' && it, 'intakes lead straight into the two engine tunnels');
+    if (it && it.type === 'side_box' && sp.arch === 'CHINED_STEALTH') {
+      rule(true, 'caret intakes: walls angled to continue the chine line into the wing roots');
+      const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180);
+      for (const sd of [-1, 1]) {
+        const cs = []; for (let i = 0; i <= 6; i++) { const u = i / 6, z = zi + u * len, q = sp.at(z), k = sp.chine.hex(q), xi = q.w * 0.6 + w * 0.2 * (1 - u), xo = xi + 2 * w * (1 - 0.5 * u * u), hh = h * (1 - 0.25 * u * u), cy = k.cy;
+          const c4 = [[sd * xo, cy + hh * 0.18], [sd * xi, cy + hh], [sd * xi, cy - hh], [sd * xo, cy - hh * 0.18]]; cs.push({ z, c: sd > 0 ? c4 : c4.reverse() }); } // mirrored side: same rotational order
+        const g = loftPrism(cs, 'caret intake'), pa = g.attributes.position;
+        for (let i = 0; i < pa.count; i++) { const f = Math.max(0, 1 - (pa.getZ(i) - zi) / len); pa.setZ(i, pa.getZ(i) - rake * Math.abs(pa.getX(i)) * 0.5 * f); } // swept caret lips
+        g.computeVertexNormals(); body.add(g, (px, py, pz, ny, nz) => nz < -0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
+      }
+    }
+    else if (it && it.type !== 'nose_cone' && sp.arch !== 'TWIN_NACELLE_DECK') {
       const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180); // mouth half-sizes (m)
       if (rule(it.type === 'side_box' || it.type === 'cheek_crescent', it.type === 'side_box' ? 'side_box: raked rectangular intake trunks on the fuselage sides' : 'cheek_crescent: half-round cheek intakes')) for (const s of [-1, 1]) {
         const y = sp.at(zi).y, x = s * (sp.sideAt(zi, y) + w * (it.type === 'cheek_crescent' ? 0.25 : 1)); // box trunks: inner face on the core, outer face = body side
@@ -318,7 +371,11 @@
       if (rule(g.fences && i === 0, 'wing fences')) for (let k = 0; k < g.fences; k++) { const w = sp.wingAt(0.3 + k * 0.22, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(box(0.03, g.t * w.c + 0.12, w.c * 0.9), shade(pt.top, 0.92), [s * w.x, w.y + 0.05, w.le + w.c * 0.47]); }
       if (rule(g.tiprail && i === 0, 'wing-tip missile rails')) { const tip = sp.wingAt(1, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(cyl(0.08, 0.08, tip.c * 1.6, 8), metal, [s * (tip.x + 0.05), tip.y, tip.le + tip.c * 0.4], [Math.PI / 2, 0, 0]); }
     });
-    if (rule(sp.extra.lerx, 'leading-edge root extensions')) { const w0 = sp.wingAt(0), zA = w0.le - L * 0.24, s = sp.at(zA + L * 0.1);
+    if (sp.arch === 'TWIN_NACELLE_DECK' && rule(sp.extra.lerx, 'lexPresence: flat, sharp LEX shelf from the wing root forward along the cockpit')) {
+      const w0 = sp.wingAt(0), zA = Math.max(sp.tunnel.zA - 0.3, cp.z + cp.len * 0.2), q = sp.tunnel.at(w0.le), y = q.y + q.h + 0.03;
+      const lx = loftSurface([{ x: sp.at(zA).w * 0.85, le: zA, c: w0.le - zA + w0.c * 0.25, y, t: 0.012 }, { x: q.x + q.w, le: w0.le - 0.1, c: w0.c * 0.3, y, t: 0.012 }], 8, 'lex');
+      body.add(lx, camo); body.add(mirrorX(lx), camo); }
+    else if (rule(sp.extra.lerx, 'leading-edge root extensions')) { const w0 = sp.wingAt(0), zA = w0.le - L * 0.24, s = sp.at(zA + L * 0.1);
       const lx = loftSurface([{ x: s.w * 0.6, le: zA, c: w0.le - zA + w0.c * 0.3, y: w0.y, t: 0.025 }, { x: sp.wing.x0 + R * 0.75, le: w0.le - 0.15, c: w0.c * 0.35, y: w0.y, t: 0.025 }], 8, 'lerx');
       body.add(lx, camo); body.add(mirrorX(lx), camo); }
     if (rule(sp.extra.canards, 'canards: forward lifting surfaces ' + (sp.extra.canards ? sp.extra.canards.offset : 0) + ' m behind the cockpit centre')) {
@@ -404,7 +461,9 @@
       const slope = top.kink ? (f < top.kink[0] ? top.kink[1] : top.kink[2]) : top.dih;
       for (const s of [-1, 1]) { const b = new Builder(); insignia(b, pl.nation, size, [0, 0.012, 0], 'y', pl.era); const g = b.build(); g.rotateZ(s * slope);
         g.translate(s * w.x, w.y + naca(0.42, top.t) * w.c, w.le + w.c * 0.42); (s < 0 ? mkL : mkR).parts.push({ g, color: 0xffffff, preColored: true }); } }
-    { const z = z0 + L * (sp.jet ? 0.66 : 0.68), s = sp.at(z), y = s.y;
+    if (sp.arch === 'TWIN_NACELLE_DECK') { const z = z0 + L * 0.66, q = sp.tunnel.at(z), size = Math.min(q.h * 1.4, 1.4);
+      for (const sd of [-1, 1]) insignia(mkB, pl.nation, size, [sd * (q.x + q.w + 0.03), q.y, z], 'x', pl.era); }
+    else { const z = z0 + L * (sp.jet ? 0.66 : 0.68), s = sp.at(z), y = s.y;
       for (const sd of [-1, 1]) { const x = sp.sideAt(z, y), size = Math.min(s.h * 1.25, R * 1.3, 1.5); if (size > 0.2) insignia(mkB, pl.nation, size, [sd * (x + 0.02), y, z], 'x', pl.era); } }
 
     // ---------------- assemble

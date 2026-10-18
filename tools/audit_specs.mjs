@@ -1,4 +1,5 @@
-// node tools/audit_specs.mjs  -  configuration audit of the airframe registry (js/airframe.js)
+// node tools/audit_specs.mjs [--write]  -  configuration audit of the airframe registry (js/airframe.js)
+//   --write: (re)assigns every aircraft's fuselageArchitecture from its real engine / tail layout, then audits
 //
 // Cross-checks every aircraft against an INDEPENDENT reference table of its defining layout
 // (from the types' published descriptions / three-views), then applies geometric rules to the
@@ -8,11 +9,10 @@ import vm from 'vm';
 import path from 'path';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '..');
-const src = ['js/data.js', 'js/planes.js', 'js/bombers.js', 'js/airframe.js'].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
-const ctx = { console, Math, JSON, Object, Array, Set, Map, Number, String, Error };
-vm.createContext(ctx);
-vm.runInContext(src + '\n;globalThis.__out = { PLANE_LIST, PLANES, Airframe };', ctx);
-const { PLANE_LIST, Airframe } = ctx.__out;
+const load = () => { const src = ['js/data.js', 'js/planes.js', 'js/bombers.js', 'js/airframe.js'].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
+  const c = { console, Math, JSON, Object, Array, Set, Map, Number, String, Error }; vm.createContext(c);
+  vm.runInContext(src + '\n;globalThis.__out = { PLANE_LIST, PLANES, Airframe };', c); return c.__out; };
+let ctxOut = load();
 
 // ---------------------------------------------------------------- reference: defining layout of each type
 // wing: B biplane | L low | LM low-to-mid | M mid | S shoulder | H high
@@ -60,6 +60,28 @@ const HT = { F: 'fuselage', C: 'fin_mid', T: 'fin_top', N: 'none', B: 'boom' };
 const INTAKE = { none: 'none', nose: 'nose_cone', box: 'side_box', chin: 'chin_scoop', cheek: 'cheek_crescent', vent: 'ventral_box', root: 'wing_root', nacelle: 'nacelle' };
 const PLAN = { S: ['trapezoid'], MS: ['trapezoid'], V: ['trapezoid'], E: ['elliptical', 'trapezoid'], W: ['trapezoid', 'cranked', 'diamond'], D: ['delta'], X: ['diamond'], G: ['gull'], IG: ['inverted_gull'], K: ['cranked'] };
 
+// ---------------------------------------------------------------- fuselage architecture from the real engine / tail layout
+//   CHINED_STEALTH     5th-generation stealth designs (diamond planform with a chined, faceted body: F-22, Su-57)
+//   TWIN_NACELLE_DECK  two engines carried in separate, wide-spaced tunnels with a twin vertical tail on them
+//                      (F-15, F/A-18E, MiG-29, Su-27 family) - i.e. two engines AND twin vertical tails
+//   SINGLE_TUBE        everything else: one central fuselage (single engines, twin engines side by side under a
+//                      single fin like the F-4 / Tornado / Typhoon, nacelle and propeller aircraft)
+function architectureOf(pl) {
+  const [, tail, , , , plan] = REF[pl.id].split(' ');
+  if (plan === 'X' && pl.era >= 7) return 'CHINED_STEALTH';
+  if (pl.kind === 'jet' && pl.eng === 2 && (tail === '2s' || tail === '2c')) return 'TWIN_NACELLE_DECK';
+  return 'SINGLE_TUBE';
+}
+if (process.argv.includes('--write')) {
+  const file = path.join(root, 'js/airframe.js'); let txt = fs.readFileSync(file, 'utf8'), n = 0;
+  for (const pl of ctxOut.PLANE_LIST) {
+    const re = new RegExp('(\\n    ' + pl.id + ': \\{ dims: \\{[^}]*\\}, )(fuselageArchitecture: \'\\w+\', )?');
+    if (!re.test(txt)) { console.log('cannot find the entry for ' + pl.id); continue; }
+    txt = txt.replace(re, (m0, head) => head + "fuselageArchitecture: '" + architectureOf(pl) + "', "); n++;
+  }
+  fs.writeFileSync(file, txt); console.log('fuselageArchitecture written for ' + n + ' aircraft'); ctxOut = load();
+}
+const { PLANE_LIST, Airframe } = ctxOut;
 const flags = {};
 const flag = (id, msg) => (flags[id] = flags[id] || []).push(msg);
 for (const pl of PLANE_LIST) {
@@ -68,6 +90,7 @@ for (const pl of PLANE_LIST) {
   if (!e) { flag(id, 'no registry entry'); continue; }
   let sp; try { sp = Airframe.spec(pl); } catch (err) { flag(id, 'spec() throws: ' + err.message); continue; }
   const [wing, tail, ht, intake, canard, plan] = ref.split(' ');
+  if (e.fuselageArchitecture !== architectureOf(pl)) flag(id, `fuselageArchitecture "${e.fuselageArchitecture}" should be "${architectureOf(pl)}" (run with --write)`);
   // ---- 1. layout facts
   if (wing === 'B') { if (!e.biplane) flag(id, 'is a biplane but has no biplane block'); }
   else { const [lo, hi] = WING[wing]; if (e.wing.wingMountHeight < lo || e.wing.wingMountHeight > hi) flag(id, `wingMountHeight ${e.wing.wingMountHeight} does not match a ${({ L: 'low', LM: 'low/mid', M: 'mid', S: 'shoulder', H: 'high' })[wing]} wing (${lo}..${hi})`); }
@@ -83,7 +106,16 @@ for (const pl of PLANE_LIST) {
   if (plan === 'D' && e.wing.sweepLE < 30) flag(id, `delta with only ${e.wing.sweepLE} deg of sweep`);
   // ---- 2. geometry of the resolved airframe
   const R = sp.R, W = sp.W;
-  if (sp.fins.length === 2 && /^twin_vertical/.test(e.tailConfiguration)) {
+  if (e.fuselageArchitecture === 'TWIN_NACELLE_DECK') {
+    const zf = sp.fins[0].zLE + sp.fins[0].rc * 0.4, tu = sp.tunnel.at(zf);
+    if (Math.abs(Math.abs(sp.fins[0].x) - tu.x) > 0.05) flag(id, `deck fins at ±${Math.abs(sp.fins[0].x).toFixed(2)} m are not on the tunnel centre lines (±${tu.x.toFixed(2)} m)`);
+    if (Math.abs(sp.fins[0].base - (tu.y + tu.h)) > 0.15) flag(id, 'deck fins do not stand on the tunnel tops');
+    if (tu.x - tu.w < sp.R * 0.5) flag(id, 'engine tunnels overlap the cockpit pod: they must be distinct, wide-spaced tunnels');
+  } else if (e.fuselageArchitecture === 'CHINED_STEALTH') {
+    const s0 = sp.at(sp.wing.rootZ + sp.wing.rc / 2), chineY = s0.y + e.chine.chineLevel * s0.h;
+    if (Math.abs(sp.wing.y - chineY) > 0.05) flag(id, 'stealth wing root is not on the chine line');
+    if (!(e.chine.topRatio < 0.7 && e.chine.bottomRatio < 0.8)) flag(id, 'chine section is not faceted (top / bottom faces too wide)');
+  } else if (sp.fins.length === 2 && /^twin_vertical/.test(e.tailConfiguration)) {
     const fx = Math.abs(sp.fins[0].x), zf = sp.fins[0].zLE + sp.fins[0].rc * 0.4, local = sp.at(zf).w;
     const eng = sp.engines.filter(g => g.jet), outer = Math.max(...eng.map(g => Math.abs(g.x) + g.r * 0.5));
     if (fx < outer) flag(id, `twin fins at Â±${fx.toFixed(2)} m sit inboard of the engines (outer engine edge Â±${outer.toFixed(2)} m): they belong on the outer engine-bay edges / tail booms`);
@@ -104,5 +136,5 @@ for (const pl of PLANE_LIST) {
 }
 const ids = Object.keys(flags);
 console.log(`audited ${PLANE_LIST.length} aircraft against the reference layouts + geometry rules: ${ids.length} flagged\n`);
-for (const id of ids) console.log(`${id} (${ctx.__out.PLANES[id] ? ctx.__out.PLANES[id].name : '?'}):\n  - ` + flags[id].join('\n  - '));
+for (const id of ids) console.log(`${id} (${ctxOut.PLANES[id] ? ctxOut.PLANES[id].name : '?'}):\n  - ` + flags[id].join('\n  - '));
 process.exitCode = ids.length ? 1 : 0;
