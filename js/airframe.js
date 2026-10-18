@@ -48,7 +48,8 @@
 // ============================================================================
 const Airframe = (() => {
   const D = Math.PI / 180;
-  // ---- fuselage shapes along the axis: [t (0 nose .. 1 tail), width, depth, centre-line height (in half-widths)].
+  // ---- fuselage shapes along the axis: [t (0 nose .. 1 tail), width, depth, centre-line height (in half-widths)
+  //      (, section squareness n at that station: 2 round .. 5 flat-sided box; default: the aircraft's section)].
   // Width and depth are normalised at load time, so the aircraft's real width / depth come only from its ratios.
   const FUS = {
     piston_inline:  [[0, .42, .5, -.02], [.04, .74, .9, 0], [.13, .92, 1.15, .02], [.27, 1, 1.32, .08], [.42, .96, 1.3, .1], [.62, .66, .98, .14], [.84, .32, .58, .2], [.97, .13, .3, .24], [1, .07, .16, .25]],
@@ -71,9 +72,11 @@ const Airframe = (() => {
     flanker:        [[0, .02, .02, -.08], [.05, .32, .32, -.07], [.14, .55, .55, -.04], [.24, .74, .74, 0], [.36, 1.1, .82, .04], [.5, 1.3, .8, .06], [.7, .9, .64, .08], [.88, .5, .46, .1], [1, .32, .32, .1]],
     lightning:      [[0, .8, 1.05, 0], [.08, .9, 1.18, 0], [.3, 1, 1.35, .05], [.62, .96, 1.32, .05], [.86, .86, 1.2, .05], [1, .8, 1.15, .05]],
     buccaneer:      [[0, .02, .02, -.05], [.05, .38, .4, -.03], [.14, .7, .74, 0], [.3, .96, 1, 0], [.45, .82, .96, 0], [.62, 1, 1.02, .02], [.85, .7, .76, .06], [.97, .3, .34, .1], [1, .14, .16, .1]],
+    // F-15: round radar nose, then a flat-topped, box-section deck from the intakes back (engine bays + tail booms)
+    f15_deck:       [[0, .02, .02, -.08, 2.2], [.05, .28, .3, -.07, 2.2], [.13, .45, .5, -.04, 2.2], [.2, .55, .66, 0, 2.5], [.26, .75, .72, 0, 3.5], [.32, 1, .7, 0, 4.5], [.5, 1, .66, .02, 5], [.8, .95, .6, .02, 5], [.93, .82, .55, .02, 4.5], [1, .72, .5, .02, 4]],
     p38_gondola:    [[0, .3, .32, 0], [.05, .66, .7, 0], [.14, .92, .96, 0], [.3, 1, 1.05, .02], [.5, .9, .98, .04], [.6, .6, .7, .06], [.64, .3, .4, .08], [.66, .12, .16, .08]],
   };
-  for (const k in FUS) { const r = FUS[k], mw = Math.max(...r.map(x => x[1])), mh = Math.max(...r.map(x => x[2])); FUS[k] = r.map(([t, w, h, y]) => [t, w / mw, h / mh, y / mw]); }
+  for (const k in FUS) { const r = FUS[k], mw = Math.max(...r.map(x => x[1])), mh = Math.max(...r.map(x => x[2])); FUS[k] = r.map(([t, w, h, y, sn]) => sn === undefined ? [t, w / mw, h / mh, y / mw] : [t, w / mw, h / mh, y / mw, sn]); }
   const SECTION_N = { round: 2, oval: 2.2, rounded_box: 2.8, box: 4 };
   const ENUM = {
     gear: ['tailwheel', 'tricycle', 'skid'],
@@ -194,11 +197,11 @@ const Airframe = (() => {
       tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.4, 1.9, .45, .88, 43, -23, .7, .76, 3.8, .35, 50, 0, 0),
       ...NOCANARD, cockpit: { canopy: 'framed', at: .21, length: 3.8, offset: 0 }, extras: [] },
     f15c: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
-      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
-      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      fuselage: { profile: 'f15_deck', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .95, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
-      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .7, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: [] },
     f16c: { dims: { length: 15, span: 9.96, height: 4.88, wingArea: 27.87 }, gear: 'tricycle',
       fuselage: { profile: 'jet_f16', section: 'oval', fuselageLengthToWidthRatio: 6.8, heightToWidth: .65 },
@@ -212,14 +215,14 @@ const Airframe = (() => {
       wing: { wingMountHeight: .65, planform: 'trapezoid', rootLE: .43, sweepLE: 28, taper: .35, dihedral: -3, thickness: .05 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .34, length: .3, width: 0.8, height: 1.0, rake: 20, splitter: false, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.27, 0], [.27, 0]], nozzleAt: 1 },
-      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 20, tail: t(7.3, 2.2, .4, .86, 42, 0, 0, .72, 3.1, .4, 35, .55, 0),
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 20, tail: t(7.3, 2.2, .4, .86, 42, 0, 0, .72, 3.1, .4, 35, .72, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: ['lerx'] },
     f22a: { dims: { length: 18.9, span: 13.6, height: 5.08, wingArea: 78.04 }, gear: 'tricycle',
       fuselage: { profile: 'jet_blended', section: 'box', fuselageLengthToWidthRatio: 3.9, heightToWidth: .4 },
       wing: { wingMountHeight: .75, planform: 'diamond', rootLE: .42, sweepLE: 42, taper: .14, dihedral: -3, thickness: .04, sweepTE: -17 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .25, length: .4, width: 1.0, height: 1.7, rake: 30, splitter: false, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.25, 0], [.25, 0]], nozzleAt: 1, rectangular: true },
-      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 28, tail: t(8.84, 2.6, .25, .86, 42, 0, 0, .73, 3.8, .4, 22, .5, 0),
+      tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 28, tail: t(8.84, 2.6, .25, .86, 42, 0, 0, .73, 3.8, .4, 22, .76, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 3.0, offset: 0 }, extras: [] },
     b17g: { dims: { length: 22.7, span: 31.6, height: 5.82, wingArea: 131.92 }, gear: 'tailwheel',
       fuselage: { profile: 'bomber_solid', section: 'oval', fuselageLengthToWidthRatio: 9.9, heightToWidth: 1.15 },
@@ -248,11 +251,11 @@ const Airframe = (() => {
       tailConfiguration: 'single_vertical', horizontalTail: 'fin_mid', finCantDeg: 0, tail: t(3.4, 1.2, .45, .86, 25, 0, .3, .72, 2.8, .4, 35, 0, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 1.7, offset: 0 }, extras: [] },
     f15e: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
-      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
-      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      fuselage: { profile: 'f15_deck', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .95, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
-      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .7, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 3.9, offset: 0 }, extras: ['conformalTanks'] },
     dh4: { dims: { length: 9.2, span: 12.9, height: 3.35, wingArea: 40.32 }, gear: 'skid',
       fuselage: { profile: 'biplane', section: 'box', fuselageLengthToWidthRatio: 9.7, heightToWidth: 1.35 },
@@ -295,7 +298,7 @@ const Airframe = (() => {
     f111f: { dims: { length: 22.4, span: 19.2, height: 5.22, wingArea: 48.77 }, gear: 'tricycle',
       fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 7.0, heightToWidth: .6 },
       wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .4, sweepLE: 16, taper: .35, dihedral: 0, thickness: .06 },
-      biplane: null, intakeProfile: 'side_box', intake: { at: .4, length: .25, width: 0.8, height: 0.8, rake: 0, splitter: true, shockCone: true },
+      biplane: null, intakeProfile: 'cheek_crescent', intake: { at: .4, length: .25, width: 0.8, height: 0.8, rake: 0, splitter: true, shockCone: true },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.28, 0], [.28, 0]], nozzleAt: 1 },
       tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(9.0, 3.0, .4, .86, 55, 0, 0, .7, 5.0, .3, 55, 0, 0),
       ...NOCANARD, cockpit: { canopy: 'side_by_side', at: .17, length: 2.6, offset: 0 }, extras: ['wingGlove'] },
@@ -645,7 +648,7 @@ const Airframe = (() => {
       ...NOCANARD, cockpit: { canopy: 'framed', at: .27, length: 1.9, offset: 0 }, extras: ['dorsalFin', 'ventralFin'] },
     mig23: { dims: { length: 16.7, span: 13.97, height: 4.82, wingArea: 37.35 }, gear: 'tricycle',
       fuselage: { profile: 'jet_radar', section: 'rounded_box', fuselageLengthToWidthRatio: 6.4, heightToWidth: .7 },
-      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .45, sweepLE: 20, taper: .3, dihedral: -3, thickness: .05 },
+      wing: { wingMountHeight: .9, planform: 'trapezoid', rootLE: .45, sweepLE: 16, taper: .3, dihedral: -3, thickness: .05 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .27, length: .35, width: 0.7, height: 1.2, rake: 5, splitter: true, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 1, nozzles: [[0, 0]], nozzleAt: 1 },
       tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.8, 2.3, .35, .87, 55, 0, 0, .7, 4.5, .3, 55, 0, 0),
@@ -783,7 +786,7 @@ const Airframe = (() => {
       ...NOCANARD, cockpit: { canopy: 'framed', at: .47, length: 1.7, offset: 0 }, extras: [] },
     n1k2: { dims: { length: 9.3, span: 12, height: 3.96, wingArea: 23.5 }, gear: 'tailwheel',
       fuselage: { profile: 'piston_radial', section: 'round', fuselageLengthToWidthRatio: 7.2, heightToWidth: 1.15 },
-      wing: { wingMountHeight: .3, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 6, thickness: .15 },
+      wing: { wingMountHeight: .05, planform: 'trapezoid', rootLE: .28, sweepLE: 4, taper: .45, dihedral: 6, thickness: .15 },
       biplane: null, intakeProfile: 'none', intake: null, engines: { layout: 'nose_propeller', count: 1, radial: true },
       tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: { ...t(4.0, 1.2, .55, .86, 6, 0, .25, .83, 1.5, .5, 28, 0, 0), finTip: 1.75 },
       ...NOCANARD, cockpit: { canopy: 'framed', at: .46, length: 1.8, offset: 0 }, extras: [] },
@@ -815,11 +818,11 @@ const Airframe = (() => {
       tailConfiguration: 'single_vertical', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(5.4, 1.9, .45, .88, 43, -23, .7, .76, 3.8, .35, 50, 0, 0),
       ...NOCANARD, cockpit: { canopy: 'framed', at: .21, length: 3.8, offset: 0 }, extras: [] },
     f15j: { dims: { length: 19.4, span: 13, height: 5.63, wingArea: 56.5 }, gear: 'tricycle',
-      fuselage: { profile: 'jet_blended', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
-      wing: { wingMountHeight: .85, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
+      fuselage: { profile: 'f15_deck', section: 'rounded_box', fuselageLengthToWidthRatio: 4.4, heightToWidth: .45 },
+      wing: { wingMountHeight: .95, planform: 'trapezoid', rootLE: .38, sweepLE: 45, taper: .27, dihedral: -1, thickness: .05 },
       biplane: null, intakeProfile: 'side_box', intake: { at: .2, length: .42, width: 1.1, height: 1.5, rake: 25, splitter: true, shockCone: false },
       engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.3, 0], [.3, 0]], nozzleAt: 1 },
-      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .55, 0),
+      tailConfiguration: 'twin_vertical_straight', horizontalTail: 'fuselage', finCantDeg: 0, tail: t(8.6, 2.8, .35, .87, 50, 0, 0, .8, 3.3, .45, 36, .7, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 2.7, offset: 0 }, extras: [] },
     f2a: { dims: { length: 15.5, span: 11.1, height: 4.96, wingArea: 34.84 }, gear: 'tricycle',
       fuselage: { profile: 'jet_f16', section: 'oval', fuselageLengthToWidthRatio: 6.8, heightToWidth: .65 },
@@ -1044,11 +1047,18 @@ const Airframe = (() => {
     const L = pl.len, S = pl.span, jet = pl.kind === 'jet', z0 = -L / 2, ex = new Set(e.extras);
     const W = L / e.fuselage.fuselageLengthToWidthRatio, H = W * e.fuselage.heightToWidth, R = W / 2, n = SECTION_N[e.fuselage.section];
     const rows = FUS[e.fuselage.profile];
-    const at = z => { const t = Math.max(0, Math.min(1, (z - z0) / L)); return { w: sample(rows, t, 1) * R, h: sample(rows, t, 2) * H / 2, y: sample(rows, t, 3) * R }; };
+    const perStation = rows[0].length === 5;
+    // side_box: between the intake mouth and the end of the trunks the core fuselage is only as wide as the real body
+    // minus the trunks, so the trunks themselves form the body sides out to the published width
+    const box = e.intakeProfile === 'side_box' ? { a: z0 + e.intake.at * L - 0.3, b: z0 + (e.intake.at + e.intake.length) * L, ramp: 0.12 * L, cap: Math.max(R * 0.3, R - e.intake.width) } : null;
+    const at = z => { const t = Math.max(0, Math.min(1, (z - z0) / L));
+      let w = sample(rows, t, 1) * R;
+      if (box && z > box.a) { const cap = z <= box.b ? box.cap : box.cap + (R - box.cap) * Math.min(1, (z - box.b) / box.ramp); w = Math.min(w, cap); }
+      return { w, h: sample(rows, t, 2) * H / 2, y: sample(rows, t, 3) * R, n: perStation ? sample(rows, t, 4) : n }; };
     const se = (v, k) => Math.pow(Math.max(0, v), 1 / k);
-    const topAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y + s.h * se(1 - Math.pow(q, n), n); };
-    const botAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y - s.h * se(1 - Math.pow(q, n), n); };
-    const sideAt = (z, y) => { const s = at(z), q = Math.min(1, Math.abs(y - s.y) / s.h); return s.w * se(1 - Math.pow(q, n), n); };
+    const topAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y + s.h * se(1 - Math.pow(q, s.n), s.n); };
+    const botAt = (z, x) => { const s = at(z), q = Math.min(1, Math.abs(x || 0) / s.w); return s.y - s.h * se(1 - Math.pow(q, s.n), s.n); };
+    const sideAt = (z, y) => { const s = at(z), q = Math.min(1, Math.abs(y - s.y) / s.h); return s.w * se(1 - Math.pow(q, s.n), s.n); };
     const sp = { id: pl.id, entry: e, L, S, R, W, H, n, rows, at, topAt, botAt, sideAt, extras: ex, jet, bi: !!e.biplane, big: pl.shape.startsWith('bomber') || pl.shape === 'jet_bomber', era: pl.era, notes: [] };
     const note = s => sp.notes.push(s);
     // ---- wing: root chord from the published wing area

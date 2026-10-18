@@ -82,6 +82,7 @@ node tools/tests/cdp.mjs tools/tests/perf.mjs      # 60v60 simulation cost
 node tools/tests/cdp.mjs tools/tests/uishots.mjs   # menu screenshots
 node tools/tests/cdp.mjs tools/tests/gallery.mjs   # aircraft model sheets (NATION= or IDS=; CLOSE=1 cockpit close-ups, CAM=x,y,z view direction, K= distance, TZ= target along the length)
 node tools/tests/cdp.mjs tools/tests/meshcheck.mjs # airframe registry valid + every part watertight and outward-facing (LOG=ids prints the anomaly checklist)
+node tools/audit_specs.mjs                         # configuration audit: every airframe vs an independent reference of its real layout + geometry rules
 node tools/tests/mp.mjs                            # two tabs: host + join code + battle (needs internet)
 ```
 Screenshots go to `tools/tests/shots/`.

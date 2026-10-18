@@ -140,7 +140,7 @@
     const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
     for (let i = 0; i <= NS; i++) { const u = (1 - Math.cos(Math.PI * i / NS)) / 2, z = z0 + u * tEnd * L, s = sp.at(z);
       const k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // ramps over 0.6 m at each end
-      secs.push({ z, w: Math.max(0.012, s.w), h: Math.max(0.012, s.h), y: s.y, n: sp.n + (4.5 - sp.n) * Math.max(0, k) }); }
+      secs.push({ z, w: Math.max(0.012, s.w), h: Math.max(0.012, s.h), y: s.y, n: s.n + (Math.max(4.5, s.n) - s.n) * Math.max(0, k) }); }
     const zTail = secs[secs.length - 1].z;
     const radome = sp.jet && pl.era >= 5 && e0.intakeProfile !== 'nose_cone';
     const glare = !ww1 && !sp.big && lum > 140 && pl.era <= 4; // olive anti-glare panels were a WW2 / Korea-era practice
@@ -237,8 +237,8 @@
     if (it && it.type !== 'nose_cone') {
       const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180); // mouth half-sizes (m)
       if (rule(it.type === 'side_box' || it.type === 'cheek_crescent', it.type === 'side_box' ? 'side_box: raked rectangular intake trunks on the fuselage sides' : 'cheek_crescent: half-round cheek intakes')) for (const s of [-1, 1]) {
-        const y = sp.at(zi).y, x = s * (sp.sideAt(zi, y) + w * (it.type === 'cheek_crescent' ? 0.25 : 0.3)); // against the fuselage side at the mouth
-        duct(x, y, zi, len, w, h, it.type === 'side_box' ? 4.5 : 2, rake, 'intake', s * sp.sideAt(zi + len, y) * 0.6);
+        const y = sp.at(zi).y, x = s * (sp.sideAt(zi, y) + w * (it.type === 'cheek_crescent' ? 0.25 : 1)); // box trunks: inner face on the core, outer face = body side
+        duct(x, y, zi, len, w, h, it.type === 'side_box' ? 6 : 2, rake, 'intake', it.type === 'side_box' ? x * 0.92 : s * sp.sideAt(zi + len, y) * 0.6);
         if (rule(it.splitter && s > 0, 'boundary-layer splitter plates')) {} if (it.splitter) body.add(box(0.04, h * 1.6, len * 0.4), camo, [x - s * w * 1.1, y, zi + len * 0.15]);
         if (rule(it.shockCone && s > 0, 'half-cone shock bodies in the intakes')) {} if (it.shockCone) body.add(latheRing([[0.001, zi - h * 0.7], [Math.min(w, h) * 0.6, zi + 0.1], [0.001, zi + 0.1]], 14, 'half cone', x - s * w * 0.3, y), metal);
       }
