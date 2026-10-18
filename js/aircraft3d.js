@@ -10,11 +10,23 @@
 //                  fins, canards), with root and tip caps
 //   loftPrism    - polygon sections lofted along Z with every face kept flat and every
 //                  edge creased (chined stealth fuselages, caret intakes)
-// The fuselage itself is built by one of three architectures (registry: fuselageArchitecture):
-//   SINGLE_TUBE        one central lofted fuselage
-//   TWIN_NACELLE_DECK  narrow cockpit pod + two distinct engine tunnels from the intake mouths
-//                      to the nozzles, joined by a flat deck; fins on the tunnel tops; LEX shelves
-//   CHINED_STEALTH     hexagonal prism section with a continuous chine into the wing roots
+//   loftUnion    - stations made of several superellipse primitives (core / pod, intake trunks,
+//                  engine tunnels, bridging deck, engine housings), lofted as ONE skin through a
+//                  smooth union, so parts weld together with fillets instead of being clamped on
+//   lipRing      - a raked lip around an intake mouth
+// Every aircraft goes through the same 4-stage manufacturing pipeline:
+//   1. core fuselage by architecture (registry: fuselageArchitecture)
+//        SINGLE_TUBE        one central fuselage (intake trunks and engine housings blended in)
+//        TWIN_NACELLE_DECK  cockpit pod + two engine tunnels from the intake mouths to the nozzles,
+//                           welded by a solid bridging deck; fins on the tunnel tops; LEX shelves
+//        CHINED_STEALTH     faceted prism with a continuous chine through the caret intakes into
+//                           the wing roots; solid between the engines (keel bridge under nacelles)
+//   2. blunt exhaust plane: jet fuselages stop at the nozzles (a boom runs on above them when the
+//      nozzles are short of the tail) and every engine ends in an open tailpipe ring
+//   3. curvature: spline-lofted stations, blended trunks, NACA teardrop wing sections, cranked
+//      outer panels bent to their outerWingDihedral
+//   4. skin: per-vertex paint tags read by the skin shader (models.js) for panel lines, rivets,
+//      panel-to-panel tone and period camouflage
 // orient() then checks each part's signed volume and makes every triangle face
 // outwards, so no face is inside-out from any angle; Airframe.check collects the
 // parts for the mesh test (tools/tests/meshcheck.mjs). Nothing is placed by eye:
@@ -57,11 +69,12 @@
     return orient(indexed(pos, idx), name);
   }
   // a closed (r, z) profile loop turned about the Z axis; each profile edge gets its own rings so corners stay crisp
-  function latheRing(prof, segs, name, cx, cy, sx, sy) {
+  // (n: optional superellipse squareness of the turned section, e.g. 4 for the rectangular 2D nozzles)
+  function latheRing(prof, segs, name, cx, cy, sx, sy, n) {
     const pos = [], idx = [];
     for (let i = 0; i < prof.length; i++) {
       const p0 = prof[i], p1 = prof[(i + 1) % prof.length], base = pos.length / 3;
-      for (const [r, z] of [p0, p1]) for (let j = 0; j < segs; j++) { const a = j / segs * Math.PI * 2; pos.push((cx || 0) + r * Math.cos(a) * (sx || 1), (cy || 0) + r * Math.sin(a) * (sy || 1), z); }
+      for (const [r, z] of [p0, p1]) for (let j = 0; j < segs; j++) { const a = (j + 0.5) / segs * Math.PI * 2; pos.push((cx || 0) + r * sep(Math.cos(a), n || 2) * (sx || 1), (cy || 0) + r * sep(Math.sin(a), n || 2) * (sy || 1), z); }
       for (let j = 0; j < segs; j++) { const a = base + j, b = base + (j + 1) % segs, c = base + segs + (j + 1) % segs, d = base + segs + j; idx.push(a, b, c, a, c, d); }
     }
     return orient(indexed(pos, idx), name);
@@ -92,7 +105,7 @@
     const pos = [], idx = [], K = secs[0].c.length;
     for (let k = 0; k < K; k++) {
       const base = pos.length / 3;
-      for (const sc of secs) { const a = sc.c[k], b = sc.c[(k + 1) % K]; pos.push(a[0], a[1], sc.z, b[0], b[1], sc.z); }
+      for (const sc of secs) { const a = sc.c[k], b = sc.c[(k + 1) % K]; pos.push(a[0], a[1], sc.z + (a[2] || 0), b[0], b[1], sc.z + (b[2] || 0)); } // optional 3rd value: z offset of that corner
       for (let i = 0; i < secs.length - 1; i++) { const a = base + i * 2, b = a + 1, c = a + 3, d = a + 2; idx.push(a, b, c, a, c, d); }
     }
     for (const [k, back] of [[0, false], [secs.length - 1, true]]) {
@@ -102,6 +115,53 @@
     }
     const g = indexed(pos, idx); orient(g, name); g.deleteAttribute('normal'); const ng = g.toNonIndexed(); ng.computeVertexNormals(); // flat facets
     if (Airframe.check) Airframe.check[Airframe.check.length - 1].g = g; return ng;
+  }
+  // far crossing of the ray O + t·d with the superellipse q {x, y, w, h, n}, or -1 if the ray misses it. The
+  // superellipse "norm" is convex along a line, so: golden-section search for its minimum, then bisect outwards to 1
+  function farHit(ox, oy, dx, dy, q) {
+    const g = t => Math.pow(Math.abs((ox + t * dx - q.x) / q.w), q.n) + Math.pow(Math.abs((oy + t * dy - q.y) / q.h), q.n);
+    const T = Math.hypot(q.x - ox, q.y - oy) + Math.max(q.w, q.h) * 1.05, phi = 0.618034;
+    let a = 0, b = T, c = b - phi * (b - a), d = a + phi * (b - a);
+    for (let i = 0; i < 28; i++) { if (g(c) < g(d)) b = d; else a = c; c = b - phi * (b - a); d = a + phi * (b - a); }
+    let lo = (a + b) / 2; if (g(lo) > 1) return -1;
+    let hi = T; for (let i = 0; i < 32; i++) { const m = (lo + hi) / 2; if (g(m) <= 1) lo = m; else hi = m; }
+    return lo;
+  }
+  // smooth union of the station's primitives seen from its origin (0, oy): r = (Σ r_i^P)^(1/P) along each ray. Where
+  // one primitive dominates this is exactly its outline; where two meet it rounds the join into a fillet
+  const UNION_P = 10;
+  function unionRing(s, segs) {
+    const pts = [];
+    for (let j = 0; j < segs; j++) { const a = (j + 0.5) / segs * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a); let sum = 0;
+      for (const q of s.prims) { const t = farHit(0, s.oy, dx, dy, q); if (t > 0) sum += Math.pow(t, UNION_P); }
+      const r = Math.max(0.01, Math.pow(sum, 1 / UNION_P)); pts.push([dx * r, s.oy + dy * r]); }
+    return pts;
+  }
+  // stations {z, oy, prims, crease} lofted along Z; a crease station gets two copies of its ring so the skin on either
+  // side keeps its own normals (intake mouths, the blunt exhaust plane). Ends closed by fans from the origin.
+  function loftUnion(st, segs, name) {
+    const pos = [], idx = [], rings = [];
+    for (const s of st) { const pts = s.pts || unionRing(s, segs), first = pos.length / 3;
+      for (const [x, y] of pts) pos.push(x, y, s.z);
+      if (s.crease) for (const [x, y] of pts) pos.push(x, y, s.z);
+      rings.push([first, s.crease ? first + segs : first]); }
+    for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < segs; j++) {
+      const a = rings[i][1] + j, b = rings[i][1] + (j + 1) % segs, c = rings[i + 1][0] + (j + 1) % segs, d = rings[i + 1][0] + j;
+      idx.push(a, b, c, a, c, d); }
+    for (const [k, back] of [[0, false], [st.length - 1, true]]) { const s = st[k], src = back ? rings[k][1] : rings[k][0], base = pos.length / 3;
+      pos.push(0, s.oy, s.z); for (let j = 0; j < segs; j++) pos.push(pos[(src + j) * 3], pos[(src + j) * 3 + 1], pos[(src + j) * 3 + 2]);
+      for (let j = 0; j < segs; j++) { const p = base + 1 + j, q = base + 1 + (j + 1) % segs; if (back) idx.push(base, p, q); else idx.push(base, q, p); } }
+    return orient(indexed(pos, idx), name);
+  }
+  // a closed lip ring around a superellipse mouth (centre cx, cy, half-sizes w, h, squareness n): outer 1.03, inner 0.88
+  // of the outline, from zf (front) to zb; rake leans the top of the ring forward (deg)
+  function lipRing(cx, cy, w, h, n, zf, zb, rake, name) {
+    const prof = [[0.88, zf, 1], [1.03, zf - 0.02, 1], [1.03, zb, 0], [0.88, zb, 0]], segs = 32, pos = [], idx = [], t = Math.tan((rake || 0) * Math.PI / 180);
+    for (let i = 0; i < prof.length; i++) { const base = pos.length / 3;
+      for (const [r, z, front] of [prof[i], prof[(i + 1) % prof.length]]) for (let j = 0; j < segs; j++) { const a = j / segs * Math.PI * 2, y = cy + h * r * sep(Math.sin(a), n);
+        pos.push(cx + w * r * sep(Math.cos(a), n), y, z - front * t * (y - cy + h)); } // only the front edge is raked; the back stays on the mouth face
+      for (let j = 0; j < segs; j++) { const a = base + j, b = base + (j + 1) % segs, c = base + segs + (j + 1) % segs, d = base + segs + j; idx.push(a, b, c, a, c, d); } }
+    return orient(indexed(pos, idx), name);
   }
   // mirror across the centre plane: negate X and reverse every triangle so the copy still faces outwards
   function mirrorX(g) {
@@ -156,44 +216,60 @@
     const ckB = new Builder(); // cockpit details seen from outside (frames, coaming, gunsight): hidden with the glass in the cockpit view
     const mkB = new Builder(), mkL = new Builder(), mkR = new Builder();
     const lum = (pt.top >> 16 & 255) * 0.3 + (pt.top >> 8 & 255) * 0.59 + (pt.top & 255) * 0.11;
-    const nozzleEngines = sp.engines.filter(e => e.kind === 'fus');
+    const nozzleEngines = sp.engines.filter(e => e.kind === 'fus' || e.kind === 'tunnel');
 
-    // ---------------- fuselage
-    const tEnd = sp.rows[sp.rows.length - 1][0], NS = 40, secs = [];
-    const boxSides = rule(e0.intakeProfile === 'side_box' && sp.arch !== 'TWIN_NACELLE_DECK', 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
+    // ================= STAGE 1: core fuselage by architecture, welded into one closed skin =================
+    // the main body runs from the nose to the blunt exhaust plane (fuselage jets) or the tail; intake mouths are crease stations
+    const deck = sp.arch === 'TWIN_NACELLE_DECK', chined = sp.arch === 'CHINED_STEALTH';
+    const zMain = sp.boom ? sp.nozzleZ : deck ? sp.tunnel.zB : L / 2;
+    const mouthZ = deck ? sp.tunnel.zA : chined ? (e0.intakeProfile === 'side_box' ? sp.intakeZ : null) : sp.intakeZ !== null && sp.trunks(sp.intakeZ).length ? sp.intakeZ : null;
+    const boxSides = rule(e0.intakeProfile === 'side_box' && !deck, 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
     const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
-    for (let i = 0; i <= NS; i++) { const u = (1 - Math.cos(Math.PI * i / NS)) / 2, z = z0 + u * tEnd * L, s = sp.at(z);
-      const k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // ramps over 0.6 m at each end
-      secs.push({ z, w: Math.max(0.012, s.w), h: Math.max(0.012, s.h), y: s.y, n: s.n + (Math.max(4.5, s.n) - s.n) * Math.max(0, k) }); }
-    const zTail = secs[secs.length - 1].z;
+    const NS = 56, zs = [];
+    for (let i = 0; i <= NS; i++) { const z = z0 + (1 - Math.cos(Math.PI * i / NS)) / 2 * (zMain - z0); if (mouthZ === null || Math.abs(z - mouthZ) > 0.05) zs.push(z); }
+    const station = (z, drop, crease) => { const sc = sp.section(z), k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // flattening ramps over 0.6 m
+      const prims = sc.prims.filter(p => !drop || !drop.includes(p.part)).map(p => p.part === 'core' || p.part === 'pod' ? Object.assign({}, p, { w: Math.max(0.012, p.w), h: Math.max(0.012, p.h), n: p.n + (Math.max(4.5, p.n) - p.n) * k }) : p);
+      return { z, oy: sc.oy, prims, crease }; };
+    const secs = [];
+    for (const z of zs) { if (mouthZ !== null && z > mouthZ && !secs.some(q => q.crease)) { secs.push(station(mouthZ, ['trunk', 'tunnel', 'bridge'], true)); secs.push(station(mouthZ, null, true)); } secs.push(station(z)); }
+    const zTail = zMain;
     const radome = sp.jet && pl.era >= 5 && e0.intakeProfile !== 'nose_cone';
     const glare = !ww1 && !sp.big && lum > 140 && pl.era <= 4; // olive anti-glare panels were a WW2 / Korea-era practice
     const noseDark = rule(e0.intakeProfile === 'nose_cone', 'nose_cone: open nose intake with lip' + (e0.intake && e0.intake.shockCone ? ' and shock cone' : ''));
+    const inNozzle = (x, y) => nozzleEngines.some(e => Math.hypot((x - e.x) / (e.rect ? 1.25 : 1), (y - e.y) / (e.rect ? 0.62 : 1)) < e.r);
     const fusPaint = (x, y, z, ny, nz) => {
       if (nz < -0.98 && z < z0 + 0.05 && noseDark) return 0x101010;                  // intake mouth
-      if (nz > 0.98 && z > zTail - 0.05) return nozzleEngines.some(e => Math.hypot(x - e.x, y - e.y) < e.r) ? 0x161412 : shade(pt.bot, 0.75); // engine face / tail cap
+      if (nz > 0.98 && z > zTail - 0.05) return inNozzle(x, y) ? 0x161412 : shade(pt.bot, 0.72); // the blunt exhaust plane around the nozzles
+      if (chined && mouthZ !== null && nz < -0.6 && Math.abs(z - mouthZ) < 0.02) return 0x0e0e0e; // caret intake mouths
       if (radome && z < z0 + L * 0.09) return shade(pt.top, 0.7);
       if (glare && ny > 0.55 && z > z0 + L * (sp.jet ? 0.1 : 0.05) && z < sp.canopy.z - sp.canopy.len * 0.5) return 0x2f3229;
       return ny < -0.25 ? pt.bot : pt.top;
     };
-    if (rule(sp.arch === 'CHINED_STEALTH', 'CHINED_STEALTH: hexagonal hard-edged fuselage with a continuous chine')) {
-      // the same stations as a hexagon: flat top and bottom faces, side walls angled out to the chine
-      body.add(loftPrism(secs.map(q => { const k = sp.chine.hex(q); return { z: q.z, c: [[q.w, k.cy], [k.wt, k.top], [-k.wt, k.top], [-q.w, k.cy], [-k.wb, k.bot], [k.wb, k.bot]] }; }), 'fuselage'), fusPaint);
-    } else body.add(loftBody(secs, 28, sp.n, sp.arch === 'TWIN_NACELLE_DECK' ? 'cockpit pod' : 'fuselage'), fusPaint);
-    if (rule(sp.arch === 'TWIN_NACELLE_DECK', 'TWIN_NACELLE_DECK: cockpit pod + two engine tunnels joined by a flat deck')) {
-      const tun = sp.tunnel, NT = 18, rake = Math.tan(e0.intake.rake * Math.PI / 180), dz = (tun.zB - tun.zA) / NT;
-      for (const sd of [-1, 1]) { // each tunnel runs from its intake mouth to its nozzle
-        const ts = []; for (let i = 0; i <= NT; i++) { const z = tun.zA + i * dz, q = tun.at(z); ts.push({ z, w: q.w, h: q.h, y: q.y, x: sd * q.x }); }
-        const g = loftBody(ts, 24, 4, 'engine tunnel'), pa = g.attributes.position, q0 = tun.at(tun.zA);
-        for (let i = 0; i < pa.count; i++) { const f = Math.max(0, 1 - (pa.getZ(i) - tun.zA) / (L * 0.12)); pa.setZ(i, pa.getZ(i) - rake * (pa.getY(i) - q0.y) * f); } // raked intake lip
-        g.computeVertexNormals();
-        body.add(g, (px, py, pz, ny, nz) => nz < -0.6 && pz < tun.zA + 0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
-      }
-      // the flat deck between the tunnels, its top flush with the tunnel tops, from just behind the intakes to the tail
-      const zD0 = tun.zA + L * 0.08, zD1 = tun.zB - 0.4, ds = [];
-      for (let i = 0; i <= 10; i++) { const z = zD0 + (zD1 - zD0) * i / 10, q = tun.at(z), th = q.h * 0.5; ds.push({ z, w: q.x, h: th, y: q.y + q.h - th - 0.04 }); }
-      body.add(loftBody(ds, 20, 5, 'deck'), camo);
+    rule(deck, 'TWIN_NACELLE_DECK: cockpit pod + two engine tunnels from the intake mouths to the nozzles, welded by a solid bridging deck');
+    if (rule(chined, 'CHINED_STEALTH: hexagonal hard-edged fuselage; the chine widens over the caret intakes and runs on into the wing roots')) {
+      // the same stations as a hexagon: flat top and bottom faces, side walls angled out to the chine (solid between the engines)
+      // the side walls carry two extra corners at the intake's top and bottom lip height: ahead of and behind the intakes they
+      // lie on the straight wall, over the intakes the chine juts out between them, so the caret mouth is only as tall as the inlet
+      const ih = e0.intake && e0.intakeProfile === 'side_box' ? e0.intake.height / 2 : 0;
+      const hexSt = (z, wide) => { const q = sp.at(z), k = sp.chine.hex(q), wc = wide ? sp.chineW(z) : q.w;
+        const yU = Math.min(k.cy + ih, k.cy + (k.top - k.cy) * 0.8), yL = Math.max(k.cy - ih, k.cy - (k.cy - k.bot) * 0.8);
+        const xU = q.w - (q.w - k.wt) * (yU - k.cy) / Math.max(1e-6, k.top - k.cy), xL = q.w - (q.w - k.wb) * (k.cy - yL) / Math.max(1e-6, k.cy - k.bot);
+        return { z, c: [[wc, k.cy], [xU, yU], [k.wt, k.top], [-k.wt, k.top], [-xU, yU], [-wc, k.cy], [-xL, yL], [-k.wb, k.bot], [k.wb, k.bot], [xL, yL]] }; };
+      body.add(loftPrism(secs.map((q, i) => hexSt(q.z, !(q.crease && secs[i + 1] && secs[i + 1].crease))), 'fuselage'), fusPaint);
+      rule(mouthZ !== null, 'caret intakes: diamond mouths cut into the chine, their walls continuing the chine line into the wing roots');
+    } else body.add(loftUnion(secs, 48, 'fuselage'), fusPaint);
+    rule(secs.some(q => q.prims.some(p => p.part === 'bridge')), 'solid bridging deck welds the tunnels\' inner walls together from the intakes to the tail (no gap on the centreline)');
+    rule(secs.some(q => q.prims.some(p => p.part === 'trunk')), 'intake trunks blended into the fuselage skin (smooth union, no clamped-on boxes)');
+    rule(secs.some(q => q.prims.some(p => p.part === 'housing')), 'rear fuselage swells around the engines and ends blunt at the exhaust plane');
+    if (rule(sp.boom, 'tail boom above the exhausts (fuselage stops at the nozzle plane below it)')) {
+      const bs = []; for (let i = 0; i <= 14; i++) { const z = sp.nozzleZ - 0.05 + (L / 2 - sp.nozzleZ + 0.05) * i / 14, b = sp.boom(z); bs.push({ z, w: Math.max(0.02, b.w), h: Math.max(0.02, b.h), y: b.y }); }
+      body.add(loftBody(bs, 28, sp.n, 'tail boom'), camo);
     }
+    // intake mouths of the trunks / tunnels: a raked lip ring with a dark mouth plate just inside it
+    if (mouthZ !== null && !chined) { const rake = e0.intake ? e0.intake.rake : 0;
+      for (const p of station(mouthZ).prims.filter(p => p.part === 'trunk' || p.part === 'tunnel')) {
+        body.add(lipRing(p.x, p.y, p.w, p.h, p.n, mouthZ - 0.14, mouthZ + 0.03, rake, 'intake lip'), shade(pt.top, 0.92));
+        body.add(loftBody([{ z: mouthZ - 0.03, w: p.w * 0.97, h: p.h * 0.97, y: p.y, x: p.x }, { z: mouthZ - 0.015, w: p.w * 0.97, h: p.h * 0.97, y: p.y, x: p.x }], 24, p.n, 'mouth plate'), 0x0b0b0b); } }
 
     // ---------------- nose: intake lip and shock cone / radar pitot / propeller hub
     if (noseDark) {
@@ -210,10 +286,23 @@
 
     // ---------------- engines
     const props = [], glows = [];
-    const nozzle = (e, x, y, zn) => { // exhaust nozzle: a closed ring with a dark engine face sealed inside it
-      const ro = e.r, ri = e.r * 0.84, ln = e.r * (pl.ab ? 0.9 : 0.5), sx = e.rect ? 1.25 : 1, sy = e.rect ? 0.62 : 1;
-      body.add(latheRing([[ri, zn - 0.35], [ro, zn - 0.35], [ro * (pl.ab ? 0.92 : 0.97), zn + ln], [ri * (pl.ab ? 0.95 : 1), zn + ln]], 24, 'nozzle', x, y, sx, sy), pl.ab ? burnt : metal);
-      body.add(cyl(ri * 1.01, ri * 1.01, 0.05, 20), 0x141210, [x, y, zn + ln * 0.25], [Math.PI / 2, 0, 0], [sx, 1, sy]);
+    // ================= STAGE 2: open exhaust nozzles =================
+    // the fuselage stops blunt at the exhaust plane; each engine ends in an open, hollow tailpipe: a metal cylinder ring
+    // standing slightly proud of the body, dark heat-stained inner wall, and deep inside it the flame holder, the turbine
+    // cone and a dark engine face that seals the part
+    const nozzle = (e, x, y, zn) => {
+      const ro = e.r, ri = e.r * 0.86, ln = e.r * (pl.ab ? 0.55 : 0.32), sx = e.rect ? 1.25 : 1, sy = e.rect ? 0.62 : 1, petals = pl.ab && !e.rect ? 14 : 0;
+      const ringPaint = (px, py) => { const dx = (px - x) / sx, dy = (py - y) / sy, r = Math.hypot(dx, dy);
+        if (r < (ri + ro) / 2) return 0x262320;                                      // inner wall: dark, heat-stained
+        const base = pl.ab ? burnt : metal; return petals && Math.floor((Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * petals * 2) % 2 ? shade(base, 0.82) : base; }; // afterburner petals
+      body.add(latheRing([[ri, zn - 0.35], [ro, zn - 0.35], [ro * (pl.ab ? 0.94 : 0.98), zn + ln], [ri * (pl.ab ? 0.97 : 1), zn + ln]], 28, 'nozzle', x, y, sx, sy, e.rect ? 4 : 2), ringPaint);
+      body.parts[body.parts.length - 1].skin = 3;                                    // metal skin in the shader (streaks, no camouflage)
+      const zf = zn + 0.02;                                                          // engine face on the exhaust plane: the void is the full tailpipe
+      body.add(latheRing([[0.001, zf - 0.02], [ri * 1.01, zf - 0.02], [ri * 1.01, zf + 0.02], [0.001, zf + 0.02]], 28, 'engine face', x, y, sx, sy, e.rect ? 4 : 2), 0x0d0c0b);
+      if (!e.rect) {
+        body.add(latheRing([[ri * 0.55, zf + 0.04], [ri * 0.66, zf + 0.04], [ri * 0.66, zf + 0.11], [ri * 0.55, zf + 0.11]], 20, 'flame holder', x, y), 0x3a3632);
+        body.add(latheRing([[0.001, zf + 0.025], [ri * 0.3, zf + 0.025], [0.001, zf + 0.02 + ri * 0.5]], 16, 'turbine cone', x, y), 0x2e2b28);
+      }
       if (pl.ab) { const gg = new THREE.Mesh(zcyl(ri * 0.9, ri * 0.06, L * 0.32, 12), mat('glow')); gg.scale.set(sx, sy, 1); gg.position.set(x, y, zn + ln + L * 0.16); gg.visible = false; glows.push(gg); }
     };
     const nacelle = (e, prof, name) => body.add(loftBody(prof.map(([t, k, ky]) => ({ z: e.z - e.len / 2 + t * e.len, w: e.r * k, h: e.r * (ky || k), y: e.y, x: e.x })), 20, 2, name), (x, y, z, ny, nz) => nz < -0.98 ? 0x101010 : ny < -0.25 ? pt.bot : pt.top);
@@ -274,29 +363,26 @@
       const g = loftBody([0, 0.12, 0.35, 0.65, 1].map(t => ({ z: zi + t * len, w: w * (1 - 0.45 * t * t), h: h * (1 - 0.2 * t * t), y, x: x + (xe - x) * t * t })), 20, n, name);
       if (rake) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const f = Math.max(0, 1 - (p.getZ(i) - zi) / len); p.setZ(i, p.getZ(i) - rake * (p.getY(i) - y) * f); } g.computeVertexNormals(); }
       body.add(g, (px, py, pz, ny, nz) => nz < -0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
+      body.add(lipRing(x, y, w, h, n, zi - 0.1, zi + 0.04, Math.atan(rake || 0) * 180 / Math.PI, 'intake lip'), shade(pt.top, 0.92)); // rounded lip, as on the trunks
     };
-    rule(sp.arch === 'TWIN_NACELLE_DECK' && it, 'intakes lead straight into the two engine tunnels');
-    if (it && it.type === 'side_box' && sp.arch === 'CHINED_STEALTH') {
-      rule(true, 'caret intakes: walls angled to continue the chine line into the wing roots');
-      const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180);
-      for (const sd of [-1, 1]) {
-        const cs = []; for (let i = 0; i <= 6; i++) { const u = i / 6, z = zi + u * len, q = sp.at(z), k = sp.chine.hex(q), xi = q.w * 0.6 + w * 0.2 * (1 - u), xo = xi + 2 * w * (1 - 0.5 * u * u), hh = h * (1 - 0.25 * u * u), cy = k.cy;
-          const c4 = [[sd * xo, cy + hh * 0.18], [sd * xi, cy + hh], [sd * xi, cy - hh], [sd * xo, cy - hh * 0.18]]; cs.push({ z, c: sd > 0 ? c4 : c4.reverse() }); } // mirrored side: same rotational order
-        const g = loftPrism(cs, 'caret intake'), pa = g.attributes.position;
-        for (let i = 0; i < pa.count; i++) { const f = Math.max(0, 1 - (pa.getZ(i) - zi) / len); pa.setZ(i, pa.getZ(i) - rake * Math.abs(pa.getX(i)) * 0.5 * f); } // swept caret lips
-        g.computeVertexNormals(); body.add(g, (px, py, pz, ny, nz) => nz < -0.6 ? 0x0e0e0e : ny < -0.25 ? pt.bot : pt.top);
-      }
-    }
-    else if (it && it.type !== 'nose_cone' && sp.arch !== 'TWIN_NACELLE_DECK') {
+    rule(deck && it, 'intakes lead straight into the two engine tunnels');
+    if (it && it.type !== 'nose_cone' && !deck && !(chined && it.type === 'side_box')) {
       const zi = z0 + it.at * L, len = it.length * L, w = it.width / 2, h = it.height / 2, rake = Math.tan(it.rake * Math.PI / 180); // mouth half-sizes (m)
-      if (rule(it.type === 'side_box' || it.type === 'cheek_crescent', it.type === 'side_box' ? 'side_box: raked rectangular intake trunks on the fuselage sides' : 'cheek_crescent: half-round cheek intakes')) for (const s of [-1, 1]) {
-        const y = sp.at(zi).y, x = s * (sp.sideAt(zi, y) + w * (it.type === 'cheek_crescent' ? 0.25 : 1)); // box trunks: inner face on the core, outer face = body side
-        duct(x, y, zi, len, w, h, it.type === 'side_box' ? 6 : 2, rake, 'intake', it.type === 'side_box' ? x * 0.92 : s * sp.sideAt(zi + len, y) * 0.6);
-        if (rule(it.splitter && s > 0, 'boundary-layer splitter plates')) {} if (it.splitter) body.add(box(0.04, h * 1.6, len * 0.4), camo, [x - s * w * 1.1, y, zi + len * 0.15]);
+      const trunks = mouthZ !== null ? station(mouthZ).prims.filter(p => p.part === 'trunk') : [];
+      if (rule(it.type === 'side_box' || it.type === 'cheek_crescent', it.type === 'side_box' ? 'side_box: raked rounded-rectangular intake trunks blended into the fuselage sides' : 'cheek_crescent: half-round cheek intakes blended into the fuselage')) for (const p of trunks) {
+        const s = Math.sign(p.x), x = p.x, y = p.y;
+        if (rule(it.splitter && s > 0, 'boundary-layer splitter plates')) {} if (it.splitter) body.add(box(0.04, h * 1.7, len * 0.3), camo, [x - s * w * 1.12, y, zi + len * 0.1]);
         if (rule(it.shockCone && s > 0, 'half-cone shock bodies in the intakes')) {} if (it.shockCone) body.add(latheRing([[0.001, zi - h * 0.7], [Math.min(w, h) * 0.6, zi + 0.1], [0.001, zi + 0.1]], 14, 'half cone', x - s * w * 0.3, y), metal);
       }
-      else if (rule(it.type === 'chin_scoop', 'chin_scoop: intake under the forward fuselage')) { const y = sp.botAt(zi + len * 0.5) + h * 0.35; duct(0, y, zi, len, w, h, 3, rake, 'chin intake'); }
-      else if (rule(it.type === 'ventral_box', 'ventral_box: raked intakes under the LERX, ahead of the engine nacelles')) for (const e of sp.engines.filter(e => e.kind === 'nacelle')) duct(e.x, e.y - e.r * 0.15, zi, len + (e.z - e.len / 2 - zi) + 0.3, w, h, 4, rake, 'ventral intake');
+      else if (rule(it.type === 'chin_scoop', 'chin_scoop: intake trunk under the forward fuselage, blended into the belly')) {}
+      else if (rule(it.type === 'ventral_box', 'ventral_box: raked intakes under the LERX, ahead of the engine nacelles')) {
+        const ns = sp.engines.filter(e => e.kind === 'nacelle');
+        for (const e of ns) duct(e.x, e.y - e.r * 0.15, zi, len + (e.z - e.len / 2 - zi) + 0.3, w, h, 3.2, rake, 'ventral intake');
+        if (ns.length === 2 && rule(chined, 'solid keel bridging the engine nacelles inner walls to the fuselage, from the intakes to the tail')) {
+          const e = ns[0], za = zi + len * 0.5, zb = e.z + e.len / 2 - 0.3, ks = [];
+          for (let i = 0; i <= 12; i++) { const z = za + (zb - za) * i / 12, yt = sp.botAt(z) + 0.15, yb = e.y - e.r * 0.75; ks.push({ z, w: Math.abs(e.x), h: Math.max(0.05, (yt - yb) / 2), y: (yt + yb) / 2 }); }
+          body.add(loftBody(ks, 24, 5, 'keel bridge'), camo); }
+      }
       else if (rule(it.type === 'wing_root', 'wing_root: intake slots in the wing-root leading edges')) for (const s of [-1, 1]) { const w0 = sp.wingAt(0.02); body.add(box(w * 2, Math.min(h * 2, sp.wing.t * w0.c * 0.9), 0.06), 0x0e0e0e, [s * (sp.wing.x0 + w * 1.2), w0.y, w0.le - 0.03]); }
     }
     rule(e0.intakeProfile === 'nacelle', 'nacelle: each engine nacelle / pod carries its own intake');
@@ -363,7 +449,7 @@
       return base; };
     sp.wings.forEach((g, i) => {
       const st = surfStations(g, f => sp.wingAt(f, g), { square: sp.wing.tiptanks && i === 0 });
-      const geo = loftSurface(st, 14, 'wing' + i), pf = wingPaint(g);
+      const geo = loftSurface(st, 18, 'wing' + i), pf = wingPaint(g);
       wr.add(geo, pf); wl.add(mirrorX(geo), pf);
       if (rule(g.tiptanks && i === 0, 'wing-tip tanks')) { const tip = sp.wingAt(1, g), tl = Math.max(2.4, tip.c * 2.4), tr = Math.max(0.3, tl * 0.12);
         const tank = [0, 0.1, 0.3, 0.7, 0.9, 1].map((t, k) => ({ z: tip.le + tip.c * 0.4 - tl * 0.5 + t * tl, w: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], h: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], y: tip.y, x: tip.x + tr * 0.2 }));
@@ -468,11 +554,13 @@
 
     // ---------------- assemble
     const grp = { props, glows };
-    grp.body = new THREE.Mesh(body.build(), mat('vc'));
+    // ================= STAGE 4: the skin shader (panel lines, rivets, panel tones, camouflage) on the airframe =================
+    const skin = { top: pt.top, bot: pt.bot }, skinM = Models.skinMat(pl, pt);
+    grp.body = new THREE.Mesh(body.build(skin), skinM);
     grp.glass = new THREE.Mesh(glassB.build(), mat('glass'));
     if (pilotB.parts.length) { const pm = new THREE.Mesh(pilotB.build(), mat('vc')); pm.name = 'pilot'; grp.glass.add(pm); }
     if (ckB.parts.length) grp.glass.add(new THREE.Mesh(ckB.build(), mat('vc')));
-    grp.wingL = new THREE.Mesh(wl.build(), mat('vc')); grp.wingR = new THREE.Mesh(wr.build(), mat('vc'));
+    grp.wingL = new THREE.Mesh(wl.build(skin), skinM); grp.wingR = new THREE.Mesh(wr.build(skin), skinM);
     const mergePre = (b) => { // markings: some parts arrive already coloured (rotated insignia)
       const pre = b.parts.filter(p => p.preColored), plain = new Builder(); plain.parts = b.parts.filter(p => !p.preColored);
       const geos = []; if (plain.parts.length) geos.push(plain.build()); for (const p of pre) geos.push(p.g);
@@ -504,5 +592,5 @@
     for (const g of geos) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); col.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
   }
-  Models.primitives = { loftBody, latheRing, loftSurface, mirrorX, orient };
+  Models.primitives = { loftBody, latheRing, loftSurface, loftPrism, loftUnion, lipRing, mirrorX, orient, naca };
 })();

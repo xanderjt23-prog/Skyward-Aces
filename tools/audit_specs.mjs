@@ -108,7 +108,7 @@ for (const pl of PLANE_LIST) {
   const R = sp.R, W = sp.W;
   if (e.fuselageArchitecture === 'TWIN_NACELLE_DECK') {
     const zf = sp.fins[0].zLE + sp.fins[0].rc * 0.4, tu = sp.tunnel.at(zf);
-    if (Math.abs(Math.abs(sp.fins[0].x) - tu.x) > 0.05) flag(id, `deck fins at �${Math.abs(sp.fins[0].x).toFixed(2)} m are not on the tunnel centre lines (�${tu.x.toFixed(2)} m)`);
+    if (Math.abs(Math.abs(sp.fins[0].x) - tu.x) > 0.05) flag(id, `deck fins at +/-${Math.abs(sp.fins[0].x).toFixed(2)} m are not on the tunnel centre lines (+/-${tu.x.toFixed(2)} m)`);
     if (Math.abs(sp.fins[0].base - (tu.y + tu.h)) > 0.15) flag(id, 'deck fins do not stand on the tunnel tops');
     if (tu.x - tu.w < sp.R * 0.5) flag(id, 'engine tunnels overlap the cockpit pod: they must be distinct, wide-spaced tunnels');
   } else if (e.fuselageArchitecture === 'CHINED_STEALTH') {
@@ -118,12 +118,12 @@ for (const pl of PLANE_LIST) {
   } else if (sp.fins.length === 2 && /^twin_vertical/.test(e.tailConfiguration)) {
     const fx = Math.abs(sp.fins[0].x), zf = sp.fins[0].zLE + sp.fins[0].rc * 0.4, local = sp.at(zf).w;
     const eng = sp.engines.filter(g => g.jet), outer = Math.max(...eng.map(g => Math.abs(g.x) + g.r * 0.5));
-    if (fx < outer) flag(id, `twin fins at ±${fx.toFixed(2)} m sit inboard of the engines (outer engine edge ±${outer.toFixed(2)} m): they belong on the outer engine-bay edges / tail booms`);
-    if (fx < local * 0.62) flag(id, `twin fins at ±${fx.toFixed(2)} m are squeezed toward the spine (rear body half-width ${local.toFixed(2)} m): they belong near its outer edges`);
+    if (fx < outer) flag(id, `twin fins at Â+/-${fx.toFixed(2)} m sit inboard of the engines (outer engine edge Â+/-${outer.toFixed(2)} m): they belong on the outer engine-bay edges / tail booms`);
+    if (fx < local * 0.62) flag(id, `twin fins at Â+/-${fx.toFixed(2)} m are squeezed toward the spine (rear body half-width ${local.toFixed(2)} m): they belong near its outer edges`);
   }
   if (e.intakeProfile === 'side_box' || e.intakeProfile === 'cheek_crescent') {
-    const zi = -pl.len / 2 + e.intake.at * pl.len, side = sp.sideAt(zi, sp.at(zi).y), outer = side + e.intake.width; // same construction as the builder: trunk inner face on the core
-    if (e.intakeProfile === 'side_box' && outer > W / 2 * 1.05) flag(id, `box intakes stick out to ±${outer.toFixed(2)} m, beyond the body width ±${(W / 2).toFixed(2)} m: the trunks should form the body sides`);
+    const zi = -pl.len / 2 + e.intake.at * pl.len, tr = sp.trunks(zi), outer = tr.length ? Math.max(...tr.map(p => Math.abs(p.x) + p.w)) : sp.at(zi).w; // the trunks exactly as the builder lofts them
+    if (e.intakeProfile === 'side_box' && outer > W / 2 * 1.05) flag(id, `box intakes stick out to Â+/-${outer.toFixed(2)} m, beyond the body width Â+/-${(W / 2).toFixed(2)} m: the trunks should form the body sides`);
     if (e.intake.height < 0.5 && e.intakeProfile === 'side_box') flag(id, `box intake mouth only ${e.intake.height} m tall`);
   }
   if (!sp.bi) {
@@ -131,10 +131,41 @@ for (const pl of PLANE_LIST) {
     if (wing === 'L' && rel > -0.3) flag(id, `low wing joins the body at ${(rel * 100).toFixed(0)}% of its half-depth (should be in the lower part)`);
     if ((wing === 'S' || wing === 'H') && rel < 0.3) flag(id, `${wing === 'S' ? 'shoulder' : 'high'} wing joins the body at ${(rel * 100).toFixed(0)}% of its half-depth (should be near the top)`);
   }
+  // ---- 3. the 4-stage manufacturing pipeline (aircraft3d.js) fed by this entry
+  const rng = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * i / n);
+  const inside = (q, x, y, m) => Math.pow(Math.abs((x - q.x) / (q.w * (m || 1))), q.n) + Math.pow(Math.abs((y - q.y) / (q.h * (m || 1))), q.n) <= 1;
+  // stage 1: the deck / stealth centre is solid from the intakes to the tail
+  if (e.fuselageArchitecture === 'TWIN_NACELLE_DECK') for (const z of rng(sp.tunnel.zA + 0.05, sp.tunnel.zB, 12)) {
+    const pr = sp.section(z).prims, br = pr.find(p => p.part === 'bridge'), tu = pr.filter(p => p.part === 'tunnel');
+    if (!br) { flag(id, `no bridging deck at z ${z.toFixed(1)} m: hollow gap between the tunnels`); break; }
+    if (!tu.every(t => inside(t, Math.sign(t.x) * br.w * 0.98, br.y))) { flag(id, `bridging deck does not reach into the tunnels at z ${z.toFixed(1)} m`); break; }
+  }
+  if (e.fuselageArchitecture === 'CHINED_STEALTH') {
+    for (const z of rng(-pl.len / 2 + 0.5, pl.len / 2, 20)) if (sp.chineW(z) < sp.at(z).w - 1e-6) { flag(id, 'chine narrower than the body at z ' + z.toFixed(1)); break; }
+    if (sp.wing.x0 > sp.chineW(sp.wing.rootZ + sp.wing.rc / 2)) flag(id, 'wing root outside the chine: the chine must run into the wing');
+  }
+  // stage 2: blunt exhaust plane, every nozzle enclosed and open, side-by-side nozzles not overlapping, boom clear of the jets
+  const fj = sp.engines.filter(g => g.kind === 'fus' || g.kind === 'tunnel');
+  if (pl.kind === 'jet' && fj.length) {
+    const pr = sp.section(sp.nozzleZ).prims;
+    for (const g of fj) { const sx = g.rect ? 1.25 : 1, sy = g.rect ? 0.62 : 1, pts = [[g.x, g.y + g.r * sy], [g.x, g.y - g.r * sy], [g.x + g.r * sx, g.y], [g.x - g.r * sx, g.y]];
+      if (!pts.every(([x, y]) => pr.some(q => inside(q, x, y, 1.001)))) flag(id, `nozzle at (${g.x.toFixed(2)}, ${g.y.toFixed(2)}) is not enclosed by the body at the exhaust plane`); }
+    if (fj.length === 2) { const g = fj[0], gap = Math.hypot(fj[0].x - fj[1].x, fj[0].y - fj[1].y), need = 2 * g.r * (fj[0].x !== fj[1].x ? (g.rect ? 1.25 : 1) : (g.rect ? 0.62 : 1));
+      if (gap < need - 1e-6) flag(id, `the two exhaust nozzles overlap (${gap.toFixed(2)} m apart, need ${need.toFixed(2)} m)`); }
+    if (sp.boom) for (const z of rng(sp.nozzleZ + 0.05, pl.len / 2, 8)) { const b = sp.boom(z); if (b.y - b.h < Math.max(...fj.map(g => g.y + g.r)) - 1e-6) { flag(id, 'tail boom hangs down into the exhausts at z ' + z.toFixed(1)); break; } }
+    if (!sp.boom && sp.nozzleZ < pl.len / 2 - 0.3 && e.fuselageArchitecture !== 'TWIN_NACELLE_DECK') flag(id, 'nozzles short of the tail but no boom: the body would run on over the exhausts');
+  }
+  // stage 3: intake trunks sink back into the core where they end (no step); cranked outer panels really bent
+  if (sp.intakeZ !== null && sp.trunks(sp.intakeZ).length) {
+    const zEnd = sp.intakeZ + e.intake.length * pl.len + 0.12 * pl.len - 0.01, s = sp.at(zEnd);
+    if (sp.trunks(zEnd).some(p => Math.abs(p.x) + p.w > s.w * 1.001)) flag(id, 'intake trunks do not sink into the fuselage where they end');
+  }
+  if (e.wing.outerWingDihedral !== null) { const a = sp.wingAt(e.wing.kinkSpan), b = sp.wingAt(1), want = Math.tan(e.wing.outerWingDihedral * Math.PI / 180) * (b.x - a.x);
+    if (Math.abs((b.y - a.y) - want) > 0.02) flag(id, `outer wing panel rises ${(b.y - a.y).toFixed(2)} m, not the ${want.toFixed(2)} m of its ${e.wing.outerWingDihedral} deg outerWingDihedral`); }
   if (e.canardPresence && !(e.canardLength > 0.8 && e.canardLength < 3)) flag(id, `canard semi-span ${e.canardLength} m is implausible`);
   if (e.tailConfiguration === 'twin_vertical_canted' && !(e.finCantDeg >= 5 && e.finCantDeg <= 35)) flag(id, `fin cant ${e.finCantDeg} deg outside the real-world 5..35 deg range`);
 }
 const ids = Object.keys(flags);
-console.log(`audited ${PLANE_LIST.length} aircraft against the reference layouts + geometry rules: ${ids.length} flagged\n`);
+console.log(`audited ${PLANE_LIST.length} aircraft against the reference layouts, geometry rules and 4-stage pipeline checks: ${ids.length} flagged\n`);
 for (const id of ids) console.log(`${id} (${ctxOut.PLANES[id] ? ctxOut.PLANES[id].name : '?'}):\n  - ` + flags[id].join('\n  - '));
 process.exitCode = ids.length ? 1 : 0;

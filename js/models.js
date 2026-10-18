@@ -29,10 +29,16 @@ const Models = (() => {
       m.compose(new V(pos ? pos[0] : 0, pos ? pos[1] : 0, pos ? pos[2] : 0), q, scale ? new V(scale[0], scale[1], scale[2]) : new V(1, 1, 1));
       g.applyMatrix4(m); this.parts.push({ g, color, camo }); return this;
     }
-    build() {
+    // skin: optional { top, bot } paint of an aircraft. Each vertex then also gets an aSkin tag for the skin shader:
+    // 2 = top-side paint (or a shade of it: camouflage + panel lines), 1 = underside paint (panel lines), 3 = bare metal
+    // (part.skin = 3: heat streaks), 0 = everything else (glass, dark interiors, tyres) - left untouched
+    build(skin) {
       let n = 0; for (const p of this.parts) n += p.g.attributes.position.count;
-      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3), tag = skin ? new Float32Array(n) : null;
       let o = 0; const c = new THREE.Color(), c2 = new THREE.Color();
+      const tops = skin ? new THREE.Color(skin.top) : null, bots = skin ? new THREE.Color(skin.bot) : null;
+      const tint = (cc, ref) => { const k = (cc.r + cc.g + cc.b) / Math.max(1e-4, ref.r + ref.g + ref.b); // a uniformly scaled copy of ref (k 0.45..1.2)?
+        return k > 0.45 && k < 1.2 && Math.abs(cc.r - ref.r * k) < 0.02 && Math.abs(cc.g - ref.g * k) < 0.02 && Math.abs(cc.b - ref.b * k) < 0.02; };
       for (const p of this.parts) {
         const pa = p.g.attributes.position, na = p.g.attributes.normal;
         const fn = typeof p.color === 'function' ? p.color : null;
@@ -44,12 +50,114 @@ const Models = (() => {
           // camouflage: top colour on upward faces, underside colour on downward faces
           const cc = fn ? c : Array.isArray(p.color) ? (na.getY(i) < -0.25 ? c2 : c) : c;
           col[o * 3] = cc.r; col[o * 3 + 1] = cc.g; col[o * 3 + 2] = cc.b;
+          if (tag) tag[o] = p.skin !== undefined ? p.skin : tint(cc, tops) ? 2 : tint(cc, bots) ? 1 : 0;
         }
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      if (tag) g.setAttribute('aSkin', new THREE.BufferAttribute(tag, 1));
       g.computeBoundingSphere(); return g;
     }
+  }
+
+  // ---- aircraft skin: procedural panel lines, rivets, panel-to-panel tone and camouflage, computed per pixel in the
+  // aircraft's own coordinates (so the pattern is fixed to the airframe and continuous across the body and wings)
+  const SKIN_GLSL = `
+    uniform vec3 uTop, uC0, uC1, uC2; uniform float uPattern, uPanel, uBlot, uVar, uLines, uSeed;
+    varying float vSkin; varying vec3 vOP; varying vec3 vON; float gSkinH;
+    float sHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float sHash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    float sNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(sHash3(i), sHash3(i + vec3(1,0,0)), f.x), mix(sHash3(i + vec3(0,1,0)), sHash3(i + vec3(1,1,0)), f.x), f.y),
+                 mix(mix(sHash3(i + vec3(0,0,1)), sHash3(i + vec3(1,0,1)), f.x), mix(sHash3(i + vec3(0,1,1)), sHash3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+    float sFbm(vec3 p) { return 0.5 * sNoise(p) + 0.27 * sNoise(p * 2.03 + 11.7) + 0.15 * sNoise(p * 4.01 + 23.1) + 0.08 * sNoise(p * 8.1 + 5.3); }
+    float sLum(vec3 c) { return dot(c, vec3(0.3, 0.59, 0.11)); }
+    vec3 sCamo(vec3 p) {
+      vec3 q = p * uBlot;
+      if (uPattern < 1.5) { return mix(uC0, uC1, smoothstep(0.49, 0.53, sFbm(q))); }                               // 1: two-tone disruptive
+      if (uPattern < 2.5) { float a = sFbm(q), b = sFbm(q * 1.3 + 41.0);                                             // 2: three-tone (SEA, Soviet)
+        return mix(mix(uC0, uC1, smoothstep(0.48, 0.52, a)), uC2, smoothstep(0.57, 0.61, b)); }
+      if (uPattern < 3.5) { float s = 0.0;                                                                           // 3: splinter (angular)
+        for (int i = 0; i < 6; i++) { float fi = float(i); vec3 d = normalize(vec3(sin(fi * 2.4 + uSeed), 0.35 * cos(fi * 1.7), cos(fi * 2.4 + uSeed)));
+          s += step(0.0, dot(p, d) / max(0.5, 1.0 / uBlot) - (sHash(vec2(fi, uSeed)) - 0.5) * 2.0) * pow(2.0, fi); }
+        float h = sHash(vec2(s, uSeed + 3.0)); return h < 0.45 ? uC0 : h < 0.85 ? uC1 : uC2; }
+      if (uPattern < 4.5) { float m = sFbm(q * 3.0);                                                                 // 4: mottle
+        return mix(mix(uC0, uC1, smoothstep(0.6, 0.66, m)), uC2, smoothstep(0.66, 0.7, sFbm(q * 2.2 + 17.0))); }
+      if (uPattern < 5.5) { return mix(uC0, uC1, step(0.5, sFbm(q * 0.8))); }                                        // 5: stealth greys (hard edges)
+      vec3 g = p * 2.6; vec3 cell = floor(g); float best = 9.0; vec3 id = cell;                                       // 6: lozenge (printed fabric)
+      for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) { vec3 c = cell + vec3(x, y, z), o = c + vec3(sHash3(c), sHash3(c + 7.1), sHash3(c + 3.3)); float d = length(g - o); if (d < best) { best = d; id = c; } }
+      float h = sHash3(id + uSeed); return h < 0.33 ? uC0 : h < 0.66 ? uC1 : uC2;
+    }`;
+  const SKIN_FRAG = `
+    #include <color_fragment>
+    gSkinH = 0.5;
+    if (vSkin > 0.5) {
+      vec3 an = abs(normalize(vON)); vec2 uv; float face;
+      if (an.y >= an.x && an.y >= an.z) { uv = vOP.xz; face = 1.0; } else if (an.x >= an.z) { uv = vOP.zy; face = 2.0; } else { uv = vOP.xy; face = 3.0; }
+      vec2 cell = vec2(uPanel * 1.35, uPanel * 0.7), g = uv / cell; g.x += sHash(vec2(floor(g.y), face + uSeed));   // long skin panels, each row's joints offset irregularly
+      vec2 id = floor(g), dm = min(fract(g), 1.0 - fract(g)) * cell;                                                  // metres to the panel edges
+      vec2 fw = max(fwidth(uv), vec2(1e-5)); float fwm = max(fw.x, fw.y);
+      // a 1 cm panel seam covers lw / pixel-footprint of a pixel: real coverage, so seams thin out and fade with distance instead of turning to bricks
+      float lines = max((1.0 - smoothstep(0.005, 0.005 + fw.x, dm.x)) * min(1.0, 0.01 / fw.x), (1.0 - smoothstep(0.005, 0.005 + fw.y, dm.y)) * min(1.0, 0.01 / fw.y));
+      vec2 r1 = vec2(abs(dm.x - 0.028), (fract(uv.y / 0.11) - 0.5) * 0.11), r2 = vec2((fract(uv.x / 0.11) - 0.5) * 0.11, abs(dm.y - 0.028));
+      float rivets = max(1.0 - smoothstep(0.0045, 0.0045 + fw.x * 1.5, length(r1)), 1.0 - smoothstep(0.0045, 0.0045 + fw.y * 1.5, length(r2)));
+      float near = 1.0 - smoothstep(0.01, 0.03, fwm), close = 1.0 - smoothstep(0.003, 0.009, fwm);                  // fade the detail out with distance
+      gSkinH = sHash(id + face * 17.0 + uSeed);
+      vec3 col = diffuseColor.rgb;
+      if (vSkin > 1.5 && vSkin < 2.5 && uPattern > 0.5) col = sCamo(vOP) * (sLum(col) / max(0.02, sLum(uTop)));
+      if (vSkin > 2.5) col *= 0.78 + 0.4 * sNoise(vec3(vOP.x * 9.0, vOP.y * 9.0, vOP.z * 0.7));                    // heat-streaked metal
+      else col *= 1.0 + (gSkinH - 0.5) * uVar;                                                                         // adjacent panels differ slightly
+      col *= 1.0 - uLines * (lines * 0.36 * near + rivets * 0.18 * close);
+      diffuseColor.rgb = col;
+    }`;
+  const skinCache = {};
+  function skinMat(pl, pt) {
+    if (skinCache[pl.id]) return skinCache[pl.id];
+    const cs = camo(pl, pt), L = pl.len, m = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: cs.pattern === 5 ? 8 : 22, specular: cs.pattern === 5 ? 0x101214 : 0x1c1c1c });
+    const v3 = h => new THREE.Color(h);
+    m.userData.u = { uTop: { value: v3(pt.top) }, uC0: { value: v3(cs.c[0]) }, uC1: { value: v3(cs.c[1]) }, uC2: { value: v3(cs.c[2]) }, uPattern: { value: cs.pattern },
+      uPanel: { value: Math.max(0.55, Math.min(1.3, L / 20)) }, uBlot: { value: 1 / Math.max(1.6, Math.min(5, L * 0.14)) }, uVar: { value: cs.pattern === 5 ? 0.11 : 0.05 },
+      uLines: { value: cs.lines ? 1 : 0 }, uSeed: { value: (pl.id.length * 7.3 + pl.id.charCodeAt(0) * 0.37) % 10 } };
+    m.extensions = { derivatives: true };
+    m.onBeforeCompile = function (sh) {
+      Object.assign(sh.uniforms, this.userData.u);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSkin; varying float vSkin; varying vec3 vOP; varying vec3 vON;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = aSkin; vOP = position; vON = normal;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + SKIN_GLSL).replace('#include <color_fragment>', SKIN_FRAG)
+        .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\nspecularStrength *= 0.8 + 0.4 * gSkinH;'); // panels catch the light differently
+    };
+    m.customProgramCacheKey = () => 'aircraft-skin-1';
+    return (skinCache[pl.id] = m);
+  }
+  // camouflage schemes from each air arm's real practice (nation, era, role); colours are the period paint standards
+  // (RAF Dark Green / Dark Earth / Ocean Grey, RLM 70/71 and 74/75, USAF T.O. 1-1-4 SEA FS 30219/34102/34079,
+  // FS 36375/36320 air-superiority greys, FS 36170/36375 F-22 greys, Soviet AII/AMT enamels)
+  const CAMO_ID = {
+    f4e: [2, 0xa58b64, 0x4f5b3a, 0x3a4232], f105: [2, 0xa58b64, 0x4f5b3a, 0x3a4232], f111f: [2, 0xa58b64, 0x4f5b3a, 0x3a4232], f100d: [2, 0xa58b64, 0x4f5b3a, 0x3a4232],
+    a10a: [2, 0x3c4a3c, 0x4f5b3a, 0x3d4245], f15c: [1, 0x9aa3ac, 0x7d858d, 0x7d858d], f15j: [1, 0x9aa3ac, 0x7d858d, 0x7d858d], f15e: [0, 0x5d6266, 0x5d6266, 0x5d6266],
+    f16c: [1, 0x8b939b, 0x6d757c, 0x6d757c], fa18e: [1, 0x8b939b, 0x6d757c, 0x6d757c], f2a: [1, 0x3c5d8a, 0x6b8bb5, 0x6b8bb5], f4ej: [1, 0x8f979d, 0x6f777d, 0x6f777d],
+    f22a: [5, 0x6f7579, 0x8e959b, 0x8e959b], su57: [3, 0x7d8a99, 0x5d6a78, 0x9eacba],
+    su27: [2, 0x9fb7c9, 0x7f98ab, 0x5e7487], su35s: [2, 0x9fb7c9, 0x7f98ab, 0x5e7487], su34: [1, 0x8fa2ad, 0x6c808c, 0x6c808c], mig29: [1, 0x9aa4a8, 0x7d8f84, 0x7d8f84],
+    mig29g: [1, 0x8a9296, 0x6c7478, 0x6c7478], mig23: [2, 0xb09a6a, 0x5b6b3a, 0x5c4a36], su24: [2, 0xb09a6a, 0x5b6b3a, 0x5c4a36], su7b: [2, 0xb09a6a, 0x5b6b3a, 0x5c4a36],
+    tornadoids: [3, 0x434c3b, 0x56595a, 0x2c2f2c], tornadogr1: [1, 0x3f4a33, 0x5f6669, 0x5f6669], jaguar: [1, 0x3f4a33, 0x5f6669, 0x5f6669], hunter6: [1, 0x3f4a33, 0x5f6669, 0x5f6669],
+    f104g: [3, 0x48503a, 0x5f6466, 0x5f6466], m2000c: [1, 0x8f9ca8, 0x6b7a88, 0x6b7a88], m2000d: [1, 0x5e6a5a, 0x7a6e58, 0x7a6e58],
+    ju87: [3, 0x37402d, 0x4a5337, 0x37402d], a4: [1, 0xa3a7aa, 0xa3a7aa, 0xa3a7aa],                       // Stuka RLM 70/71 splinter; Navy Light Gull Gray
+    fd7: [6, 0x5d5a4a, 0x6b5a6e, 0x3f4a3a], hannover: [6, 0x5d5a4a, 0x6b5a6e, 0x3f4a3a], su25: [2, 0xb09a6a, 0x5b6b3a, 0x5c4a36], gotha: [6, 0x3f4256, 0x5a4a5e, 0x2f3a46], albd3: [1, 0x5a6a3a, 0x6b5266, 0],  // printed lozenge; Albatros green / mauve
+  };
+  function camo(pl, pt) {
+    const n = pl.nation, e = pl.era, metalSkin = !(e <= 2 && (pl.shape === 'bi' || pl.shape === 'tri' || e === 1)); // WW1 / biplanes: doped fabric, no panel lines
+    const out = (pattern, c0, c1, c2) => ({ pattern, c: [c0, c1, c2], lines: metalSkin });
+    if (CAMO_ID[pl.id]) return out(...CAMO_ID[pl.id]);
+    if (e === 3) {
+      const big = pl.shape.startsWith('bomber');
+      if (n === 'uk') return big ? out(1, 0x3f4a31, 0x6b5737, 0) : out(1, 0x3f4a33, 0x7a7f80, 0);         // Dark Green / Dark Earth, or Ocean Grey on fighters
+      if (n === 'ger') return big ? out(3, 0x37402d, 0x4a5337, 0x37402d) : out(4, 0x5b6068, 0x4a5048, 0x6b6a72); // RLM 70/71 splinter; RLM 74/75 with mottle
+      if (n === 'ussr') return pl.year >= 1943 ? out(1, 0x7a8a96, 0x4f5a62, 0) : out(1, 0x5c6a3a, 0x2b2b26, 0);
+      if (n === 'fra') return out(2, 0x6b6a52, 0x7a5c3a, 0x5a6a72);
+    }
+    if (e === 5 && n === 'uk' && pl.id !== 'lightning') return out(1, 0x3f4a33, 0x5f6669, 0);
+    if (e === 5 && n === 'fra') return out(1, 0x6b5a3e, 0x4c5640, 0);
+    return out(0, pt.top, pt.top, pt.top);                                                                  // a single colour (natural metal, navy blue, silver, ...)
   }
   // a tapered wing panel: root at x=0, tip at x=dir*half; chord along z; sweep moves the tip back (+z)
   function panel(half, rootC, tipC, sweep, thick, dir, dihedral) {
@@ -201,5 +309,5 @@ const Models = (() => {
     m.userData.r = r; m.userData.len = len; return m;
   }
   function bomb(mass) { const r = 0.12 * Math.cbrt(mass / 20), b = new Builder(); b.add(zcyl(r * 0.6, r * 0.5, r * 5, 8), 0x4a5040, [0, 0, 0]); b.add(new THREE.SphereGeometry(r, 8, 6), 0x4a5040, [0, 0, -r * 2.5]); b.add(box(r * 2, 0.02, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); b.add(box(0.02, r * 2, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); return new THREE.Mesh(b.build(), mat('vc')); }
-  return { aircraft: null /* set by aircraft3d.js */, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
+  return { aircraft: null /* set by aircraft3d.js */, skinMat, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
 })();

@@ -52,6 +52,41 @@ export default async function (t) {
   console.log('open (non-watertight) parts:', r.open.length, r.open.slice(0, 30).join(' '));
   console.log('inside-out parts:', r.inverted.length, r.inverted.slice(0, 30).join(' '));
   console.log('NaN parts:', r.nan.length, r.nan.slice(0, 30).join(' '));
+  // 2b. the 4-stage pipeline on the built meshes
+  const pipe = JSON.parse(await t.eval(`(() => {
+    const out = { naca: '', open: [], solid: [], skin: [] };
+    // wing sections: a true NACA teardrop - round leading edge, max thickness near 30% chord, razor-thin trailing edge
+    const P = Models.primitives, th = p => P.naca(p, 0.1), xs = Array.from({ length: 201 }, (_, i) => i / 200), tmax = Math.max(...xs.map(th)), at = xs[xs.map(th).indexOf(tmax)];
+    const round = th(0.0025) / th(0.01); // a round nose grows like sqrt(x): 0.5; a sharp wedge would be 0.25
+    out.naca = 'max t/c ' + (2 * tmax).toFixed(3) + ' at ' + (at * 100).toFixed(0) + '% chord, trailing edge ' + Math.abs(2 * th(1)).toFixed(4) + ', leading-edge roundness ' + round.toFixed(2) + ' (sqrt law 0.5)';
+    if (!(at > 0.25 && at < 0.35 && Math.abs(th(1)) < 0.002 && round > 0.42)) out.nacaBad = true;
+    const ray = new THREE.Raycaster();
+    for (const pl of PLANE_LIST) {
+      const sp = Airframe.spec(pl), m = Models.aircraft(pl), body = m.userData.body; body.updateMatrixWorld(true);
+      const skinM = body.material; body.material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); // this copy only: rays must also see the skin from inside
+      const bb = new THREE.Box3();
+      // stage 2: every fuselage jet's exhaust is open and stands proud of the blunt exhaust plane
+      const fj = sp.engines.filter(g => g.kind === 'fus' || g.kind === 'tunnel');
+      for (const g of fj) { // a ray from behind straight up the tailpipe must hit the dark engine face, not skin
+        ray.set(new THREE.Vector3(g.x + g.r * 0.4, g.y, sp.L), new THREE.Vector3(0, 0, -1)); const h = ray.intersectObject(body, false)[0];
+        if (!h) { out.open.push(pl.id + ': no hit up the tailpipe'); continue; }
+        const c = body.geometry.attributes.color, lum = (c.getX(h.face.a) + c.getY(h.face.a) + c.getZ(h.face.a)) / 3;
+        if (lum > 0.12 || h.point.z < sp.nozzleZ - 0.1) out.open.push(pl.id + ': tailpipe blocked at z ' + h.point.z.toFixed(2) + ' (lum ' + lum.toFixed(2) + ')'); }
+      // stage 1: no see-through gap on the centreline of the deck / stealth bodies, intakes to tail (rays from above and from the side)
+      if (sp.arch !== 'SINGLE_TUBE') { const zA = sp.arch === 'TWIN_NACELLE_DECK' ? sp.tunnel.zA + 0.3 : sp.canopy.z + sp.canopy.len, zB = (sp.nozzleZ || sp.L / 2) - 0.6; // stop short of the tailpipes, which are separate closed parts sunk into the body
+        for (let i = 0; i <= 16; i++) { const z = zA + (zB - zA) * i / 16;
+          for (const x of [0, -0.4, 0.4]) { ray.set(new THREE.Vector3(x, 30, z), new THREE.Vector3(0, -1, 0)); const hs = ray.intersectObject(body, false); if (!hs.length) out.solid.push(pl.id + ': gap from above at x ' + x + ', z ' + z.toFixed(1)); }
+          // from the side: a solid centre means the ray enters the skin once on each side and meets no inner walls near x = 0
+          ray.set(new THREE.Vector3(30, sp.at(z).y - sp.at(z).h * 0.5, z), new THREE.Vector3(-1, 0, 0)); const hx = ray.intersectObject(body, false);
+          if (hx.length < 2 || hx.some(h => Math.abs(h.point.x) < 0.3)) out.solid.push(pl.id + ': centre not solid seen from the side at z ' + z.toFixed(1)); } }
+      // stage 4: the airframe carries the skin shader with its per-vertex tags
+      const a = body.geometry.attributes.aSkin; if (!a || !(skinM.onBeforeCompile && skinM.userData.u)) out.skin.push(pl.id);
+    }
+    return JSON.stringify(out); })()`));
+  console.log('NACA wing sections:', pipe.naca, pipe.nacaBad ? 'BAD' : 'ok');
+  console.log('open exhausts (ray up every tailpipe hits the engine face):', pipe.open.length ? pipe.open.length + ' FAIL ' + pipe.open.slice(0, 12).join(' / ') : 'all ok');
+  console.log('solid deck / stealth centreline (no see-through gaps):', pipe.solid.length ? pipe.solid.length + ' FAIL ' + pipe.solid.slice(0, 12).join(' / ') : 'all ok');
+  console.log('skin shader on every airframe:', pipe.skin.length ? 'missing on ' + pipe.skin.join(' ') : 'all ok');
   // 3. the anomaly checklist each aircraft went through
   if (process.env.LOG) { const log = JSON.parse(await t.eval('JSON.stringify(Airframe.anomalies)')); for (const id of process.env.LOG.split(',')) console.log(id + ':\n  - ' + (log[id] || []).join('\n  - ')); }
 }
