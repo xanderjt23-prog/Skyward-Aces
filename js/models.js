@@ -31,10 +31,13 @@ const Models = (() => {
     }
     // skin: optional { top, bot } paint of an aircraft. Each vertex then also gets an aSkin tag for the skin shader:
     // 2 = top-side paint (or a shade of it: camouflage + panel lines), 1 = underside paint (panel lines), 3 = bare metal
-    // (part.skin = 3: heat streaks), 0 = everything else (glass, dark interiors, tyres) - left untouched
+    // (part.skin = 3: heat streaks), 0 = everything else (glass, dark interiors, tyres) - left untouched;
+    // plus 10 x the part's structure (part.kind: 1 'surf' = wing / tail surface, 2 'fus' = fuselage-like body), with
+    // part.uv(x, y, z) -> [a, b, c] giving its panel coordinates (aUV): surf = [span m, chord fraction, chord m],
+    // fus = [station m along the axis, arc m round the section from the top, 0]
     build(skin) {
       let n = 0; for (const p of this.parts) n += p.g.attributes.position.count;
-      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3), tag = skin ? new Float32Array(n) : null;
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3), tag = skin ? new Float32Array(n) : null, uvs = skin ? new Float32Array(n * 3) : null;
       let o = 0; const c = new THREE.Color(), c2 = new THREE.Color();
       const tops = skin ? new THREE.Color(skin.top) : null, bots = skin ? new THREE.Color(skin.bot) : null;
       const tint = (cc, ref) => { const k = (cc.r + cc.g + cc.b) / Math.max(1e-4, ref.r + ref.g + ref.b); // a uniformly scaled copy of ref (k 0.45..1.2)?
@@ -50,12 +53,13 @@ const Models = (() => {
           // camouflage: top colour on upward faces, underside colour on downward faces
           const cc = fn ? c : Array.isArray(p.color) ? (na.getY(i) < -0.25 ? c2 : c) : c;
           col[o * 3] = cc.r; col[o * 3 + 1] = cc.g; col[o * 3 + 2] = cc.b;
-          if (tag) tag[o] = p.skin !== undefined ? p.skin : tint(cc, tops) ? 2 : tint(cc, bots) ? 1 : 0;
+          if (tag) { const t0 = p.skin !== undefined ? p.skin : tint(cc, tops) ? 2 : tint(cc, bots) ? 1 : 0; tag[o] = t0 + (t0 ? 10 * ({ surf: 1, fus: 2 }[p.kind] || 0) : 0);
+            if (p.uv) { const u = p.uv(pa.getX(i), pa.getY(i), pa.getZ(i)); uvs[o * 3] = u[0]; uvs[o * 3 + 1] = u[1]; uvs[o * 3 + 2] = u[2]; } }
         }
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      if (tag) g.setAttribute('aSkin', new THREE.BufferAttribute(tag, 1));
+      if (tag) { g.setAttribute('aSkin', new THREE.BufferAttribute(tag, 1)); g.setAttribute('aUV', new THREE.BufferAttribute(uvs, 3)); }
       g.computeBoundingSphere(); return g;
     }
   }
@@ -64,7 +68,7 @@ const Models = (() => {
   // aircraft's own coordinates (so the pattern is fixed to the airframe and continuous across the body and wings)
   const SKIN_GLSL = `
     uniform vec3 uTop, uC0, uC1, uC2; uniform float uPattern, uPanel, uBlot, uVar, uLines, uSeed;
-    varying float vSkin; varying vec3 vOP; varying vec3 vON; float gSkinH;
+    uniform float uFabric, uFrame; varying float vSkin; varying vec3 vOP; varying vec3 vON; varying vec3 vUV; float gSkinH;
     float sHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
     float sHash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
     float sNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -72,6 +76,12 @@ const Models = (() => {
                  mix(mix(sHash3(i + vec3(0,0,1)), sHash3(i + vec3(1,0,1)), f.x), mix(sHash3(i + vec3(0,1,1)), sHash3(i + vec3(1,1,1)), f.x), f.y), f.z); }
     float sFbm(vec3 p) { return 0.5 * sNoise(p) + 0.27 * sNoise(p * 2.03 + 11.7) + 0.15 * sNoise(p * 4.01 + 23.1) + 0.08 * sNoise(p * 8.1 + 5.3); }
     float sLum(vec3 c) { return dot(c, vec3(0.3, 0.59, 0.11)); }
+    // distance (m) from x to the nearest of a row of seams spaced S apart, each jittered so the spacing is irregular; id = the panel x lies in
+    float sSeams(float x, float S, float seed, out float id) { float i = floor(x / S), best = 1e5; id = i;
+      for (int k = -1; k <= 1; k++) { float j = i + float(k), p = (j + 0.5 + (sHash(vec2(j, seed)) - 0.5) * 0.7) * S, d = abs(x - p); if (d < best) { best = d; id = x > p ? j : j - 1.0; } }
+      return best; }
+    // pixel coverage of a seam w m wide at distance d, for a pixel footprint fw m: thin seams fade out with distance instead of aliasing
+    float sCover(float d, float fw, float w) { return (1.0 - smoothstep(w, w + fw, d)) * min(1.0, 2.0 * w / max(fw, 1e-5)); }
     vec3 sCamo(vec3 p) {
       vec3 q = p * uBlot;
       if (uPattern < 1.5) { return mix(uC0, uC1, smoothstep(0.49, 0.53, sFbm(q))); }                               // 1: two-tone disruptive
@@ -91,23 +101,29 @@ const Models = (() => {
   const SKIN_FRAG = `
     #include <color_fragment>
     gSkinH = 0.5;
-    if (vSkin > 0.5) {
-      vec3 an = abs(normalize(vON)); vec2 uv; float face;
-      if (an.y >= an.x && an.y >= an.z) { uv = vOP.xz; face = 1.0; } else if (an.x >= an.z) { uv = vOP.zy; face = 2.0; } else { uv = vOP.xy; face = 3.0; }
-      vec2 cell = vec2(uPanel * 1.35, uPanel * 0.7), g = uv / cell; g.x += sHash(vec2(floor(g.y), face + uSeed));   // long skin panels, each row's joints offset irregularly
-      vec2 id = floor(g), dm = min(fract(g), 1.0 - fract(g)) * cell;                                                  // metres to the panel edges
-      vec2 fw = max(fwidth(uv), vec2(1e-5)); float fwm = max(fw.x, fw.y);
-      // a 1 cm panel seam covers lw / pixel-footprint of a pixel: real coverage, so seams thin out and fade with distance instead of turning to bricks
-      float lines = max((1.0 - smoothstep(0.005, 0.005 + fw.x, dm.x)) * min(1.0, 0.01 / fw.x), (1.0 - smoothstep(0.005, 0.005 + fw.y, dm.y)) * min(1.0, 0.01 / fw.y));
-      vec2 r1 = vec2(abs(dm.x - 0.028), (fract(uv.y / 0.11) - 0.5) * 0.11), r2 = vec2((fract(uv.x / 0.11) - 0.5) * 0.11, abs(dm.y - 0.028));
-      float rivets = max(1.0 - smoothstep(0.0045, 0.0045 + fw.x * 1.5, length(r1)), 1.0 - smoothstep(0.0045, 0.0045 + fw.y * 1.5, length(r2)));
-      float near = 1.0 - smoothstep(0.01, 0.03, fwm), close = 1.0 - smoothstep(0.003, 0.009, fwm);                  // fade the detail out with distance
-      gSkinH = sHash(id + face * 17.0 + uSeed);
-      vec3 col = diffuseColor.rgb;
-      if (vSkin > 1.5 && vSkin < 2.5 && uPattern > 0.5) col = sCamo(vOP) * (sLum(col) / max(0.02, sLum(uTop)));
-      if (vSkin > 2.5) col *= 0.78 + 0.4 * sNoise(vec3(vOP.x * 9.0, vOP.y * 9.0, vOP.z * 0.7));                    // heat-streaked metal
-      else col *= 1.0 + (gSkinH - 0.5) * uVar;                                                                         // adjacent panels differ slightly
-      col *= 1.0 - uLines * (lines * 0.36 * near + rivets * 0.18 * close);
+    float sKind = floor(vSkin / 10.0 + 0.01), sTag = vSkin - sKind * 10.0;
+    if (sTag > 0.5) {
+      vec3 col = diffuseColor.rgb; float seam = 0.0, rivet = 0.0, fwm = 1.0; vec2 pid = vec2(0.0);
+      if (sKind > 1.5) {                                                           // fuselage: frame joints at irregular stations, a few long seams round the section
+        float fz = max(fwidth(vUV.x), 1e-5), fa = max(fwidth(vUV.y), 1e-5), iz, ia; fwm = max(fz, fa);
+        float dz = sSeams(vUV.x, uFrame, uSeed, iz), da = sSeams(vUV.y + 50.0, 0.85, uSeed + 7.0, ia);
+        seam = max(sCover(dz, fz, 0.0035), sCover(da, fa, 0.0035)); pid = vec2(iz, ia);
+        rivet = max(sCover(length(vec2(dz - 0.022, (fract(vUV.y / 0.075) - 0.5) * 0.075)), fwm, 0.0028), sCover(length(vec2(da - 0.022, (fract(vUV.x / 0.075) - 0.5) * 0.075)), fwm, 0.0028));
+      } else if (sKind > 0.5) {                                                    // wing / tail surface: spar and hinge lines along the span, ribs across it
+        float span = vUV.x, cm = vUV.y * vUV.z, fs = max(fwidth(span), 1e-5), fc = max(fwidth(cm), 1e-5), ir; fwm = max(fs, fc);
+        float dr = sSeams(span, 0.7, uSeed + 3.0, ir), d1 = abs(vUV.y - 0.14) * vUV.z, d2 = abs(vUV.y - 0.66) * vUV.z, d3 = abs(vUV.y - 0.745) * vUV.z;
+        if (uFabric > 0.5) {                                                       // doped fabric: rib tapes and a faint sag between the ribs, no metal seams
+          float ip, dp = sSeams(span, 0.3, 1.0, ip); col *= 1.0 + 0.05 * sCover(dp, fs, 0.012) - 0.03 * smoothstep(0.03, 0.15, dp);
+        } else seam = max(max(sCover(dr, fs, 0.0035), sCover(min(d1, d2), fc, 0.003)), sCover(d3, fc, 0.006));
+        pid = vec2(ir, floor(vUV.y / 0.33));
+        rivet = sCover(length(vec2(min(d1, d2) - 0.02, (fract(span / 0.07) - 0.5) * 0.07)), fwm, 0.0026);
+      } else { fwm = max(length(fwidth(vOP)), 1e-5); pid = floor(vOP.xz / 1.4); } // other skinned parts: tone only
+      gSkinH = sHash(pid + uSeed);
+      if (sTag > 1.5 && sTag < 2.5 && uPattern > 0.5) col = sCamo(vOP) * (sLum(col) / max(0.02, sLum(uTop)));
+      if (sTag > 2.5) col *= 0.9 + 0.18 * sNoise(vec3(vOP.x * 11.0, vOP.y * 11.0, vOP.z * 0.6));                // heat-streaked metal
+      else col *= 1.0 + (gSkinH - 0.5) * uVar;                                                                   // adjacent panels differ slightly
+      float near = 1.0 - smoothstep(0.012, 0.035, fwm), close = 1.0 - smoothstep(0.002, 0.006, fwm);
+      col *= 1.0 - uLines * (seam * 0.22 * near + rivet * 0.12 * close);
       diffuseColor.rgb = col;
     }`;
   const skinCache = {};
@@ -116,17 +132,17 @@ const Models = (() => {
     const cs = camo(pl, pt), L = pl.len, m = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: cs.pattern === 5 ? 8 : 22, specular: cs.pattern === 5 ? 0x101214 : 0x1c1c1c });
     const v3 = h => new THREE.Color(h);
     m.userData.u = { uTop: { value: v3(pt.top) }, uC0: { value: v3(cs.c[0]) }, uC1: { value: v3(cs.c[1]) }, uC2: { value: v3(cs.c[2]) }, uPattern: { value: cs.pattern },
-      uPanel: { value: Math.max(0.55, Math.min(1.3, L / 20)) }, uBlot: { value: 1 / Math.max(1.6, Math.min(5, L * 0.14)) }, uVar: { value: cs.pattern === 5 ? 0.11 : 0.05 },
-      uLines: { value: cs.lines ? 1 : 0 }, uSeed: { value: (pl.id.length * 7.3 + pl.id.charCodeAt(0) * 0.37) % 10 } };
+      uPanel: { value: Math.max(0.55, Math.min(1.3, L / 20)) }, uBlot: { value: 1 / Math.max(1.6, Math.min(5, L * 0.14)) }, uVar: { value: cs.pattern === 5 ? 0.1 : 0.035 },
+      uLines: { value: cs.lines ? 1 : 0 }, uFabric: { value: cs.lines ? 0 : 1 }, uFrame: { value: Math.max(0.75, Math.min(1.4, L / 13)) }, uSeed: { value: (pl.id.length * 7.3 + pl.id.charCodeAt(0) * 0.37) % 10 } };
     m.extensions = { derivatives: true };
     m.onBeforeCompile = function (sh) {
       Object.assign(sh.uniforms, this.userData.u);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSkin; varying float vSkin; varying vec3 vOP; varying vec3 vON;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = aSkin; vOP = position; vON = normal;');
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSkin; attribute vec3 aUV; varying float vSkin; varying vec3 vOP; varying vec3 vON; varying vec3 vUV;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = aSkin; vOP = position; vON = normal; vUV = aUV;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + SKIN_GLSL).replace('#include <color_fragment>', SKIN_FRAG)
         .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\nspecularStrength *= 0.8 + 0.4 * gSkinH;'); // panels catch the light differently
     };
-    m.customProgramCacheKey = () => 'aircraft-skin-1';
+    m.customProgramCacheKey = () => 'aircraft-skin-2';
     return (skinCache[pl.id] = m);
   }
   // camouflage schemes from each air arm's real practice (nation, era, role); colours are the period paint standards
@@ -186,15 +202,18 @@ const Models = (() => {
   function insignia(b, nation, size, pos, normalAxis, era) {
     // flat markings: a disc / cross / star, slightly off the surface
     const N = NATIONS[nation], rot = normalAxis === 'x' ? [0, 0, Math.PI / 2] : [0, 0, 0];
-    const flat = (g, c, s, off) => { const p = pos.slice(); if (normalAxis === 'x') p[0] += off * Math.sign(pos[0] || 1); else p[1] += off; b.add(g, c, p, rot, [s, 1, s]); };
-    const disc = cyl(1, 1, 0.02, 16);
-    if (nation === 'ger') { flat(box(1, 0.02, 0.3), 0xffffff, size, 0.01); flat(box(0.3, 0.02, 1), 0xffffff, size, 0.01); flat(box(0.8, 0.02, 0.18), 0x111111, size, 0.02); flat(box(0.18, 0.02, 0.8), 0x111111, size, 0.02); return; }
+    const flat = (g, c, s, off) => { const p = pos.slice(); off *= 2; if (normalAxis === 'x') p[0] += off * Math.sign(pos[0] || 1); else p[1] += off; b.add(g, c, p, rot, [s, 1, s]); }; // layers 1-9 cm apart: no z-fighting at range
+    const disc = cyl(1, 1, 0.002, 24);
+    if (nation === 'ddr') { // East German NVA: the black-red-gold flag with the state emblem
+      const bar = (c, dy) => { const p = pos.slice(); if (normalAxis === 'x') { p[0] += 0.025 * Math.sign(pos[0] || 1); p[1] += dy * size; } else { p[1] += 0.025; p[2] += dy * size; } b.add(normalAxis === 'x' ? box(0.18, 0.002, 0.75) : box(0.75, 0.002, 0.18), c, p, rot, [size, 1, size]); };
+      bar(0x111111, 0.18); bar(0xdd0000, 0); bar(0xffce00, -0.18); flat(disc, 0xdd0000, size * 0.17, 0.008); flat(disc, 0xffce00, size * 0.12, 0.01); return; }
+    if (nation === 'ger') { flat(box(1, 0.002, 0.3), 0xffffff, size, 0.01); flat(box(0.3, 0.002, 1), 0xffffff, size, 0.01); flat(box(0.8, 0.002, 0.18), 0x111111, size, 0.02); flat(box(0.18, 0.002, 0.8), 0x111111, size, 0.02); return; }
     if (nation === 'jpn') { if (era >= 3 && normalAxis === 'x') flat(disc, 0xffffff, size * 0.56, 0.005); flat(disc, 0xc8102e, size * 0.5, 0.01); return; } // white-outlined hinomaru on dark-green fuselages
     if (nation === 'ussr') { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.2 : 0.5; s[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
       const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI); flat(g, 0xcc1111, size, 0.02); return; }
     if (nation === 'usa' && era === 1) { flat(disc, 0xb22234, size * 0.5, 0.01); flat(disc, 0x1c2f6e, size * 0.34, 0.02); flat(disc, 0xffffff, size * 0.16, 0.03); return; }
     if (nation === 'usa' && era >= 3) { // star and bar (1943 on), with the red stripe from 1947
-      const bar = (l, h) => normalAxis === 'x' ? box(h, 0.02, l) : box(l, 0.02, h);
+      const bar = (l, h) => normalAxis === 'x' ? box(h, 0.002, l) : box(l, 0.002, h);
       flat(bar(1.9, 0.3), 0x1c2f6e, size, 0.004); flat(bar(1.78, 0.2), 0xffffff, size, 0.007); if (era >= 4) flat(bar(1.78, 0.07), 0xb22234, size, 0.009); }
     if (nation === 'uk' && era === 3) { // WW2 RAF: yellow-ringed type C1 on the fuselage, type B (no white) on the upper wings
       if (normalAxis === 'x') { flat(disc, 0xd8b030, size * 0.56, 0.005); flat(disc, N.roundel[2], size * 0.5, 0.01); flat(disc, N.roundel[1], size * 0.3, 0.02); flat(disc, N.roundel[0], size * 0.22, 0.03); }

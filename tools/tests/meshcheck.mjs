@@ -87,6 +87,16 @@ export default async function (t) {
   console.log('open exhausts (ray up every tailpipe hits the engine face):', pipe.open.length ? pipe.open.length + ' FAIL ' + pipe.open.slice(0, 12).join(' / ') : 'all ok');
   console.log('solid deck / stealth centreline (no see-through gaps):', pipe.solid.length ? pipe.solid.length + ' FAIL ' + pipe.solid.slice(0, 12).join(' / ') : 'all ok');
   console.log('skin shader on every airframe:', pipe.skin.length ? 'missing on ' + pipe.skin.join(' ') : 'all ok');
+  // 2c. every feature the registry declares was actually built (its rule fired in the builder's checklist)
+  const unbuilt = JSON.parse(await t.eval(`(() => {
+    const RULE = { bellyScoop: 'belly radiator', chinRadiator: 'chin radiator', wingRadiators: /radiator baths|wing-root leading edges/, wingGlove: 'wing glove', spats: 'spats',
+      gunHump: 'gun hump', vStruts: 'V-struts', tipTanks: 'tip tanks', wingFences: 'fences', tipRails: 'missile rails', gearPods: 'gear pods', gau8: 'GAU-8',
+      conformalTanks: 'conformal', ventralTank: 'ventral tank', duckbillNose: 'duckbill', dorsalFin: 'dorsal fin', ventralFin: 'ventral fin' };
+    const out = [];
+    for (const pl of PLANE_LIST) { const log = (Airframe.anomalies[pl.id] || []).join(' | ');
+      for (const x of Airframe.REGISTRY[pl.id].extras) { const r = RULE[x]; if (r && !(typeof r === 'string' ? log.includes(r) : r.test(log))) out.push(pl.id + ':' + x); } }
+    return JSON.stringify(out); })()`));
+  console.log('declared features actually built:', unbuilt.length ? unbuilt.length + ' MISSING ' + unbuilt.join(' ') : 'all ok');
   // 3. the anomaly checklist each aircraft went through
   if (process.env.LOG) { const log = JSON.parse(await t.eval('JSON.stringify(Airframe.anomalies)')); for (const id of process.env.LOG.split(',')) console.log(id + ':\n  - ' + (log[id] || []).join('\n  - ')); }
 }
