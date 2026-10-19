@@ -253,6 +253,9 @@ const Game = (() => {
   function finish(left) {
     const m = G.match; if (!m) return;
     const p = m.player, r = m.result || { winner: -2, reason: 'Left the battle', scores: m.scores };
+    if (m.mode === 'tutorial') { // practice: no rewards, no statistics
+      document.exitPointerLock && document.exitPointerLock(); Sound.stopAll();
+      return UI.showResults(m, { won: !left && r.winner === 0, left, reward: { xp: 0, coins: 0, achievements: [], levelUp: 0 }, reason: left ? 'Tutorial left' : r.reason }); }
     const won = !left && (m.mode === 'survival' ? m.wave >= 5 : r.winner === p.team);
     const s = p.stats;
     const reward = Profile.applyBattle({ left: !!left, tanks: s.tanks || 0, kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,

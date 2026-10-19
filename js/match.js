@@ -51,6 +51,7 @@ const Plan = {
   // humans: [{ id, name, plane, loadout, owner, team }]  settings: { mode, teamSize:[a,b], time, respawns, mission, fill, map }
   SKILL: { rookie: [0.1, 0.3], regular: [0.3, 0.6], veteran: [0.55, 0.8], ace: [0.8, 0.97] },
   build(settings, humans) {
+    if (settings.mode === 'tutorial') return Tutorial.plan(Tutorial.byId(settings.tutorial), humans[0]);
     Plan.difficulty = settings.difficulty || 'regular';
     const mode = settings.mode, seed = 1 + Math.floor(Math.random() * 1e6);
     const eraAvg = Math.max(1, Math.min(7, Math.round(humans.reduce((a, h) => a + PLANES[h.plane].era, 0) / humans.length)));
@@ -213,6 +214,7 @@ class Match {
       const ahp = 160 * Math.sqrt(ERA_HP[e] + 0.3);
       base.aa.push({ isAA: true, team: b.team, id: 'aa', baseIdx: i, type, pos: wp.clone().add(new V3(0, 1.5, 0)), hp: ahp, max: ahp, cd: Math.random() * 2, target: null, retarget: 0, burst: 0, mount, local: this.isHost, vel: new V3() });
     });
+    if (b.passive) base.aa.length = 0; // tutorial targets do not shoot back
     return base;
   }
   get cameraPos() { return this._camPos; }
@@ -241,6 +243,7 @@ class Match {
   }
   spawnCraft(c, i, first) {
     if (i == null) i = Math.floor(Math.random() * 16);
+    if (this.mode === 'tutorial' && Tutorial.spawn(this, c)) { c.respawnAt = 0; return; }
     // (mission bomber raids still arrive in the air)
     if (this.groundTeam(c.team) && !(this.mode === 'missions' && c.spec.task === 'bomb') && this.spawnOnRunway(c, i)) return;
     const sp = this.spawnPoint(c.team, i);
@@ -258,6 +261,7 @@ class Match {
   airfieldsLeft(team) { return this.bases.filter(b => b.team === team && !b.dead && (b.kind === 'airfield' || b.kind === 'carrier')).length; }
   canRespawn(c) {
     if (this.over) return false;
+    if (this.mode === 'tutorial') return c.team === 0;
     if (this.groundTeam(c.team) && !this.homes(c.team).length) return false; // every airfield of this team is destroyed
     if (this.mode === 'destroy' && !this.airfieldsLeft(c.team)) return false;
     if (this.mode === 'destroy') return true;
@@ -475,6 +479,7 @@ class Match {
   }
   // ---- rules, objectives and the end of the match (host)
   rules(dt) {
+    if (this.mode === 'tutorial') { if (!this.tut) Tutorial.start(this); Tutorial.update(this, dt); return; }
     const humans = this.crafts.filter(c => c.human);
     if (this.cfg.time && this.time >= this.cfg.time && this.mode !== 'missions') {
       if (this.mode === 'destroy') return this.end(this.scores[0] === this.scores[1] ? -1 : this.scores[0] > this.scores[1] ? 0 : 1, 'Time is up');

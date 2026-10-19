@@ -9,6 +9,11 @@ class BotBrain {
   update(dt) {
     const c = this.c, m = c.match; if (!c.alive || c.dm.destroyed || !c.dm.fx.ctrl) return;
     const P = c.perf, role = c.def.role;
+    if (c.spec.passive) { // tutorial targets: hold height and weave gently, never fight back
+      this.passT = (this.passT || 0) + dt; const f = new V3(0, 0, -1).applyQuaternion(c.quat), hd = Math.atan2(-f.x, -f.z) + Math.sin(this.passT * 0.15 + c.id) * 0.004;
+      const dir = new V3(-Math.sin(hd), 0, -Math.cos(hd)); this.holdY = this.holdY || c.pos.y; dir.y = (this.holdY - c.pos.y) * 0.004; dir.normalize();
+      if (Math.abs(c.pos.x) > m.half * 0.8 || Math.abs(c.pos.z) > m.half * 0.8) { dir.set(-c.pos.x, 0, -c.pos.z).normalize(); }
+      Flight.steer(c, dir, c.ctl, { allowPush: false }); c.ctl.throttle = 0.75; return; }
     this.think -= dt; this.missileCd -= dt; this.rocketCd -= dt; this.noiseT -= dt;
     if (this.noiseT <= 0) { this.noiseT = 0.4 + Math.random() * 0.6; const k = (1 - this.skill) * 0.03; this.noise.set((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k); }
     // Realistic mode take-off: roll down the runway, rotate, climb out, raise the gear

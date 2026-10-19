@@ -235,6 +235,7 @@ const HUD = (() => {
   // ---- match status (top centre)
   function topBar(game) {
     const m = game.match, cx = W / 2;
+    if (m.mode === 'tutorial') return Tutorial.draw(g, W, H, m, game.camera, text, proj);
     const tl = m.cfg.time ? Math.max(0, m.cfg.time - m.time) : m.time, mm = Math.floor(tl / 60), ss = Math.floor(tl % 60);
     const clock = `${mm}:${String(ss).padStart(2, '0')}`;
     g.fillStyle = 'rgba(8,14,22,0.55)'; round(cx - 170, 10, 340, 46, 10); g.fill();
