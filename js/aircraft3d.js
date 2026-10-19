@@ -163,6 +163,25 @@
       for (let j = 0; j < segs; j++) { const a = base + j, b = base + (j + 1) % segs, c = base + segs + (j + 1) % segs, d = base + segs + j; idx.push(a, b, c, a, c, d); } }
     return orient(indexed(pos, idx), name);
   }
+  // closed (scale, z) profile loop swept round a rounded-rectangle outline of half-size (hw, hh) centred on (cx, cy); M points
+  // evenly spaced by arc length; zfn(x, y, z) may move a vertex along Z (sawtooth edges) - a pure function of position, so
+  // the shared edges between the rings stay welded
+  function slotRing(prof, M, name, cx, cy, hw, hh, cr, zfn) {
+    const a = hw - cr, b = hh - cr, per = 4 * a + 4 * b + 2 * Math.PI * cr, out = [];
+    for (let j = 0; j < M; j++) { let d = (j + 0.5) / M * per, x, y; // walk: top edge (right to left), left arc, bottom, right arc ...
+      const segs = [[2 * a, t => [a - t, hh]], [Math.PI * cr / 2, t => { const q = Math.PI / 2 + t / cr; return [-a + cr * Math.cos(q), b + cr * Math.sin(q)]; }],
+        [2 * b, t => [-hw, b - t]], [Math.PI * cr / 2, t => { const q = Math.PI + t / cr; return [-a + cr * Math.cos(q), -b + cr * Math.sin(q)]; }],
+        [2 * a, t => [-a + t, -hh]], [Math.PI * cr / 2, t => { const q = 1.5 * Math.PI + t / cr; return [a + cr * Math.cos(q), -b + cr * Math.sin(q)]; }],
+        [2 * b, t => [hw, -b + t]], [Math.PI * cr / 2, t => { const q = t / cr; return [a + cr * Math.cos(q), b + cr * Math.sin(q)]; }]];
+      d = (d + a) % per; // start at the top-right corner of the flat top edge
+      for (const [len, f] of segs) { if (d <= len) { [x, y] = f(d); break; } d -= len; }
+      out.push([x / hw, y / hh]); }
+    const pos = [], idx = [];
+    for (let i = 0; i < prof.length; i++) { const base = pos.length / 3;
+      for (const [k, z] of [prof[i], prof[(i + 1) % prof.length]]) for (const [ux, uy] of out) { const px = cx + ux * hw * k, py = cy + uy * hh * k; pos.push(px, py, zfn ? zfn(px, py, z) : z); }
+      for (let j = 0; j < M; j++) { const p0 = base + j, p1 = base + (j + 1) % M, p2 = base + M + (j + 1) % M, p3 = base + M + j; idx.push(p0, p1, p2, p0, p2, p3); } }
+    return orient(indexed(pos, idx), name);
+  }
   // mirror across the centre plane: negate X and reverse every triangle so the copy still faces outwards
   function mirrorX(g) {
     const h = g.clone(), p = h.attributes.position;
@@ -232,6 +251,8 @@
     const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
     const NS = 56, zs = [];
     for (let i = 0; i <= NS; i++) { const z = z0 + (1 - Math.cos(Math.PI * i / NS)) / 2 * (zMain - z0); if (mouthZ === null || Math.abs(z - mouthZ) > 0.05) zs.push(z); }
+    if (chined) { const t = sp.rearTaper; for (let i = 1; i < 12; i++) zs.push(t.z0 + (t.z1 - t.z0) * i / 12); zs.sort((a, b) => a - b);
+      for (let i = zs.length - 1; i > 0; i--) if (zs[i] - zs[i - 1] < 0.04) zs.splice(i, 1); }
     const station = (z, drop, crease) => { const sc = sp.section(z), k = boxSides ? Math.max(0, Math.min(1, (z - flatA) / 0.6, (flatB - z) / 0.6)) : 0; // flattening ramps over 0.6 m
       const prims = sc.prims.filter(p => !drop || !drop.includes(p.part)).map(p => p.part === 'core' || p.part === 'pod' ? Object.assign({}, p, { w: Math.max(0.012, p.w), h: Math.max(0.012, p.h), n: p.n + (Math.max(4.5, p.n) - p.n) * k }) : p);
       return { z, oy: sc.oy, prims, crease }; };
@@ -246,7 +267,7 @@
     const radome = sp.jet && pl.era >= 5 && e0.intakeProfile !== 'nose_cone';
     const glare = !ww1 && !sp.big && lum > 140 && pl.era <= 4; // olive anti-glare panels were a WW2 / Korea-era practice
     const noseDark = rule(e0.intakeProfile === 'nose_cone', 'nose_cone: open nose intake with lip' + (e0.intake && e0.intake.shockCone ? ' and shock cone' : ''));
-    const inNozzle = (x, y) => nozzleEngines.some(e => Math.hypot((x - e.x) / (e.rect ? 1.25 : 1), (y - e.y) / (e.rect ? 0.62 : 1)) < e.r);
+    const inNozzle = (x, y) => nozzleEngines.some(e => Math.hypot((x - e.x) / e.sx, (y - e.y) / e.sy) < e.r);
     const fusPaint = (x, y, z, ny, nz) => {
       if (nz < -0.98 && z < z0 + 0.05 && noseDark) return 0x101010;                  // intake mouth
       if (nz > 0.98 && z > zTail - 0.05) return inNozzle(x, y) ? 0x161412 : shade(pt.bot, 0.72); // the blunt exhaust plane around the nozzles
@@ -257,11 +278,13 @@
     };
     rule(deck, 'TWIN_NACELLE_DECK: cockpit pod + two engine tunnels from the intake mouths to the nozzles, welded by a solid bridging deck');
     if (rule(chined, 'CHINED_STEALTH: hexagonal hard-edged fuselage; the chine widens over the caret intakes and runs on into the wing roots')) {
+      rule(true, 'rear deck taper: the flat top and bottom decks converge onto ' + (nozzleEngines.length ? 'the flat 2D nozzle flaps' : 'a slim tail stinger') + ' - no flat rear wall');
       // the same stations as a hexagon: flat top and bottom faces, side walls angled out to the chine (solid between the engines)
       // the side walls carry two extra corners at the intake's top and bottom lip height: ahead of and behind the intakes they
       // lie on the straight wall, over the intakes the chine juts out between them, so the caret mouth is only as tall as the inlet
       const ih = e0.intake && e0.intakeProfile === 'side_box' ? e0.intake.height / 2 : 0;
-      const hexSt = (z, wide) => { const q = sp.at(z), k = sp.chine.hex(q), wc = wide ? sp.chineW(z) : q.w;
+      const hexSt = (z, wide) => { const q = Object.assign({}, sp.at(z)), k0 = sp.chine.hex(q), k = sp.rearHex(z, k0); let wc = wide ? sp.chineW(z) : q.w;
+        if (k !== k0) { wc = wc + (k.wc - wc) * k.u; q.w = wc; }                       // rear deck taper: the chine closes in with the decks
         const yU = Math.min(k.cy + ih, k.cy + (k.top - k.cy) * 0.8), yL = Math.max(k.cy - ih, k.cy - (k.cy - k.bot) * 0.8);
         const xU = q.w - (q.w - k.wt) * (yU - k.cy) / Math.max(1e-6, k.top - k.cy), xL = q.w - (q.w - k.wb) * (k.cy - yL) / Math.max(1e-6, k.cy - k.bot);
         return { z, c: [[wc, k.cy], [xU, yU], [k.wt, k.top], [-k.wt, k.top], [-xU, yU], [-wc, k.cy], [-xL, yL], [-k.wb, k.bot], [k.wb, k.bot], [xL, yL]] }; };
@@ -309,9 +332,26 @@
     // the fuselage stops blunt at the exhaust plane; each engine ends in an open, hollow tailpipe: a metal cylinder ring
     // standing slightly proud of the body, dark heat-stained inner wall, and deep inside it the flame holder, the turbine
     // cone and a dark engine face that seals the part
+    // sawtooth (chevron) trailing edge: triangle wave of the given period and depth, as a function of position along the edge
+    const saw = (t, period, depth) => { const f = t / period - Math.floor(t / period); return depth * (1 - Math.abs(2 * f - 1)); };
+    const nozzle2D = (e, x, y, zn) => { // F-22: flat 2.5 : 1 vectoring slot; the upper and lower flaps end in sawtooth edges
+      const hw = e.r * e.sx, hh = e.r * e.sy, ln = e.nl, wall = 0.05, teeth = 3, depth = Math.min(0.32, ln * 0.25); // n: near-rectangular superellipse corners
+      // wedge flaps: thick where they hinge on the deck, converging to a thin plate at the exit (outer surface carries the deck slope on);
+      // the exit edge of the upper and lower flaps is cut into chevrons (sawtooth), the side walls stay straight
+      const zExit = zn + ln, cut = (px, py, pz) => { if (pz < zExit - 1e-4) return pz; const dx = (px - x) / hw, dy = Math.abs(py - y) / hh, wv = Math.max(0, Math.min(1, (dy - 0.45) / 0.25));
+        return pz - depth * wv + saw((dx + 1) / 2 * teeth * 2, 2, depth) * wv; }; // teeth peaks reach the full exit, valleys cut back by depth
+      const g = slotRing([[1, zn - 0.35], [1, zn], [0.86, zn + ln * 0.6], [0.78, zExit], [0.78 - wall / hh, zExit], [0.8 - wall / hh, zn + ln * 0.5], [1 - wall / hh, zn - 0.35]], 160, 'nozzle', x, y, hw, hh, hh * 0.35, cut);
+      body.add(g, (px, py, pz) => { const ddy = Math.abs(py - y) / hh, ddx = Math.abs(px - x) / hw; if (ddy < 0.86 && ddx < 0.86 && pz > zn - 0.3) return 0x1f1d1b; // sooty inner walls
+        return new THREE.Color(0x80817f).lerp(new THREE.Color(0x5c5b58), Math.max(0, Math.min(1, (pz - zn) / ln))).getHex(); }); // radar-absorbent grey flaps
+      body.parts[body.parts.length - 1].skin = 3;
+      body.add(slotRing([[0.001, zn - 0.02], [0.9, zn - 0.02], [0.9, zn + 0.02], [0.001, zn + 0.02]], 64, 'engine face', x, y, hw, hh, hh * 0.35), 0x0d0c0b);
+      for (const k of [-0.5, 0, 0.5]) body.add(box(0.03, hh * 1.7, 0.06), 0x2a2826, [x + k * hw, y, zn + 0.06]); // vanes / struts in the throat
+      if (pl.ab) { const gg = new THREE.Mesh(zcyl(hh * 0.9, hh * 0.1, L * 0.3, 12), mat('glow')); gg.scale.set(hw / hh, 1, 1); gg.position.set(x, y, zn + ln + L * 0.15); gg.visible = false; glows.push(gg); }
+    };
     const nozzle = (e, x, y, zn) => {
       const style = e.style || (pl.ab ? 'feathered' : 'plain'), ab = style !== 'plain';
-      const ro = e.r, ri = e.r * 0.88, ln = e.nl || e.r * (ab ? 0.55 : 0.32), sx = e.rect ? 1.25 : 1, sy = e.rect ? 0.62 : 1, np = e.rect ? 0 : 16;
+      if (rule(style === '2d_serrated', '2D vectoring nozzles: flat 2.5 : 1 slots with sawtooth upper and lower flap edges')) return nozzle2D(e, x, y, zn);
+      const ro = e.r, ri = e.r * 0.88, ln = e.nl || e.r * (ab ? 0.55 : 0.32), sx = e.sx || 1, sy = e.sy || 1, np = e.rect ? 0 : style === 'round_serrated' ? 18 : 16;
       // real exhaust metal: a hot-blued / straw titanium band next to the skin, darkening to sooty steel at the lip
       const ringPaint = (px, py, pz) => { const dx = (px - x) / sx, dy = (py - y) / sy, rr = Math.hypot(dx, dy), u = Math.max(0, Math.min(1, (pz - zn) / ln));
         if (rr < ri * 0.99 || (pz > zn + ln - 0.02 && rr < (ri + ro) / 2)) return 0x24211e;                       // sooty inner wall
@@ -324,7 +364,9 @@
       const inner = ab ? [[ri * 0.95, zn + ln], [ri * 0.82, zn + ln * 0.5], [ri * 0.86, zn - 0.3]] : [[ri * 0.98, zn + ln], [ri, zn - 0.3]];
       const g = latheRing([...outer, ...inner], np ? np * 4 : 36, 'nozzle', x, y, sx, sy, e.rect ? 4 : 2);
       if (np && ab) { const pa = g.attributes.position; // scalloped exit: each petal's trailing edge stands out a little past its neighbours
-        for (let k = 0; k < pa.count; k++) { if (pa.getZ(k) < zn + ln - 0.01) continue; const a = Math.atan2(pa.getY(k) - y, pa.getX(k) - x); pa.setZ(k, pa.getZ(k) + 0.045 * Math.max(0, Math.cos(a * np))); }
+        const serr = rule(style === 'round_serrated', 'round vectoring nozzles with sawtooth petal edges (stealth)');
+        for (let k = 0; k < pa.count; k++) { if (pa.getZ(k) < zn + ln - 0.01) continue; const a = Math.atan2(pa.getY(k) - y, pa.getX(k) - x);
+          pa.setZ(k, pa.getZ(k) + (serr ? saw(a / (Math.PI * 2) * np + 0.5, 1, ro * 0.22) - ro * 0.22 : 0.045 * Math.max(0, Math.cos(a * np)))); } // serrated: pointed chevron petals
         g.computeVertexNormals(); }
       body.add(g, ringPaint); body.parts[body.parts.length - 1].skin = 3;
       if (style === 'bare') { // F-15: no feathers - the actuator rods and their brackets run along the outside of the nozzle
@@ -352,7 +394,7 @@
           const py = box(0.18, Math.max(0.2, e.y - e.r * 0.7 - ft + 0.25), e.len * 0.42); py.rotateZ(side * 0.5); body.add(py, camo, [e.x * 0.72, (e.y - e.r * 0.7 + ft) / 2, e.z]); }
       } else if (e.kind === 'sidenac' || e.kind === 'nacelle') { // jet nacelles
         nacelle(e, [[0, 0.88, 0.92], [0.06, 0.98, 1], [0.5, 1, 1], [0.85, 0.96, 0.94], [1, 0.84, 0.82]], e.kind);
-        nozzle({ r: e.r * 0.84 }, e.x, e.y, e.z + e.len / 2);
+        nozzle({ r: e.r * 0.84, style: e.style, nl: e.style ? e.r * 0.5 : undefined }, e.x, e.y, e.z + e.len / 2);
         if (e.kind !== 'nacelle') body.add(latheRing([[e.r * 0.74, e.z - e.len / 2 - 0.06], [e.r * 0.92, e.z - e.len / 2 - 0.06], [e.r * 0.92, e.z - e.len / 2 + 0.25], [e.r * 0.74, e.z - e.len / 2 + 0.25]], 20, 'nacelle lip', e.x, e.y), shade(pt.top, 0.9));
       }
     }
@@ -654,5 +696,5 @@
     for (const g of geos) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); col.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
   }
-  Models.primitives = { loftBody, latheRing, loftSurface, loftPrism, loftUnion, lipRing, mirrorX, orient, naca };
+  Models.primitives = { loftBody, latheRing, loftSurface, loftPrism, loftUnion, lipRing, slotRing, mirrorX, orient, naca };
 })();

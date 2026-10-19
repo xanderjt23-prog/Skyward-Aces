@@ -113,17 +113,20 @@ const Airframe = (() => {
   //   twin_boom_propellers { positions }                fuselage_jet { nozzles [[x, y] in body half-widths], nozzleAt (fraction of L),
   //                                                       nozzleLength (m of nozzle exposed behind the rear fuselage, from photos),
   //                                                       nozzleStyle ('plain' fixed tailpipe | 'feathered' afterburner with turkey-feather
-  //                                                       petals | 'bare' feathers removed, actuators visible: USAF / JASDF F-15) }
+  //                                                       petals | 'bare' feathers removed, actuators visible: USAF / JASDF F-15 |
+  //                                                       '2d_serrated' flat 2.5:1 two-dimensional vectoring slots with sawtooth
+  //                                                       flap edges: F-22, CHINED_STEALTH + rectangular only) }
   //   wing_nacelles / underwing_pods { positions, diameter (m), length (m) }
   //   rear_fuselage_pods { lateral (m), height (m above axis), at (fraction of L), diameter, length }
   //   fuselage_side_nacelles { at, diameter, length, lateral (body half-widths, 0 = against the side) }
-  //   ventral_nacelles { lateral (body half-widths), diameter, from, to (fractions of L) }
+  //   ventral_nacelles { lateral (body half-widths), diameter, from, to (fractions of L), nozzleStyle (as above, plus
+  //                    'round_serrated': round vectoring nozzles with sawtooth petal edges, CHINED_STEALTH only - Su-57) }
   //   twin_tunnels { nozzleLength, nozzleStyle } (TWIN_NACELLE_DECK: the engines are the deck's tunnels, nozzles at deck.nozzleX)
   const ENGINE_FIELDS = {
     nose_propeller: ['radial'], wing_propellers: ['positions', 'radial', 'pusher'], twin_boom_propellers: ['positions'],
     fuselage_jet: ['nozzles', 'nozzleAt', 'nozzleLength', 'nozzleStyle'], wing_nacelles: ['positions', 'diameter', 'length'], underwing_pods: ['positions', 'diameter', 'length'],
     rear_fuselage_pods: ['lateral', 'height', 'at', 'diameter', 'length'], fuselage_side_nacelles: ['at', 'diameter', 'length', 'lateral'],
-    ventral_nacelles: ['lateral', 'diameter', 'from', 'to'], twin_tunnels: ['nozzleLength', 'nozzleStyle'],
+    ventral_nacelles: ['lateral', 'diameter', 'from', 'to', 'nozzleStyle'], twin_tunnels: ['nozzleLength', 'nozzleStyle'],
   };
   const EXTRAS = ['dorsalFin', 'ventralFin', 'bellyScoop', 'chinRadiator', 'wingRadiators', 'spats', 'bracingWires', 'gunHump', 'vStruts', 'tipTanks', 'wingFences',
     'wingGlove', 'ventralTank', 'conformalTanks', 'gearPods', 'gau8', 'duckbillNose', 'tipRails', 'droopedTips', 'fixedGear', 'headrest', 'pusher'];
@@ -249,7 +252,7 @@ const Airframe = (() => {
       chine: { topRatio: 0.42, bottomRatio: 0.6, chineLevel: 0.3 },
       wing: { wingMountHeight: .75, planform: 'diamond', rootLE: .42, sweepLE: 42, taper: .14, dihedral: -3, thickness: .04, sweepTE: -17, kinkSpan: null, outerWingDihedral: null },
       biplane: null, intakeProfile: 'side_box', intake: { at: .25, length: .4, width: 1.0, height: 1.7, rake: 30, splitter: false, shockCone: false },
-      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.25, 0], [.25, 0]], nozzleAt: 1, rectangular: true, nozzleLength: 0.5, nozzleStyle: 'feathered' },
+      engines: { layout: 'fuselage_jet', count: 2, nozzles: [[-.25, 0], [.25, 0]], nozzleAt: 1, rectangular: true, nozzleLength: 1.3, nozzleStyle: '2d_serrated' },
       tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 28, tail: t(8.84, 2.6, .25, .86, 42, 0, 0, .73, 3.8, .4, 22, .76, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .2, length: 3.0, offset: 0 }, extras: [], radiator: null, glove: null },
     b17g: { dims: { length: 22.7, span: 31.6, height: 5.82, wingArea: 131.92 }, fuselageArchitecture: 'SINGLE_TUBE', gear: 'tailwheel', lexPresence: false,
@@ -712,7 +715,7 @@ const Airframe = (() => {
       chine: { topRatio: 0.5, bottomRatio: 0.62, chineLevel: -0.15 },
       wing: { wingMountHeight: .6, planform: 'diamond', rootLE: .42, sweepLE: 48, taper: .15, dihedral: -2, thickness: .04, sweepTE: -14, kinkSpan: null, outerWingDihedral: null },
       biplane: null, intakeProfile: 'ventral_box', intake: { at: .28, length: .26, width: 1.0, height: 1.2, rake: 20, splitter: false, shockCone: false },
-      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.2, diameter: 1.4, from: .28, to: .97 },
+      engines: { layout: 'ventral_nacelles', count: 2, lateral: 1.2, diameter: 1.4, from: .28, to: .97, nozzleStyle: 'round_serrated' },
       tailConfiguration: 'twin_vertical_canted', horizontalTail: 'fuselage', finCantDeg: 26, tail: t(9.4, 2.6, .25, .87, 45, 0, -.1, .76, 3.4, .4, 45, 1.6, 0),
       ...NOCANARD, cockpit: { canopy: 'bubble', at: .19, length: 2.6, offset: 0 }, extras: [], radiator: null, glove: null },
     pe2: { dims: { length: 12.7, span: 17.2, height: 3.5, wingArea: 40.5 }, fuselageArchitecture: 'SINGLE_TUBE', gear: 'tailwheel', lexPresence: false,
@@ -1063,7 +1066,10 @@ const Airframe = (() => {
     need(e.engines, 'engines', ['layout', 'count']); oneOf(e.engines.layout, ENUM.layout, 'engines.layout');
     for (const k of ENGINE_FIELDS[e.engines.layout]) if (!(k in e.engines)) fail('engines.' + k + ' is required for layout "' + e.engines.layout + '"');
     if ('nozzleLength' in e.engines && !(num(e.engines.nozzleLength) && e.engines.nozzleLength >= 0.1 && e.engines.nozzleLength <= 2)) fail('engines.nozzleLength (m of nozzle exposed behind the fuselage) must be 0.1..2');
-    if ('nozzleStyle' in e.engines) { if (!['plain', 'feathered', 'bare'].includes(e.engines.nozzleStyle)) fail('engines.nozzleStyle must be plain, feathered or bare');
+    if ('nozzleStyle' in e.engines) { const ns = e.engines.nozzleStyle; if (!['plain', 'feathered', 'bare', '2d_serrated', 'round_serrated'].includes(ns)) fail('engines.nozzleStyle must be plain, feathered, bare, 2d_serrated or round_serrated');
+      if ((ns === '2d_serrated' || ns === 'round_serrated') && e.fuselageArchitecture !== 'CHINED_STEALTH') fail('serrated stealth nozzles are only for CHINED_STEALTH aircraft');
+      if (ns === '2d_serrated' && !e.engines.rectangular) fail('2d_serrated nozzles need engines.rectangular: true');
+      if (e.engines.rectangular && ns !== '2d_serrated') fail('rectangular nozzles must be nozzleStyle "2d_serrated"');
       if ((e.engines.nozzleStyle === 'plain') === !!pl.ab) fail('engines.nozzleStyle "' + e.engines.nozzleStyle + '" does not match ' + (pl.ab ? 'an afterburning' : 'a non-afterburning') + ' engine'); }
     if (e.engines.count !== pl.eng) fail('engines.count ' + e.engines.count + ' disagrees with the aircraft data (' + pl.eng + ')');
     if ((pl.kind === 'jet') !== !['nose_propeller', 'wing_propellers', 'twin_boom_propellers'].includes(e.engines.layout)) fail('engines.layout "' + e.engines.layout + '" does not match a ' + pl.kind + ' aircraft');
@@ -1190,8 +1196,9 @@ const Airframe = (() => {
       // nozzleAt 1: the published length runs to the nozzle exit, so the fuselage skin stops nozzleLength short of the tail
       const zEnd = en.nozzleAt >= 0.99 ? L / 2 - en.nozzleLength - 0.05 : z0 + en.nozzleAt * L, sEnd = at(zEnd);
       let rn = en.count === 2 ? Math.min(sEnd.w * 0.5, sEnd.h * 0.95, R * 0.45) : Math.min(sEnd.w, sEnd.h) * 0.98;
-      if (en.count === 2) { const gap = Math.hypot(en.nozzles[0][0] - en.nozzles[1][0], en.nozzles[0][1] - en.nozzles[1][1]) * R; rn = Math.min(rn, gap / 2 / (en.rectangular ? 1.25 : 1) * 0.94); } // side-by-side exhausts never overlap
-      for (const [nx, ny] of en.nozzles) engines.push({ kind: 'fus', x: nx * R, y: sEnd.y + ny * R, z: zEnd - L * 0.16, r: rn, len: L * 0.32, jet: true, nozzle: zEnd, rect: !!en.rectangular, nl: en.nozzleLength, style: en.nozzleStyle });
+      const asx = en.rectangular ? 1.32 : 1, asy = en.rectangular ? 1.32 / 2.5 : 1; // 2D nozzle exits: width : height = 2.5 : 1
+      if (en.count === 2) { const gap = Math.hypot(en.nozzles[0][0] - en.nozzles[1][0], en.nozzles[0][1] - en.nozzles[1][1]) * R; rn = Math.min(rn, gap / 2 / asx * 0.94); } // side-by-side exhausts never overlap
+      for (const [nx, ny] of en.nozzles) engines.push({ kind: 'fus', x: nx * R, y: sEnd.y + ny * R, z: zEnd - L * 0.16, r: rn, len: L * 0.32, jet: true, nozzle: zEnd, rect: !!en.rectangular, sx: asx, sy: asy, nl: en.nozzleLength, style: en.nozzleStyle });
     } else if (en.layout === 'wing_nacelles' || en.layout === 'underwing_pods') {
       for (const s of [-1, 1]) for (const f of en.positions) { const x = s * f * b, wa = sp.wingAt(sp.wingF(x)), r = en.diameter / 2;
         engines.push({ kind: en.layout === 'underwing_pods' ? 'underwing' : 'wingnac', x, y: en.layout === 'underwing_pods' ? wa.y - r * 0.85 : wa.y, z: wa.le + wa.c * 0.3 - en.length * 0.32, r, len: en.length, jet: true }); }
@@ -1202,9 +1209,9 @@ const Airframe = (() => {
     } else if (en.layout === 'twin_tunnels') {
       const tu = sp.tunnel.at(sp.tunnel.zB); for (const s of [-1, 1]) engines.push({ kind: 'tunnel', x: s * dk.nozzleX, y: tu.y, z: sp.tunnel.zB - L * 0.16, r: Math.min(tu.w, tu.h) * 0.85, len: L * 0.32, jet: true, nozzle: sp.tunnel.zB, nl: en.nozzleLength, style: en.nozzleStyle });
     } else if (en.layout === 'ventral_nacelles') {
-      for (const s of [-1, 1]) { const r = en.diameter / 2, len = (en.to - en.from) * L; engines.push({ kind: 'nacelle', x: s * en.lateral * R, y: -0.35 * R, z: z0 + (en.from + en.to) / 2 * L, r, len, jet: true }); }
+      for (const s of [-1, 1]) { const r = en.diameter / 2, len = (en.to - en.from) * L; engines.push({ kind: 'nacelle', x: s * en.lateral * R, y: -0.35 * R, z: z0 + (en.from + en.to) / 2 * L, r, len, jet: true, style: en.nozzleStyle }); }
     }
-    for (const g of engines) if (g.jet && g.nozzle === undefined) g.nozzle = g.z + g.len / 2;
+    for (const g of engines) { if (g.jet && g.nozzle === undefined) g.nozzle = g.z + g.len / 2; if (g.sx === undefined) { g.sx = 1; g.sy = 1; } }
     sp.engines = engines;
     sp.intake = e.intakeProfile === 'none' || e.intakeProfile === 'nacelle' ? null : Object.assign({ type: e.intakeProfile }, e.intake);
     sp.extra = { lerx: e.lexPresence, booms: en.layout === 'twin_boom_propellers' ? { x: en.positions[0] * b } : null, gearPods: ex.has('gearPods') ? [.13, .12] : null, gau8: ex.has('gau8'),
@@ -1233,7 +1240,7 @@ const Airframe = (() => {
     const housings = fusJets, zH = sp.nozzleZ !== null ? sp.nozzleZ - 0.2 * L : 0;
     // (boat-tail: the housing swells to 1.12 r, then closes in to exactly the nozzle's outer radius at the exhaust plane, so the skin flows into the nozzle)
     sp.housings = z => housings.length && z >= zH && z <= sp.nozzleZ + 1e-6 ? housings.map(g => { const u = (z - zH) / (sp.nozzleZ - zH), k = 1.12 * ss(u / 0.6) * (1 - 0.107 * ss((u - 0.7) / 0.3));
-      return { x: g.x, y: g.y, w: g.r * k * (g.rect ? 1.25 : 1), h: g.r * k * (g.rect ? 0.62 : 1), n: g.rect ? 3 : 2, part: 'housing' }; }) : [];
+      return { x: g.x, y: g.y, w: g.r * k * g.sx, h: g.r * k * g.sy, n: g.rect ? 3 : 2, part: 'housing' }; }) : [];
     // deck tail booms: along the rear tunnel centre line, top flush with the tunnel top (fins), down past the tailplane root
     sp.tailBoom = z => { const q = sp.tunnel.at(z), top = q.y + q.h, bot = Math.min(top - q.h * 0.55, sp.stab ? sp.stab.y - 0.14 : top); return { x: dk.tunnelRearX, w: Math.min(0.34, q.w * 0.45), y: (top + bot) / 2, h: (top - bot) / 2 }; };
     sp.section = z => {
@@ -1310,13 +1317,27 @@ const Airframe = (() => {
     sp.radiator = e.radiator; sp.glove = e.glove;
     sp.ventral = ex.has('ventralFin') ? { zLE: finZ + tl.finChord * 0.1, rc: tl.finChord * 0.6, h: finH * 0.28 } : null;
     sp.dorsal = ex.has('dorsalFin');
+    // ---- CHINED_STEALTH rear deck: over the last stretch the hexagon's flat top and bottom faces converge onto the nozzle
+    // flaps (2D slots: just above / below the slot) or, with the engines in nacelles (Su-57), onto a slim tail stinger
+    if (arch === 'CHINED_STEALTH') {
+      const sfus = engines.filter(g => g.kind === 'fus'), zEndC = sfus.length ? sp.nozzleZ : L / 2, tl = Math.min(L * 0.16, 3.2), zT0 = zEndC - tl;
+      const tgt = sfus.length ? (() => { const g = sfus[0], hh = g.r * g.sy, hw = Math.max(...sfus.map(q => Math.abs(q.x) + q.r * q.sx));
+          return { top: g.y + hh * 1.03, bot: g.y - hh * 1.03, w: hw + 0.05, cy: g.y }; })() // flush with the flap roots
+        : (() => { const s = at(L / 2); return { top: s.y + 0.1, bot: s.y - 0.05, w: 0.14, cy: s.y }; })();
+      sp.rearHex = (z, k) => { const u = ss((z - zT0) / tl); if (u <= 0) return k; const lp = (a, b) => a + (b - a) * u, w = Math.max(k.wt, k.wb, 1e-3);
+        return { top: lp(k.top, tgt.top), bot: lp(k.bot, tgt.bot), cy: lp(k.cy, tgt.cy), wt: lp(k.wt, tgt.w * 0.92), wb: lp(k.wb, tgt.w * 0.92), wc: tgt.w, u }; };
+      sp.rearTaper = { z0: zT0, z1: zEndC, target: tgt };
+      const nac = engines.filter(g => g.kind === 'nacelle');                       // Su-57: all-moving tailplanes pivot beside the engine nacelles, not on the stinger
+      if (sp.stab && nac.length) { sp.stab.x0 = Math.max(sp.stab.x0, Math.max(...nac.map(g => Math.abs(g.x) + g.r * 0.5))); note('tailplanes pivot on the nacelle sides'); }
+      note('rear deck: the flat top and bottom faces taper over the last ' + tl.toFixed(1) + ' m onto ' + (sfus.length ? 'the 2D nozzle flaps' : 'a slim tail stinger') + ' (no flat rear wall)');
+    }
     // ---- behind the exhaust plane: only what really carries something runs on past the nozzles
     //   boom     above the exhausts, where the fin root (or a twin-jet's whole tail, F-4) overhangs the nozzles
     //   strakes  slim side fairings carrying the tailplane roots beside the nozzle (F-16 style), when the tailplane sits aft of the skin
     const zS = sp.nozzleZ, fus = engines.filter(g => g.kind === 'fus');
     if (zS !== null && fus.length && arch !== 'TWIN_NACELLE_DECK') {
       const finEnd = Math.max(...sp.fins.map(f => f.zLE + f.sw * 0 + f.rc)), stabEnd = sp.stab && e.horizontalTail === 'fuselage' ? sp.stab.zLE + sp.stab.rc : -1e9;
-      const floor = Math.max(...fus.map(g => g.y + g.r * (g.rect ? 0.62 : 1) * 1.02 + 0.03));
+      const floor = Math.max(...fus.map(g => g.y + g.r * g.sy * 1.02 + 0.03));
       const bEnd = Math.min(L / 2, (fus.length === 2 && fus[0].x !== fus[1].x ? Math.max(finEnd, stabEnd) : finEnd) + 0.12);
       if (bEnd > zS + 0.15 && sp.fins.some(f => Math.abs(f.x) < 0.5)) {
         sp.boom = z => { const s = at(Math.min(z, L / 2)), u = Math.max(0, Math.min(1, (z - zS) / Math.max(0.1, bEnd - zS))), top0 = Math.max(s.y + s.h, floor + 0.16), bot = floor;
@@ -1324,7 +1345,7 @@ const Airframe = (() => {
           return { w: Math.max(0.12, Math.min(s.w, (top0 - bot) * 0.9)) * (1 - 0.6 * Math.pow(u, 2)), h: Math.max(0.03, (top - bot) / 2), y: (top + bot) / 2 }; };
         sp.boomEnd = bEnd; note('fairing above the exhausts carries the fin root to ' + (bEnd - z0).toFixed(2) + ' m'); }
       if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > zS - 0.1) {
-        const ox = Math.max(...fus.map(g => Math.abs(g.x) + g.r * (g.rect ? 1.25 : 1))) + 0.06;
+        const ox = Math.max(...fus.map(g => Math.abs(g.x) + g.r * g.sx)) + 0.06;
         sp.strakes = { x: ox, y: sp.stab.y, z0: zS - 0.6, z1: sp.stab.zLE + sp.stab.rc + 0.05, w: 0.1, h: 0.09 };
         sp.stab.x0 = Math.max(sp.stab.x0, ox); note('tailplanes on side strakes beside the nozzle, from ' + (ox).toFixed(2) + ' m');
       }

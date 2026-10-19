@@ -141,6 +141,11 @@ for (const pl of PLANE_LIST) {
     if (!tu.every(t => inside(t, Math.sign(t.x) * br.w * 0.98, br.y))) { flag(id, `bridging deck does not reach into the tunnels at z ${z.toFixed(1)} m`); break; }
   }
   if (e.fuselageArchitecture === 'CHINED_STEALTH') {
+    // rear deck taper: at the exhaust plane the decks hug the nozzle slots, so no tall flat wall is left; nozzles stay inside the decks
+    { const t = sp.rearTaper, k = sp.rearHex(t.z1 - 1e-3, sp.chine.hex(sp.at(t.z1 - 1e-3))), s0 = sp.at(t.z0);
+      if ((k.top - k.bot) > (2 * s0.h) * 0.6) flag(id, 'rear deck does not taper: flat rear wall ' + (k.top - k.bot).toFixed(2) + ' m tall');
+      const fjs = sp.engines.filter(g => g.kind === 'fus'); for (const g of fjs) if (g.y + g.r * g.sy > k.top || g.y - g.r * g.sy < k.bot || Math.abs(g.x) + g.r * g.sx > k.wc + 1e-6) flag(id, 'nozzle sticks out of the tapered rear deck');
+      for (const g of fjs) if (g.style === '2d_serrated' && Math.abs(g.sx / g.sy - 2.5) > 0.05) flag(id, '2D nozzle exit is not 2.5 : 1'); }
     for (const z of rng(-pl.len / 2 + 0.5, pl.len / 2, 20)) if (sp.chineW(z) < sp.at(z).w - 1e-6) { flag(id, 'chine narrower than the body at z ' + z.toFixed(1)); break; }
     if (sp.wing.x0 > sp.chineW(sp.wing.rootZ + sp.wing.rc / 2)) flag(id, 'wing root outside the chine: the chine must run into the wing');
   }
@@ -148,9 +153,9 @@ for (const pl of PLANE_LIST) {
   const fj = sp.engines.filter(g => g.kind === 'fus' || g.kind === 'tunnel');
   if (pl.kind === 'jet' && fj.length) {
     const pr = sp.section(sp.nozzleZ).prims;
-    for (const g of fj) { const sx = g.rect ? 1.25 : 1, sy = g.rect ? 0.62 : 1, pts = [[g.x, g.y + g.r * sy], [g.x, g.y - g.r * sy], [g.x + g.r * sx, g.y], [g.x - g.r * sx, g.y]];
+    for (const g of fj) { const sx = g.sx, sy = g.sy, pts = [[g.x, g.y + g.r * sy], [g.x, g.y - g.r * sy], [g.x + g.r * sx, g.y], [g.x - g.r * sx, g.y]];
       if (!pts.every(([x, y]) => pr.some(q => inside(q, x, y, 1.001)))) flag(id, `nozzle at (${g.x.toFixed(2)}, ${g.y.toFixed(2)}) is not enclosed by the body at the exhaust plane`); }
-    if (fj.length === 2) { const g = fj[0], gap = Math.hypot(fj[0].x - fj[1].x, fj[0].y - fj[1].y), need = 2 * g.r * (fj[0].x !== fj[1].x ? (g.rect ? 1.25 : 1) : (g.rect ? 0.62 : 1));
+    if (fj.length === 2) { const g = fj[0], gap = Math.hypot(fj[0].x - fj[1].x, fj[0].y - fj[1].y), need = 2 * g.r * (fj[0].x !== fj[1].x ? g.sx : g.sy);
       if (gap < need - 1e-6) flag(id, `the two exhaust nozzles overlap (${gap.toFixed(2)} m apart, need ${need.toFixed(2)} m)`); }
     if (sp.boom) for (const z of rng(sp.nozzleZ + 0.05, pl.len / 2, 8)) { const b = sp.boom(z); if (b.y - b.h < Math.max(...fj.map(g => g.y + g.r)) - 1e-6) { flag(id, 'tail boom hangs down into the exhausts at z ' + z.toFixed(1)); break; } }
     // everything aft of the exhaust plane must still be carried: a central fin root by the fairing above the jets, fuselage tailplanes by side strakes
