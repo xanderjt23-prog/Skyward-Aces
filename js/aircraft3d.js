@@ -220,10 +220,14 @@
 
   // ======================= the aircraft =======================
   const cache = {};
-  Models.aircraft = function (pl) {
-    if (!cache[pl.id]) cache[pl.id] = build(pl);
+  // livery: an optional paint scheme id (liveries.js) the type really wore; each aircraft + scheme is built once
+  Models.aircraft = function (pl, livery) {
+    const lv = livery && LIVERY[livery] && LIVERY[livery].planes.includes(pl.id) ? livery : null, key = pl.id + (lv ? '|' + lv : '');
+    if (lv && !cache[key]) cache[key] = build(Object.assign(Object.create(pl), { livery: lv }));
+    else if (!cache[key]) cache[key] = build(pl);
+    pl = lv ? Object.assign(Object.create(pl), { livery: lv }) : pl;
     // every craft gets its own meshes (wings are hidden when shot off) over shared geometry
-    const c = cache[pl.id], g = new THREE.Group();
+    const c = cache[key], g = new THREE.Group();
     const mk = (src, parent) => { const m = new THREE.Mesh(src.geometry, src.material); m.position.copy(src.position); m.rotation.copy(src.rotation); m.scale.copy(src.scale); m.visible = src.visible; m.name = src.name; for (const ch of src.children) m.add(mk(ch)); if (parent) parent.add(m); return m; };
     const body = mk(c.body, g), glass = mk(c.glass, g), wingL = mk(c.wingL, g), wingR = mk(c.wingR, g);
     const pilot = glass.children.find(o => o.name === 'pilot') || null;

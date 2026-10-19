@@ -157,7 +157,7 @@ const UI = (() => {
     const pl = PLANES[modsPlane], m = Profile.modsOf(pl.id);
     let h = `<h2>Modifications</h2><div class="row" style="margin-bottom:12px"><select id="mods-plane">${Object.keys(p.owned).map(id => PLANES[id]).filter(Boolean).sort((a, b) => a.nation.localeCompare(b.nation) || a.era - b.era).map(x => `<option value="${x.id}" ${x.id === pl.id ? 'selected' : ''}>${esc(x.name)} (${ERAS[x.era].name})</option>`).join('')}</select>
       <span class="pill">Coins: <b>${fmt(p.coins)}</b></span></div>
-      <div class="tabs">${[['ammo', 'Gun ammunition'], ['loadout', 'Ordnance & loadout'], ['upg', 'Airframe upgrades']].map(([k, n]) => `<button class="tab ${modsTab === k ? 'sel' : ''}" data-mt="${k}">${n}</button>`).join('')}</div>`;
+      <div class="tabs">${[['ammo', 'Gun ammunition'], ['loadout', 'Ordnance & loadout'], ['upg', 'Airframe upgrades'], ['paint', 'Paint schemes']].map(([k, n]) => `<button class="tab ${modsTab === k ? 'sel' : ''}" data-mt="${k}">${n}</button>`).join('')}</div>`;
     if (modsTab === 'ammo') {
       for (const gid of Profile.gunsOf(pl)) {
         const sel = Profile.loadoutFor(pl.id).belts[gid];
@@ -188,6 +188,13 @@ const UI = (() => {
         h += `</div>`;
       }
       if (!avail.length && pl.hp.length) h += `<p class="muted">No ordnance of this era fits.</p>`;
+    } else if (modsTab === 'paint') {
+      const list = liveriesFor(pl.id), price = liveryPrice(pl), sw = cs => cs.map(c => `<i style="display:inline-block;width:16px;height:16px;border-radius:3px;margin-right:3px;border:1px solid rgba(0,0,0,0.4);background:#${c.toString(16).padStart(6, '0')}"></i>`).join('');
+      h += `<p class="muted">Paint schemes this aircraft really wore in service. Buy a scheme once, then switch freely; other players see it too.</p>`;
+      h += `<div class="shop-item"><div><b>Standard scheme</b><div class="d">The aircraft's usual camouflage.</div></div><div>${!m.livery ? '<span class="pill ok">Applied</span>' : '<button data-livery="">Apply</button>'}</div></div>`;
+      for (const l of list) { const own = m.liveries[l.id];
+        h += `<div class="shop-item"><div><div class="row">${sw(l.pattern ? [l.top].concat(l.c) : [l.top, l.bot])}<b>${esc(l.name)}</b></div><div class="d">${esc(l.desc)}</div></div><div>${m.livery === l.id ? '<span class="pill ok">Applied</span>' : own ? `<button data-livery="${l.id}">Apply</button>` : `<button class="primary" data-buylivery="${l.id}">Buy ◎${fmt(price)}</button>`}</div></div>`; }
+      if (!list.length) h += `<p class="muted">No alternative schemes are recorded for this aircraft yet.</p>`;
     } else {
       for (const k of Profile.upgradesFor(pl)) {
         const mo = MODS[k], own = m.upg[k], on = m.inst[k];
@@ -202,6 +209,8 @@ const UI = (() => {
     $$('[data-belt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.belt.split('|'); Profile.selectBelt(pl.id, g, k); renderMods(); });
     $$('[data-buystore]').forEach(b => b.onclick = () => after(Profile.buyStore(pl.id, b.dataset.buystore)));
     $$('[data-buyupg]').forEach(b => b.onclick = () => after(Profile.buyUpgrade(pl.id, b.dataset.buyupg)));
+    $$('[data-buylivery]').forEach(b => b.onclick = () => after(Profile.buyLivery(pl.id, b.dataset.buylivery)));
+    $$('[data-livery]').forEach(b => b.onclick = () => { Profile.setLivery(pl.id, b.dataset.livery || null); renderMods(); });
     $$('[data-toggle]').forEach(b => b.onclick = () => { Profile.toggleUpgrade(pl.id, b.dataset.toggle); renderMods(); });
     $$('[data-slot]').forEach(b => b.onclick = () => { loSel = +b.dataset.slot; renderMods(); });
     $$('[data-fit]').forEach(b => b.onclick = () => { const r = Profile.setSlot(pl.id, loSel, b.dataset.fit || null, loMirror); if (!r.ok) toastMenu(r.why); renderMods(); });

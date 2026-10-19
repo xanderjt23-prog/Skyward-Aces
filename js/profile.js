@@ -49,6 +49,7 @@ const Profile = (() => {
     const pl = PLANES[planeId];
     if (!m.slots || m.slots.length !== Loadout.slots(pl).length) m.slots = Loadout.normalise(pl, m.loadout, false); // per pylon (older saves: per group)
     migrateBombs(pl, m);
+    if (!m.liveries) m.liveries = {}; if (m.livery === undefined) m.livery = null;
     return m;
   }
   // the generic bombs of older versions (b50 .. b1000) become the named bomb of the nearest mass this aircraft carries
@@ -88,6 +89,11 @@ const Profile = (() => {
   // older callers (per hardpoint group): fill every slot of that group
   function setStation(planeId, g, storeId) { const sl = Loadout.slots(PLANES[planeId]); let r = { ok: true };
     for (const s of sl) if (s.g === g && r.ok) r = setSlot(planeId, s.i, storeId, false); return r; }
+  function buyLivery(planeId, id) {
+    const pl = PLANES[planeId], m = modsOf(planeId); if (!LIVERY[id] || !LIVERY[id].planes.includes(planeId)) return false; if (m.liveries[id]) return true;
+    if (!buy(liveryPrice(pl))) return false; m.liveries[id] = true; m.livery = id; save(); return true;
+  }
+  function setLivery(planeId, id) { const m = modsOf(planeId); if (id && !m.liveries[id]) return false; m.livery = id || null; save(); return true; }
   function buyUpgrade(planeId, modId) {
     const pl = PLANES[planeId], m = modsOf(planeId); if (m.upg[modId]) return true;
     if (!buy(MODS[modId].price(pl.era))) return false; m.upg[modId] = true; m.inst[modId] = true; save(); return true;
@@ -99,7 +105,7 @@ const Profile = (() => {
     const pl = PLANES[planeId], m = modsOf(planeId), belts = {};
     for (const g of gunsOf(pl)) belts[g] = hasBelt(planeId, g, m.beltSel[g]) ? (m.beltSel[g] || 'std') : 'std';
     const inst = {}; for (const k in m.inst) if (m.inst[k] && m.upg[k]) inst[k] = true;
-    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst };
+    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst, livery: m.livery || null };
   }
 
   // ---- stats & achievements
@@ -146,7 +152,7 @@ const Profile = (() => {
   load();
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
-    buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
+    buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
     bump, checkAchievements, progress, rewards, applyBattle,
   };
 })();

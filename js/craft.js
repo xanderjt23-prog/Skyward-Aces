@@ -19,7 +19,7 @@ class Craft {
     this.alive = false; this.everSpawned = false; this.deadT = 0; this.respawnAt = 0;
     this.stats = { kills: 0, deaths: 0, assists: 0, tanks: 0, bases: 0, basePoints: 0, score: 0, damage: 0, crewKills: 0, wingKills: 0, fires: 0, crashKills: 0, missileKills: 0, giantKills: 0, bigBases: 0, basesDestroyed: 0 };
     this.lives = spec.lives != null ? spec.lives : Infinity;
-    this.model = Models.aircraft(this.def); this.model.visible = false; match.scene.add(this.model);
+    this.model = Models.aircraft(this.def, this.lo.livery); this.model.visible = false; match.scene.add(this.model);
     this.smokeT = 0; this.fireFxT = 0; this.flareT = -99; this.lastHitT = -99; this.missileWarn = 0; this.lockT = 0; this.lockTarget = null;
     this.netFlags = 0; this.dmgVer = 0; this.sentDmgVer = -1;
   }

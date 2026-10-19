@@ -138,8 +138,8 @@ const Models = (() => {
     }`;
   const skinCache = {};
   function skinMat(pl, pt) {
-    if (skinCache[pl.id]) return skinCache[pl.id];
-    const cs = camo(pl, pt), L = pl.len, m = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: cs.pattern === 5 ? 8 : 22, specular: cs.pattern === 5 ? 0x101214 : 0x1c1c1c });
+    const key = pl.id + (pl.livery ? '|' + pl.livery : ''); if (skinCache[key]) return skinCache[key];
+    const cs = camo(pl, pt), L = pl.len, m = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: cs.metal ? 45 : cs.pattern === 5 ? 8 : 22, specular: cs.metal ? 0x3c4044 : cs.pattern === 5 ? 0x101214 : 0x1c1c1c }); // bare aluminium shines
     const v3 = h => new THREE.Color(h);
     m.userData.u = { uTop: { value: v3(pt.top) }, uC0: { value: v3(cs.c[0]) }, uC1: { value: v3(cs.c[1]) }, uC2: { value: v3(cs.c[2]) }, uPattern: { value: cs.pattern },
       uPanel: { value: Math.max(0.55, Math.min(1.3, L / 20)) }, uBlot: { value: 1 / Math.max(1.6, Math.min(5, L * 0.14)) }, uVar: { value: cs.pattern === 5 ? 0.1 : 0.035 },
@@ -153,7 +153,7 @@ const Models = (() => {
         .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\nspecularStrength *= 0.8 + 0.4 * gSkinH;'); // panels catch the light differently
     };
     m.customProgramCacheKey = () => 'aircraft-skin-3';
-    return (skinCache[pl.id] = m);
+    return (skinCache[key] = m);
   }
   // camouflage schemes from each air arm's real practice (nation, era, role); colours are the period paint standards
   // (RAF Dark Green / Dark Earth / Ocean Grey, RLM 70/71 and 74/75, USAF T.O. 1-1-4 SEA FS 30219/34102/34079,
@@ -172,6 +172,7 @@ const Models = (() => {
     fd7: [6, 0x5d5a4a, 0x6b5a6e, 0x3f4a3a], hannover: [6, 0x5d5a4a, 0x6b5a6e, 0x3f4a3a], su25: [2, 0xb09a6a, 0x5b6b3a, 0x5c4a36], gotha: [6, 0x3f4256, 0x5a4a5e, 0x2f3a46], albd3: [1, 0x5a6a3a, 0x6b5266, 0],  // printed lozenge; Albatros green / mauve
   };
   function camo(pl, pt) {
+    if (pl.livery && LIVERY[pl.livery]) { const L = LIVERY[pl.livery]; return { pattern: L.pattern, c: L.c, lines: true, metal: !!L.metal }; }
     const n = pl.nation, e = pl.era, metalSkin = !(e <= 2 && (pl.shape === 'bi' || pl.shape === 'tri' || e === 1)); // WW1 / biplanes: doped fabric, no panel lines
     const out = (pattern, c0, c1, c2) => ({ pattern, c: [c0, c1, c2], lines: metalSkin });
     if (CAMO_ID[pl.id]) return out(...CAMO_ID[pl.id]);
@@ -202,6 +203,7 @@ const Models = (() => {
 
   // ---- colour schemes by nation and era
   function paint(pl) {
+    if (pl.livery && LIVERY[pl.livery]) { const L = LIVERY[pl.livery], base = paint(Object.getPrototypeOf(pl)); return { top: L.top, bot: L.bot, acc: L.acc || base.acc }; }
     const n = pl.nation, e = pl.era;
     if (e === 1) return { top: { uk: 0x6b6440, ger: 0x7a6a5a, fra: 0xb8b39b, usa: 0x6b6440, ussr: 0xb5ae92, jpn: 0xb5ae92 }[n], bot: 0xd9cfa8, acc: n === 'ger' ? 0x9a3b3b : 0x444444 };
     if (e === 2) return { top: { uk: 0xb9bdb7, ger: 0x8d9384, fra: 0x8b8b6e, usa: 0x5a6e8c, ussr: 0x5f7044, jpn: 0x8b8d7a }[n], bot: n === 'usa' ? 0xd8b830 : 0xb8bcb8, acc: 0xc9a227 };

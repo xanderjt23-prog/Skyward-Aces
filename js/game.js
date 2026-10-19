@@ -35,7 +35,7 @@ const Game = (() => {
   }
   function showPlane(id) {
     if (menuPlane) menuScene.remove(menuPlane);
-    const pl = PLANES[id]; menuPlane = Models.aircraft(pl); menuScene.add(menuPlane);
+    const pl = PLANES[id]; menuPlane = Models.aircraft(pl, Profile.get().owned[id] ? Profile.modsOf(id).livery : null); menuScene.add(menuPlane);
     const r = Math.max(pl.span, pl.len); menuPlane.userData.r = r;
     menuCam.position.set(r * 0.95, r * 0.32, r * 1.05); menuCam.lookAt(0, -r * 0.05, 0);
   }
