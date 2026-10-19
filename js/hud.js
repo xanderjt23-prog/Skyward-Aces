@@ -146,16 +146,18 @@ const HUD = (() => {
   }
   // ---- bottom-centre flight data and weapons
   function gauges(game, p) {
-    const cx = W / 2, y = H - 64;
-    g.fillStyle = 'rgba(8,14,22,0.55)'; round(cx - 250, y - 22, 500, 76, 10); g.fill();
+    const cx = W / 2, y = H - 64, pit = game.camMode === 'nose' || game.camMode === 'sight'; // in the cockpit its own instruments show the flight data
+    if (!pit) { g.fillStyle = 'rgba(8,14,22,0.55)'; round(cx - 250, y - 22, 500, 76, 10); g.fill(); }
     const spd = Math.round(p.speed * 3.6), alt = Math.round(p.pos.y), thr = p.ctl.throttle;
     const thrTxt = thr > 1.01 ? (p.def.ab ? 'AB' : 'WEP') : Math.round(thr * 100) + '%';
+    if (!pit) {
     text('SPD', cx - 230, y - 4, COL.dim, 10); text(spd + ' km/h', cx - 230, y + 14, COL.white, 16, 'left', true);
     text('ALT', cx - 120, y - 4, COL.dim, 10); text(alt + ' m', cx - 120, y + 14, COL.white, 16, 'left', true);
     text('THR', cx - 20, y - 4, COL.dim, 10); text(thrTxt, cx - 20, y + 14, thr > 1.01 ? '#ffb347' : COL.white, 16, 'left', true);
     text('G', cx + 60, y - 4, COL.dim, 10); text((p.gLoad || 1).toFixed(1), cx + 60, y + 14, COL.white, 16, 'left', true);
     text('FUEL', cx + 120, y - 4, COL.dim, 10); text(Math.round(p.fuel * 100) + '%', cx + 120, y + 14, p.dm.fx.leak > 0.001 ? '#ffc04d' : COL.white, 16, 'left', true);
     if (p.def.kind === 'jet') { text('M', cx + 185, y - 4, COL.dim, 10); text((p.speed / 340).toFixed(2), cx + 185, y + 14, COL.white, 16, 'left', true); }
+    }
     // weapons line
     const parts = [];
     if (p.gunGroups()) { const mg = p.guns.filter(g => !g.pod && g.g.cal < 20).reduce((a, g) => a + g.ammo, 0), cn = p.guns.filter(g => !g.pod && g.g.cal >= 20).reduce((a, g) => a + g.ammo, 0);
@@ -169,7 +171,8 @@ const HUD = (() => {
     if (nm) { const st = p.missileStation(); parts.push(`${st.s.name.split(' ')[0]} ×${nm} [${Input.label(Input.bind('missile'))}]`); }
     if (p.def.flares) parts.push(`FLARES ${p.flares} [${Input.label(Input.bind('flares'))}]`);
     if (game.match.cfg.realistic) parts.push(Models.layout(p.def).fixed ? 'GEAR FIXED' : p.gearDown ? 'GEAR ▼ DOWN' : 'GEAR ▲ UP');
-    text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
+    if (pit) { const t2 = parts.join('   '); g.font = '12px sans-serif'; const w2 = g.measureText(t2).width + 24; g.fillStyle = 'rgba(8,14,22,0.5)'; round(cx - w2 / 2, 62, w2, 22, 8); g.fill(); text(t2, cx, 77, COL.white, 12, 'center'); }
+    else text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
   }
   function round(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   // ---- damage schematic: the aircraft's own plan view (fuselage outline, wing planform, tailplane, fins, nacelles from

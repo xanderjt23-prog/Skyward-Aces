@@ -36,20 +36,26 @@ class BotBrain {
     const pullG = Math.max(1, Math.min(P.gMax * 0.6, 3.5, (c.speed / P.vs) * (c.speed / P.vs) * 0.5) - 1);
     const sink = Math.max(0, -c.vel.y), need = sink * sink / (2 * 9.81 * pullG) + sink * 1.8;
     const agl = c.pos.y - m.world.groundAt(c.pos.x, c.pos.z);
-    const look = Math.max(2.5, c.speed / 60);
-    const ahead = c.pos.clone().addScaledVector(c.vel, look), gAhead = Math.max(m.world.groundAt(ahead.x, ahead.z), m.world.groundAt(c.pos.x, c.pos.z));
-    const minAlt = (this.mode === 'ground' ? 50 : 150) + need;
-    const low = ahead.y < gAhead + minAlt || c.pos.y - gAhead < need + 60;
+    // terrain ahead: sample the whole flight path out to the look-ahead time (a ridge between here and the end point counts),
+    // with the margin growing with the distance a fast jet needs to climb over it
+    const look = Math.max(4, Math.min(14, c.speed / 25)), minAlt = (this.mode === 'ground' ? 50 : 150) + need, climb = Math.max(15, c.speed * 0.25); // ~15 deg climb available
+    let gAhead = m.world.groundAt(c.pos.x, c.pos.z), low = c.pos.y - gAhead < need + 60;
+    for (let k = 1; k <= 10 && !low; k++) { const tt = look * k / 10, x = c.pos.x + c.vel.x * tt, z = c.pos.z + c.vel.z * tt, y = c.pos.y + c.vel.y * tt, gy = m.world.groundAt(x, z);
+      gAhead = Math.max(gAhead, gy); if (y + climb * tt * 0.2 < gy + minAlt) low = true; }
     if (low || this.pullOut > 0) {
       if (low) this.pullOut = 1.5; else this.pullOut -= dt;
       // turn towards the lowest terrain ahead (scan seven headings) while climbing as hard as the speed allows
-      const hd = Math.atan2(-fwd.x, -fwd.z); let best = null, bh = Infinity;
-      for (const da of [0, -0.6, 0.6, -1.2, 1.2, -1.9, 1.9]) {
-        const h = hd + da, dx = -Math.sin(h), dz = -Math.cos(h); let mx = 0;
-        for (let d = 200; d <= Math.max(1200, c.speed * 10); d += 200) mx = Math.max(mx, m.world.groundAt(c.pos.x + dx * d, c.pos.z + dz * d));
-        const score = mx + Math.abs(da) * 60; if (score < bh) { bh = score; best = new V3(dx, 0, dz); }
+      // each heading is scored by the worst shortfall: terrain height minus the height we can reach there climbing at the
+      // rate this speed allows (and turning there costs a little time); valley walls a slow aircraft cannot out-climb mean turning away
+      const hd = Math.atan2(-fwd.x, -fwd.z), rate = c.speed > P.vs * 3 ? c.speed * 0.5 : c.speed > P.vs * 1.7 ? c.speed * 0.3 : c.speed * 0.12; let best = null, bh = Infinity;
+      for (const da of [0, -0.6, 0.6, -1.2, 1.2, -1.9, 1.9, -2.6, 2.6, Math.PI]) {
+        const h = hd + da, dx = -Math.sin(h), dz = -Math.cos(h), turnT = Math.abs(da) / Math.max(0.15, 9.81 * 4 / Math.max(60, c.speed)); let worst = -Infinity;
+        for (let d = 150; d <= Math.max(1500, c.speed * look); d += Math.max(150, c.speed * look / 14)) { const tt = d / Math.max(40, c.speed) + turnT * 0.5;
+          worst = Math.max(worst, m.world.groundAt(c.pos.x + dx * d, c.pos.z + dz * d) + 60 - (c.pos.y + rate * Math.max(0, tt - turnT))); }
+        const score = worst + Math.abs(da) * 25; if (score < bh) { bh = score; best = new V3(dx, 0, dz); }
       }
-      dir = best; dir.y = c.speed > P.vs * 1.7 ? 0.7 : 0.25; dir.normalize(); throttle = 1.1;
+      // climb as steeply as the energy allows: a fast jet zooms up at 45-60 deg, a slow aircraft only gently
+      dir = best; dir.y = c.speed > P.vs * 3 ? 1.6 : c.speed > P.vs * 1.7 ? 0.8 : 0.25; dir.normalize(); throttle = 1.1;
     }
     // ---- bounds
     const H = m.half * 0.92;
