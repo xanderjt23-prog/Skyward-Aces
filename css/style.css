@@ -134,3 +134,22 @@ svg.flag { display: inline-block; vertical-align: -3px; margin-right: 4px; borde
 .pc img.thumb { display: block; width: 100%; height: 86px; object-fit: contain; margin: 4px 0 2px; }
 .pc .ty { font-size: 11px; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.05em; }
 label.realistic { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(242,179,61,0.1); border: 1px solid rgba(242,179,61,0.35); }
+
+/* pylon diagram */
+.pylons { position: relative; margin: 10px 0 6px; padding-top: 70px; }
+.pylon-plane { position: absolute; top: 0; left: 0; width: 100%; height: 86px; opacity: 0.22; }
+.pylon-plane path { fill: #cfe0ff; }
+.pylon-row { position: relative; display: flex; gap: 4px; }
+.pylon { flex: 0 0 auto; min-width: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; background: rgba(10,16,24,0.75); padding: 5px 4px; text-align: center; cursor: pointer; overflow: hidden; }
+.pylon:hover { border-color: rgba(255,255,255,0.45); }
+.pylon.full { background: rgba(242,179,61,0.12); }
+.pylon.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.pylon .pn { font-family: var(--head); font-size: 15px; color: var(--accent2); }
+.pylon .pk { font-size: 11px; opacity: 0.8; }
+.pylon .ps { font-size: 11px; font-weight: 700; min-height: 28px; line-height: 14px; overflow: hidden; }
+.pylon .pm { font-size: 10px; color: var(--muted); }
+.pylon .pg { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker { margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04); }
+.pick-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pick-list button { font-size: 12px; padding: 5px 9px; }
+button.ghost { opacity: 0.7; border-style: dashed; }

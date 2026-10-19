@@ -83,10 +83,11 @@ const Game = (() => {
       Input.keys[code] = true;
       const m = G.match, p = m && m.player;
       for (const act of Input.actionsFor(code)) {
-        if (e && (act === 'scoreboard' || act === 'bombs')) e.preventDefault();
+        if (e && (act === 'scoreboard' || act === 'bombs' || act === 'brakes')) e.preventDefault();
         if (act === 'scoreboard') UI.scoreboard(true);
         if (!p) continue;
         if (act === 'camera') G.camMode = G.camMode === 'chase' ? 'nose' : 'chase';
+        if (act === 'bombsight') { if (p.def.bombsight) G.camMode = G.camMode === 'sight' ? 'chase' : 'sight'; else UI.toast('No bombsight on this aircraft'); }
         if (p.alive && !p.wreck) {
           if (act === 'bombs') p.dropBomb();
           if (act === 'rockets') p.fireRockets();
@@ -96,6 +97,7 @@ const Game = (() => {
           if (act === 'flapsDown') p.setFlaps(1);
           if (act === 'flapsUp') p.setFlaps(-1);
           if (act === 'guns') p.cycleGuns();
+          if (act === 'missileSelect') { if (p.cycleMissile()) UI.toast('Missile: ' + STORES[p.missileSel].name); }
         }
       }
       if (p && !p.alive && (code === 'Space' || code === 'Enter' || code === 'Mouse0')) UI.tryRespawn();
@@ -197,7 +199,17 @@ const Game = (() => {
     const focus = p && (p.alive || p.wreck) ? p : (G.deathCam || p);
     if (p && p.alive && !p.wreck) {
       const lay = Models.layout(p.def), dist = (Math.max(lay.S, lay.L) * 1.25 + 6) * G.camDist;
-      if (G.camMode === 'nose') {
+      if (G.camMode === 'sight' && p.def.bombsight) {
+        // the bomb aimer's sight in the nose: the telescope looks forward-down along the dropping angle, so the cross wires
+        // (screen centre) mark where a bomb released now lands; gyro-stabilised sights stay level while the aircraft rolls
+        if (G.cockpit) G.cockpit.group.visible = false; p.model.visible = false;
+        const lay = Models.layout(p.def), sight = p.def.bombsight;
+        _off.set(0, -lay.fr * 0.6, -lay.L * 0.4).applyQuaternion(p.quat); camera.position.copy(p.pos).add(_off);
+        const ip = p.bombImpact(), look = ip || p.pos.clone().add(new THREE.Vector3(p.vel.x, 0, p.vel.z).normalize().multiplyScalar(400)).setY(m.world.groundAt(p.pos.x, p.pos.z));
+        const track = new THREE.Vector3(p.vel.x, 0, p.vel.z); if (track.lengthSq() < 1) track.set(0, 0, -1).applyQuaternion(p.quat).setY(0); track.normalize();
+        if (sight.gyro) camera.up.copy(track); else camera.up.set(0, 0, -1).applyQuaternion(p.quat); // screen-up = the ground track (drift shows as the wires' angle)
+        camera.lookAt(look); G.sightImpact = ip;
+      } else if (G.camMode === 'nose') {
         // cockpit: the interior is fixed to the aircraft, the camera sits at the pilot's eye
         if (!G.cockpit || G.cockpit.def !== p.def) { if (G.cockpit) G.cockpit.group.parent && G.cockpit.group.parent.remove(G.cockpit.group); G.cockpit = Cockpit.build(p.def); G.cockpit.def = p.def; G.cockpit.group.traverse(o => o.layers.set(1)); p.model.add(G.cockpit.group); }
         if (G.cockpit.group.parent !== p.model) p.model.add(G.cockpit.group);
@@ -206,7 +218,7 @@ const Game = (() => {
         _off.copy(G.cockpit.eye).applyQuaternion(p.quat); camera.position.copy(p.pos).add(_off);
         camera.quaternion.copy(p.quat); if (Input.down('freeLook')) { camera.rotateY(G.freeLook.yaw); camera.rotateX(G.freeLook.pitch); }
       } else {
-        if (G.cockpit) G.cockpit.group.visible = false;
+        if (G.cockpit) G.cockpit.group.visible = false; p.model.visible = true;
         p.model.userData.body.visible = true; p.model.userData.glass.visible = true;
         let dir = G.aimDir.clone();
         if (Input.down('lookTarget') && G.target && G.target.alive) dir = G.target.pos.clone().sub(p.pos).normalize();
@@ -218,14 +230,14 @@ const Game = (() => {
       G.deathCam = null;
     } else if (p) {
       // shot down: orbit the wreck / crash site
-      p.model.userData.body.visible = true; p.model.userData.glass.visible = true; if (G.cockpit) G.cockpit.group.visible = false;
+      p.model.visible = true; p.model.userData.body.visible = true; p.model.userData.glass.visible = true; if (G.cockpit) G.cockpit.group.visible = false; if (G.camMode === 'sight') G.camMode = 'chase';
       if (!G.deathPos || p.alive) G.deathPos = p.pos.clone();
       if (p.wreck) G.deathPos.copy(p.pos);
       const t = performance.now() / 4000, r = 90;
       camera.position.set(G.deathPos.x + Math.cos(t) * r, Math.max(G.deathPos.y + 40, m.world.groundAt(G.deathPos.x, G.deathPos.z) + 40), G.deathPos.z + Math.sin(t) * r);
-      camera.lookAt(G.deathPos);
+      camera.up.set(0, 1, 0); camera.lookAt(G.deathPos);
     }
-    const wantFov = p && p.alive && Input.down('zoom') ? BASE_FOV * 0.5 : BASE_FOV;
+    const sightOn = G.camMode === 'sight' && p && p.alive && p.def.bombsight, wantFov = sightOn ? (Input.down('zoom') ? 6 : 14) : p && p.alive && Input.down('zoom') ? BASE_FOV * 0.5 : BASE_FOV; // the sight's telescope magnifies ~4x
     if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov += (wantFov - camera.fov) * 0.2; camera.updateProjectionMatrix(); }
     FX.update(1 / 60, camera, innerHeight);
     if (G.cockpit && G.cockpit.group.visible) {

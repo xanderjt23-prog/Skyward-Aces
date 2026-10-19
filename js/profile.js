@@ -47,7 +47,7 @@ const Profile = (() => {
     let m = p.mods[planeId];
     if (!m) m = p.mods[planeId] = { belts: {}, beltSel: {}, stores: {}, loadout: null, upg: {}, inst: {} };
     const pl = PLANES[planeId];
-    if (!m.loadout || m.loadout.length !== pl.hp.length) m.loadout = pl.hp.map(() => null);
+    if (!m.slots || m.slots.length !== Loadout.slots(pl).length) m.slots = Loadout.normalise(pl, m.loadout, false); // per pylon (older saves: per group)
     return m;
   }
   function gunsOf(pl) { const s = new Set(pl.guns.map(g => g[0])); return [...s]; }
@@ -64,18 +64,22 @@ const Profile = (() => {
     const m = modsOf(planeId); if (m.stores[storeId]) return true;
     if (!buy(STORES[storeId].price)) return false; m.stores[storeId] = true; save(); return true;
   }
-  function loadoutMass(planeId, lo) { const pl = PLANES[planeId]; lo = lo || modsOf(planeId).loadout; let kg = 0; lo.forEach((s, i) => { if (s) kg += STORES[s].mass * pl.hp[i][3]; }); return kg; }
-  // put a store on a station (null removes). Checks the station type, weight per pylon and total payload.
-  function setStation(planeId, idx, storeId) {
-    const pl = PLANES[planeId], m = modsOf(planeId);
-    if (storeId) {
-      if (!m.stores[storeId]) return { ok: false, why: 'Buy it first' };
-      if (!storeAllowed(pl, storeId, pl.hp[idx])) return { ok: false, why: 'This station cannot carry that' };
-      const lo = m.loadout.slice(); lo[idx] = storeId;
-      if (loadoutMass(planeId, lo) > pl.payload) return { ok: false, why: `Over the ${pl.payload} kg payload limit` };
-    }
-    m.loadout[idx] = storeId; save(); return { ok: true };
+  function loadoutMass(planeId, lo) { const pl = PLANES[planeId]; return Loadout.mass(pl, lo || modsOf(planeId).slots); }
+  // put a store on one pylon slot (null empties it); mirror: the same on the matching slot of the other wing.
+  // Checks what the pylon can carry, its weight limit and the total payload.
+  function setSlot(planeId, idx, storeId, mirror) {
+    const pl = PLANES[planeId], m = modsOf(planeId), sl = Loadout.slots(pl), lo = m.slots.slice(), targets = [idx];
+    if (mirror && sl[idx].mirror >= 0) targets.push(sl[idx].mirror);
+    for (const i of targets) {
+      if (storeId) { if (!m.stores[storeId]) return { ok: false, why: 'Buy it first' };
+        if (!Loadout.allowed(pl, sl[i], storeId)) return { ok: false, why: `${sl[i].name} cannot carry that` }; }
+      lo[i] = storeId || null; }
+    if (Loadout.mass(pl, lo) > pl.payload) return { ok: false, why: `Over the ${pl.payload} kg payload limit` };
+    m.slots = lo; save(); return { ok: true };
   }
+  // older callers (per hardpoint group): fill every slot of that group
+  function setStation(planeId, g, storeId) { const sl = Loadout.slots(PLANES[planeId]); let r = { ok: true };
+    for (const s of sl) if (s.g === g && r.ok) r = setSlot(planeId, s.i, storeId, false); return r; }
   function buyUpgrade(planeId, modId) {
     const pl = PLANES[planeId], m = modsOf(planeId); if (m.upg[modId]) return true;
     if (!buy(MODS[modId].price(pl.era))) return false; m.upg[modId] = true; m.inst[modId] = true; save(); return true;
@@ -87,7 +91,7 @@ const Profile = (() => {
     const pl = PLANES[planeId], m = modsOf(planeId), belts = {};
     for (const g of gunsOf(pl)) belts[g] = hasBelt(planeId, g, m.beltSel[g]) ? (m.beltSel[g] || 'std') : 'std';
     const inst = {}; for (const k in m.inst) if (m.inst[k] && m.upg[k]) inst[k] = true;
-    return { belts, stores: m.loadout.slice(), mods: inst };
+    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst };
   }
 
   // ---- stats & achievements
@@ -134,7 +138,7 @@ const Profile = (() => {
   load();
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
-    buyBelt, hasBelt, selectBelt, buyStore, setStation, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
+    buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
     bump, checkAchievements, progress, rewards, applyBattle,
   };
 })();

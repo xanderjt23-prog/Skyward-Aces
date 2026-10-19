@@ -30,7 +30,7 @@ const api = {
   },
   async eval(expr) { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) return 'ERR: ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text); return r.result.result.value; },
   async shot(name) { const r = await send('Page.captureScreenshot', { format: 'png' }); fs.mkdirSync('tools/tests/shots', { recursive: true }); fs.writeFileSync(`tools/tests/shots/${name}.png`, Buffer.from(r.result.data, 'base64')); },
-  async key(key, type) { const code = key.length === 1 ? 'Key' + key.toUpperCase() : key; await send('Input.dispatchKeyEvent', { type: type || 'keyDown', key, code, text: type === 'keyUp' ? undefined : (key.length === 1 ? key : undefined) }); },
+  async key(key, type) { const code = key.length === 1 ? (/[0-9]/.test(key) ? 'Digit' + key : 'Key' + key.toUpperCase()) : key; await send('Input.dispatchKeyEvent', { type: type || 'keyDown', key, code, text: type === 'keyUp' ? undefined : (key.length === 1 ? key : undefined) }); },
   async mouse(x, y, type, button) { await send('Input.dispatchMouseEvent', { type, x, y, button: button || 'left', clickCount: 1 }); },
 };
 const { pathToFileURL } = await import('url');

@@ -72,8 +72,11 @@ const HUD = (() => {
             g.beginPath(); g.moveTo(ls.x - 9, ls.y); g.lineTo(ls.x + 9, ls.y); g.moveTo(ls.x, ls.y - 9); g.lineTo(ls.x, ls.y + 9); g.strokeStyle = c; g.lineWidth = 1; g.stroke();
             if (game.assisting) text('ASSIST', ls.x, ls.y + 22, 'rgba(255,255,255,0.7)', 9, 'center'); } }
       }
-      // bomb sight: where bombs released now would hit
-      if (p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) bombSight(game, p, cam);
+      // bomb sight: where bombs released now would hit. Realistic mode shows it only on aircraft with a computing bomb
+      // sight in the HUD (CCIP on 4th-generation jets); level bombers use their bombsight view instead
+      const ccip = !m.cfg.realistic || (p.def.kind === 'jet' && p.def.era >= 6);
+      if (game.camMode !== 'sight' && ccip && p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) bombSight(game, p, cam);
+      if (game.camMode === 'sight' && p.def.bombsight) sightView(game, p);
       // missile seeker
       if (game.seeker) { const ss = proj(game.seeker.pos, cam); if (ss) { g.strokeStyle = game.locked ? '#ff3b30' : '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.arc(ss.x, ss.y, 18, 0, Math.PI * 2); g.stroke(); if (game.locked) text('LOCK', ss.x, ss.y - 24, '#ff3b30', 11, 'center', true); } }
       if (m.hitMarker && m.time - m.hitMarker < 0.12 && ns) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2; for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.beginPath(); g.moveTo(ns.x + a * 8, ns.y + b * 8); g.lineTo(ns.x + a * 15, ns.y + b * 15); g.stroke(); } }
@@ -105,6 +108,29 @@ const HUD = (() => {
     for (const [cc, w] of [['rgba(0,0,0,0.6)', 4], [c2, 2]]) { g.strokeStyle = cc; g.lineWidth = w; g.beginPath(); g.arc(bs.x, bs.y, 9, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = c2; g.beginPath(); g.arc(bs.x, bs.y, 2, 0, Math.PI * 2); g.fill();
     text(`${onTarget ? 'RELEASE' : 'BOMB'} · ${ip.tti.toFixed(1)} s`, bs.x + 14, bs.y + 4, c2, 11, 'left', true);
+  }
+  // ---- looking through a level bomber's bombsight: the round field of the telescope, the sight's own graticule and the
+  // settings the bomb aimer works with (no target cue: lining up is up to you)
+  function sightView(game, p) {
+    const m = game.match, s = p.def.bombsight, cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.44, ip = game.sightImpact;
+    g.save(); g.fillStyle = 'rgba(0,0,0,0.92)'; g.beginPath(); g.rect(0, 0, W, H); g.arc(cx, cy, R, 0, Math.PI * 2, true); g.fill('evenodd');
+    g.strokeStyle = 'rgba(30,30,30,0.9)'; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke(); g.restore();
+    const ink = s.kind === 'drift' ? 'rgba(20,20,20,0.85)' : 'rgba(255,60,40,0.9)'; g.strokeStyle = ink; g.lineWidth = 1.2;
+    const line = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+    if (s.kind === 'vector') { // Mark XIV / T2: the "sword" - a long drift line with the cross bar at the release point
+      line(cx, cy - R * 0.9, cx, cy + R * 0.35); line(cx - R * 0.16, cy, cx + R * 0.16, cy); line(cx - R * 0.05, cy + R * 0.35, cx + R * 0.05, cy + R * 0.35); }
+    else if (s.kind === 'drift') { // course-setting / drift sights: parallel drift wires and the foresight bead on the cross wire
+      for (const k of [-2, -1, 0, 1, 2]) line(cx + k * R * 0.2, cy - R * 0.95, cx + k * R * 0.2, cy + R * 0.95); line(cx - R * 0.95, cy, cx + R * 0.95, cy);
+      g.fillStyle = ink; g.beginPath(); g.arc(cx, cy, 3, 0, Math.PI * 2); g.fill(); }
+    else { // tachometric (Norden, Lotfe 7): fine cross hairs, the course hair along the track
+      line(cx, cy - R, cx, cy + R); line(cx - R, cy, cx + R, cy); for (let k = -4; k <= 4; k++) if (k) line(cx - 4, cy + k * R * 0.2, cx + 4, cy + k * R * 0.2); }
+    // settings and readings, as the bomb aimer has them: true air speed, ground speed, height, drift and time of fall
+    const agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z), gs = Math.hypot(p.vel.x, p.vel.z), f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat);
+    const drift = Math.atan2(f.x * p.vel.z - f.z * p.vel.x, f.x * p.vel.x + f.z * p.vel.z) * 180 / Math.PI;
+    const rows = [[s.name, ''], ['Height', Math.round(agl) + ' m'], ['Air speed', Math.round(p.speed * 3.6) + ' km/h'], ['Ground speed', Math.round(gs * 3.6) + ' km/h'], ['Drift', (drift >= 0 ? 'R ' : 'L ') + Math.abs(drift).toFixed(1) + '°'],
+      ['Time of fall', ip ? ip.tti.toFixed(1) + ' s' : '—'], ['Dropping angle', ip ? (Math.atan2(Math.hypot(ip.x - p.pos.x, ip.z - p.pos.z), agl) * 180 / Math.PI).toFixed(1) + '°' : '—'], ['Bombs', String(p.count('b'))]];
+    rows.forEach(([a, b], i) => { text(a, 24, 40 + i * 20, i ? '#cfd8e0' : '#ffd34d', i ? 13 : 15, 'left', !i); if (b) text(b, 190, 40 + i * 20, '#ffffff', 13, 'left', true); });
+    text(`${s.gyro ? 'Gyro-stabilised' : 'Fixed (not stabilised): keep the wings level'} · release: ${Input.label(Input.bind('bombs'))} · zoom: ${Input.label(Input.bind('zoom'))} · leave: ${Input.label(Input.bind('bombsight'))}`, W / 2, 76, '#cfd8e0', 12, 'center', true);
   }
   // ---- arrows at the screen edge for enemies that are off screen
   function offscreen(game, p, cam) {
@@ -186,36 +212,25 @@ const HUD = (() => {
     g.fillStyle = COL.me; g.beginPath(); g.moveTo(cx, cy - 6); g.lineTo(cx - 4, cy + 4); g.lineTo(cx + 4, cy + 4); g.fill();
     text('N', ...(() => { const [x, y] = pt(p.pos.clone().add(new THREE.Vector3(0, 0, -range * 0.9))); return [x, y + 4]; })(), COL.dim, 10, 'center', true);
   }
+  // ---- warnings. Arcade: banners on screen. Realistic: only what the aircraft itself has - the voice warning system of
+  // jets that carry one, and radar-warning / ground-proximity tones on Cold War and later jets; no instructional text
+  // (the tutorials teach take-off and landing)
   function warnings(game, p) {
-    const m = game.match, w = [];
-    if (p.missileWarn > 0.3) w.push(['MISSILE', '#ff3b30', true]);
-    const ahead = p.pos.clone().addScaledVector(p.vel, 4);
-    if (ahead.y < m.world.groundAt(ahead.x, ahead.z) + 20 && p.vel.y < -5) w.push(['PULL UP', '#ff3b30', true]);
-    if (p.stalled) w.push(['STALL', '#ffc04d']);
-    if (p.glocT > 0) w.push(['G-LOC — UNCONSCIOUS', '#ff3b30', true]); else if ((p.gVision || 0) > 0.45) w.push(['HIGH G — EASE OFF', '#ffc04d']); else if ((p.gVision || 0) < -0.4) w.push(['NEGATIVE G', '#ff3b30']);
+    const m = game.match, w = [], real = m.cfg.realistic, cues = [];
+    if (p.missileWarn > 0.3) { w.push(['MISSILE', '#ff3b30', true]); cues.push('missile'); }
+    const ahead = p.pos.clone().addScaledVector(p.vel, 4), agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
+    if (ahead.y < m.world.groundAt(ahead.x, ahead.z) + 20 && p.vel.y < -5) { w.push(['PULL UP', '#ff3b30', true]); cues.push('pullup'); }
+    if (p.stalled) { w.push(['STALL', '#ffc04d']); cues.push('stall'); }
+    if (Damage.burning(p.dm) && p.dm.comps.some(c => c.type === 'engine' && c.fire > 0)) cues.push('fire');
+    if (p.fuel < 0.12 && !p.onGround) cues.push('fuel');
+    if (real && !p.onGround && !p.gearDown && !Models.layout(p.def).fixed && agl < 120 && p.speed < p.perf.vs * 1.6 && p.ctl.throttle < 0.4) cues.push('gear');
+    if (p.glocT > 0) w.push(['G-LOC — UNCONSCIOUS', '#ff3b30', true]); else if (!real && (p.gVision || 0) > 0.45) w.push(['HIGH G — EASE OFF', '#ffc04d']); else if (!real && (p.gVision || 0) < -0.4) w.push(['NEGATIVE G', '#ff3b30']);
     if (Math.abs(p.pos.x) > m.half || Math.abs(p.pos.z) > m.half) w.push([`OUT OF BOUNDS ${Math.max(0, Math.ceil(20 - game.oobT))}`, '#ffc04d', true]);
     if (p.dm.fx.ctrl === 0) w.push(['PILOT KNOCKED OUT', '#ff3b30']);
-    // Realistic mode: take-off, landing and servicing prompts
-    if (m.cfg.realistic) {
-      const key = a => Input.label(Input.bind(a)), lay = Models.layout(p.def), agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
-      let hint = null;
-      if (p.onGround) {
-        if (p.serviceT > 0 && !p.serviced && p.atHome) hint = `Servicing aircraft… ${Math.floor(p.serviceT / Craft.SERVICE_TIME * 100)}%`;
-        else if (p.speed < 3 && p.atHome && p.serviced) hint = 'Ready — throttle up to take off';
-        else if (p.ctl.throttle < 0.5) hint = `Throttle up (${key('throttleUp')}) to take off — pull up at about ${Math.round(p.perf.vs * 1.3 * 3.6)} km/h`;
-        else if (p.speed < p.perf.vs * 1.3) hint = `Take-off roll… rotate at ${Math.round(p.perf.vs * 1.3 * 3.6)} km/h`;
-        else hint = 'Pull up gently to lift off';
-        if (p.atHome && p.speed > 3 && p.ctl.throttle < 0.2) hint = `Stop on the runway to refuel, rearm and repair (brakes: ${key('brakes')})`;
-      } else {
-        const home = m.bases.find(b => b.home && b.team === p.team && !b.dead && b.runway && b.runway.c.distanceTo(p.pos) < 4000);
-        if (p.gearDown && !lay.fixed && agl > 250) hint = `Raise the landing gear (${key('gear')})`;
-        else if (home && agl < 500 && !p.gearDown && !lay.fixed) hint = `Lower the landing gear (${key('gear')}) to land and service the aircraft`;
-        else if (home && agl < 300) hint = `Land on the runway: gentle sink, wings level, below ${Math.round((p.perf.vs * 1.9 + 15) * 3.6)} km/h`;
-      }
-      if (hint) text(hint, W / 2, H * 0.7, '#cfe6ff', 15, 'center', true);
-    }
-    w.forEach(([t, c, blink], i) => { if (blink && Math.floor(m.time * 4) % 2) return; text(t, W / 2, H * 0.3 + i * 26, c, 20, 'center', true); });
-    if ((w.some(x => x[0] === 'MISSILE') || w.some(x => x[0] === 'PULL UP'))) Sound.warn(m.time);
+    const shown = real ? w.filter(x => /G-LOC|OUT OF BOUNDS|KNOCKED/.test(x[0])) : w;
+    shown.forEach(([t, c, blink], i) => { if (blink && Math.floor(m.time * 4) % 2) return; text(t, W / 2, H * 0.3 + i * 26, c, 20, 'center', true); });
+    if (p.def.voice) for (const k of cues) Sound.voice(p.def.voice, k, m.time);                    // the aircraft's voice warning system
+    if ((cues.includes('missile') || cues.includes('pullup')) && (p.def.rwr || !real)) Sound.warn(m.time); // RWR / GPWS tones
   }
   // ---- match status (top centre)
   function topBar(game) {

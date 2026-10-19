@@ -23,21 +23,23 @@ const Plan = {
   botLoadout(pl, task) {
     if (task === 'intercept' || task === 'escort') task = 'air';
     const belts = {}; for (const g of Profile.gunsOf(pl)) { const opts = beltsForGun(g, pl.era); belts[g] = opts.includes('hei') ? 'hei' : opts.includes('api') ? 'api' : opts[Math.floor(Math.random() * opts.length)]; }
-    const stores = pl.hp.map(() => null); let kg = 0;
-    const want = task === 'air' ? 'm' : null;
-    pl.hp.forEach((st, i) => {
-      const opts = Object.keys(STORES).filter(id => storeAllowed(pl, id, st));
+    // filled slot by slot, a mirrored pair at a time so the aircraft stays symmetric
+    const sl = Loadout.slots(pl), stores = sl.map(() => null); let kg = 0;
+    for (const s of sl) {
+      if (stores[s.i] || (s.mirror >= 0 && s.mirror < s.i)) continue;
+      const both = s.mirror >= 0 ? [s.i, s.mirror] : [s.i], per = s.pylons * both.length;
+      const opts = Object.keys(STORES).filter(id => Loadout.allowed(pl, s, id));
       // candidates of a kind, newest and heaviest first; take the first that still fits the payload
-      const fit = k => opts.filter(id => STORES[id].kind === k).sort((a, b) => STORES[b].eras[0] - STORES[a].eras[0] || STORES[b].mass - STORES[a].mass).find(id => kg + STORES[id].mass * st[3] <= pl.payload);
+      const fit = k => opts.filter(id => STORES[id].kind === k).sort((a, b) => STORES[b].eras[0] - STORES[a].eras[0] || STORES[b].mass - STORES[a].mass).find(id => kg + STORES[id].mass * per <= pl.payload);
       let pick = null;
-      if (st[1].includes('m')) pick = fit('m');
+      if (s.kinds.includes('m')) pick = fit('m');
       if (!pick && task !== 'air') pick = Math.random() < 0.6 ? fit('b') || fit('r') : fit('r') || fit('b');
       if (!pick && task === 'air' && Math.random() < 0.3) pick = fit('g');
-      if (pick) { stores[i] = pick; kg += STORES[pick].mass * st[3]; }
-    });
+      if (pick) { for (const i of both) stores[i] = pick; kg += STORES[pick].mass * per; }
+    }
     const mods = {}; for (const k of ['engine', 'airframe', 'armor', 'sealing']) if (Math.random() < 0.4 && pl.era >= MODS[k].minEra) mods[k] = true;
     if (pl.flares) mods.flares = Math.random() < 0.5;
-    return { belts, stores, mods };
+    return { belts, stores, perSlot: true, mods };
   },
   bot(id, team, plane, opt) {
     const pl = PLANES[plane], names = PILOT_NAMES[pl.nation] || PILOT_NAMES.usa;
@@ -165,7 +167,7 @@ class Match {
     this.player = this.crafts.find(c => c.id === opt.playerId) || null;
     // a raid's target is as strong as ~a third of the raid's bomb load: an intact raid flattens it, a broken-up raid can't
     for (const b of this.bases) if (b.objective && (b.id === 'T0' || b.id === 'T1') && this.mission && (this.mission.type === 'intercept' || this.mission.type === 'escort')) {
-      let pot = 0; for (const r of cfg.roster) if (r.task === 'bomb' && r.targetBase === b.id) { const pl = PLANES[r.plane]; pl.hp.forEach((st, i) => { const id = r.loadout.stores[i]; if (id && STORES[id].kind === 'b') pot += STORES[id].dmg * st[3]; }); }
+      let pot = 0; for (const r of cfg.roster) if (r.task === 'bomb' && r.targetBase === b.id) { const pl = PLANES[r.plane]; const sl = Loadout.slots(pl); Loadout.of(pl, r.loadout).forEach((id, i) => { if (id && STORES[id].kind === 'b') pot += STORES[id].dmg * sl[i].pylons; }); }
       if (pot > 0) b.hp = b.max = Math.round(pot * 0.33);
     }
     this.nextId = cfg.nid || 1000;

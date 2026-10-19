@@ -233,7 +233,22 @@ const Sound = (() => {
       v.g.gain.setTargetAtTime(0.25 * Math.min(1, 60 / Math.max(60, d)) * (c.def.mass > 10000 ? 1.4 : 1), t, 0.08);
     });
   }
-  function stopAll() { engineStop(); for (const v of voices) v.g.gain.value = 0; for (const [, gr] of growls) gr.g.gain.value = 0; lockTone(0); }
+  // ---- voice warnings, spoken by the browser's speech synthesiser in the aircraft's language
+  const PHRASES = {
+    en: { pullup: 'Pull up. Pull up.', missile: 'Missile. Missile.', stall: 'Warning. Angle of attack.', fire: 'Engine fire. Engine fire.', fuel: 'Bingo. Bingo.', altitude: 'Altitude. Altitude.', gear: 'Landing gear.' },
+    ru: { pullup: 'Опасная высота!', missile: 'Ракета!', stall: 'Критический режим!', fire: 'Пожар двигателя!', fuel: 'Аварийный остаток топлива!', altitude: 'Высота!', gear: 'Выпусти шасси!' },
+    fr: { pullup: 'Ressource! Ressource!', missile: 'Missile! Missile!', stall: 'Décrochage!', fire: 'Feu moteur!', fuel: 'Pétrole!', altitude: 'Altitude! Altitude!', gear: 'Train!' },
+  };
+  const voiceLast = {}; let ttsVoices = [];
+  function voice(lang, key, t) {
+    if (!lang || !window.speechSynthesis || (voiceLast[key] && t - voiceLast[key] < 3.5)) return;
+    voiceLast[key] = t; const ph = (PHRASES[lang.slice(0, 2)] || PHRASES.en)[key]; if (!ph) return;
+    if (!ttsVoices.length) ttsVoices = speechSynthesis.getVoices();
+    const u = new SpeechSynthesisUtterance(ph); u.lang = lang; u.rate = 1.1; u.pitch = 1.05; u.volume = Math.min(1, vol * 1.3);
+    const v = ttsVoices.find(x => x.lang === lang && /female|zira|hazel|susan|irina|hortense|samantha|google/i.test(x.name)) || ttsVoices.find(x => x.lang === lang) || ttsVoices.find(x => x.lang.startsWith(lang.slice(0, 2)));
+    if (v) u.voice = v; speechSynthesis.speak(u);
+  }
+  function stopAll() { if (window.speechSynthesis) speechSynthesis.cancel(); engineStop(); for (const v of voices) v.g.gain.value = 0; for (const [, gr] of growls) gr.g.gain.value = 0; lockTone(0); }
   function tick() { if (ctx) tickGuns(); }
-  return { init, resume, setVolume, setListener, fire, boom, flak, hit, launch, clunk, lockTone, warn, engineStart, engineSet, engineStop, flyby, stopAll, tick, gunClass };
+  return { init, resume, setVolume, setListener, fire, boom, flak, hit, launch, clunk, lockTone, warn, voice, engineStart, engineSet, engineStop, flyby, stopAll, tick, gunClass };
 })();

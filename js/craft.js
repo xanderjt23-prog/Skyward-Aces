@@ -186,27 +186,17 @@ class Craft {
   // ---- ordnance hanging on the pylons, shown until it is released
   buildStoreMeshes() {
     if (this.storeGroup) { this.model.remove(this.storeGroup); this.storeGroup = null; }
-    const d = this.def, lay = Models.layout(d), grp = new THREE.Group(); let wingIdx = 0;
-    const pylonMat = Models.mat('vc');
+    const d = this.def, lay = Models.layout(d), grp = new THREE.Group(), pylonMat = Models.mat('vc');
     for (const st of this.stations) {
-      const label = st.label.toLowerCase(), si = d.hp.findIndex(h => h[0] === st.label);
-      if (/bay|bays/.test(label)) { st.meshes = []; continue; } // carried internally
-      const fuselage = /centre|belly|fuselage|well|cft|intake|nose/.test(label) || (st.pylons === 1 && !/wing/.test(label));
-      let f = /tip/.test(label) ? 0.98 : /outer/.test(label) ? 0.7 : /mid/.test(label) ? 0.5 : /inner|stub|glove/.test(label) ? 0.3 : 0.3 + (wingIdx++) * 0.18;
-      f = Math.min(0.98, f);
       st.meshes = [];
-      const per = Math.max(1, st.pylons), sides = fuselage ? per : Math.max(1, Math.floor(per / 2)) * 2;
-      for (let k = 0; k < per; k++) {
-        const s = st.s, mk = Models.storeMesh(s, st.id);
-        let x, y, z;
-        if (fuselage) { x = per === 1 ? 0 : (k % 2 ? 1 : -1) * lay.fr * 0.55; y = -lay.fr - mk.userData.r - 0.15; z = lay.wingZ - lay.chord * 0.2 + Math.floor(k / 2) * Math.max(1.5, mk.userData.len * 1.1) - (per > 2 ? mk.userData.len * 0.5 : 0); }
-        else {
-          const side = k % 2 ? 1 : -1, row = Math.floor(k / 2), fk = Math.min(0.98, f + row * 0.09 * (f > 0.9 ? -1 : 1));
-          x = side * (lay.fr * 0.5 + (lay.S / 2 - lay.fr * 0.5) * fk); z = lay.wingZ + lay.sweep * fk - (lay.chord * (1 - fk) + lay.tipC * fk) * 0.1;
-          y = fk > 0.95 ? lay.wingY : lay.wingY - 0.18 - mk.userData.r - (lay.jet ? 0.1 : 0.05);
-        }
-        mk.position.set(x, y, z); grp.add(mk);
-        if (!(f > 0.95 && !fuselage)) { const py = new THREE.Mesh(new THREE.BoxGeometry(0.08, Math.max(0.05, (fuselage ? -lay.fr : lay.wingY) - y - mk.userData.r), Math.min(1.2, mk.userData.len * 0.4)), pylonMat); py.position.set(x, (y + mk.userData.r + (fuselage ? -lay.fr : lay.wingY)) / 2, z); py.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Array(py.geometry.attributes.position.count * 3).fill(0.3), 3)); grp.add(py); }
+      const sp0 = Loadout.position(d, st.slot, 0, null); st.local = new V3(sp0.x, sp0.y, sp0.z); // release point, also for internal bays
+      if (st.slot.bay) continue;                                                     // carried internally
+      for (let k = 0; k < st.pylons; k++) {
+        const mk = Models.storeMesh(st.s, st.id), p = Loadout.position(d, st.slot, k, mk);
+        mk.position.set(p.x, p.y, p.z); grp.add(mk); st.local.set(p.x, p.y, p.z);
+        if (!p.tip) { const top = p.wing ? lay.wingY : -lay.fr * (st.slot.band === 1 ? 0.75 : 1), h = Math.max(0.05, top - p.y - mk.userData.r);
+          const py = new THREE.Mesh(new THREE.BoxGeometry(0.08, h, Math.min(1.2, mk.userData.len * 0.4)), pylonMat); py.position.set(p.x, p.y + mk.userData.r + h / 2, p.z);
+          py.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Array(py.geometry.attributes.position.count * 3).fill(0.3), 3)); grp.add(py); }
         st.meshes.push(mk);
       }
       st.full = st.n;
@@ -222,8 +212,9 @@ class Craft {
   loadStores() {
     const d = this.def;
     this.mass = d.mass + (this.lo.mods.armor ? 40 : 0);
-    this.stations = d.hp.map((st, i) => { const id = this.lo.stores[i]; if (!id || !STORES[id] || !storeAllowed(d, id, st)) return null; const s = STORES[id];
-      this.mass += s.mass * st[3]; return { id, s, n: st[3] * (s.count || 1), pylons: st[3], label: st[0], gunAmmo: s.kind === 'g' ? GUNS[s.gun].ammo * s.guns * st[3] : 0 }; }).filter(Boolean);
+    const sl = Loadout.slots(d), ids = Loadout.of(d, this.lo);
+    this.stations = sl.map((slot, i) => { const id = ids[i]; if (!id || !STORES[id] || !Loadout.allowed(d, slot, id)) return null; const s = STORES[id];
+      this.mass += s.mass * slot.pylons; return { id, s, n: slot.pylons * (s.count || 1), pylons: slot.pylons, label: slot.name, slot, gunAmmo: s.kind === 'g' ? GUNS[s.gun].ammo * s.guns * slot.pylons : 0 }; }).filter(Boolean);
   }
   processDamageEvents() {
     const dm = this.dm;
@@ -289,16 +280,25 @@ class Craft {
   }
   // ---- secondary weapons
   stationsOf(kind) { return this.stations.filter(s => s.s.kind === kind && s.n > 0); }
+  // the next pylon(s) to release from: of the given type (or the first in line), outboard pylons first, and its loaded
+  // mirror on the other wing so the aircraft stays balanced
+  releaseSet(kind, pick) {
+    const l = this.stationsOf(kind).filter(s => !pick || pick(s)).sort((a, b) => b.slot.rank - a.slot.rank || a.slot.side - b.slot.side); if (!l.length) return [];
+    const a = l[0], b = a.slot.mirror >= 0 ? l.find(s => s.slot.i === a.slot.mirror && s.id === a.id) : null; return b ? [a, b] : [a];
+  }
+  releasePoint(st) { const p = st.local ? st.local.clone() : new V3(0, -Models.layout(this.def).fr - 0.5, 0); return p.applyQuaternion(this.quat).add(this.pos); }
   count(kind) { return this.stationsOf(kind).reduce((a, s) => a + s.n, 0); }
   releaseMass(s, n) { this.mass -= s.s.mass / (s.s.count || 1) * n; this.perf = Flight.perf(this.def, this.lo.mods, this.mass); }
   dropBomb() {
-    const st = this.stationsOf('b').sort((a, b) => b.s.mass - a.s.mass)[0]; if (!st || this.dm.destroyed) return false;
-    const n = Math.min(st.n, st.pylons >= 2 ? 2 : 1);
-    for (let i = 0; i < n; i++) { const lay = Models.layout(this.def); const off = new V3(n > 1 ? (i ? 1 : -1) * Math.min(3, lay.S * 0.2) : 0, -lay.fr - 0.5, 0).applyQuaternion(this.quat);
-      // bombs tumble and scatter a little on release (more from high altitude level bombers)
-      const agl = this.pos.y - this.match.world.groundAt(this.pos.x, this.pos.z), sc = 1.5 + agl * (this.def.role === 'bomber' ? 0.004 : 0.0015), v = this.vel.clone().add(new V3((Math.random() - 0.5) * sc, 0, (Math.random() - 0.5) * sc));
-      this.match.combat.bomb(this.pos.clone().add(off), v, this, st.s); }
-    st.n -= n; this.releaseMass(st, n); return true;
+    if (this.dm.destroyed) return false;
+    const heavy = this.stationsOf('b').reduce((m, s) => Math.max(m, s.s.mass), 0), set = this.releaseSet('b', s => s.s.mass === heavy); if (!set.length) return false;
+    for (const st of set) { const n = st.slot.bay ? Math.min(st.n, 2) : 1; // a bay releases two at a time, an external pylon its one bomb
+      for (let i = 0; i < n; i++) {
+        // bombs tumble and scatter a little on release (more from high altitude level bombers)
+        const agl = this.pos.y - this.match.world.groundAt(this.pos.x, this.pos.z), sc = 1.5 + agl * (this.def.role === 'bomber' ? 0.004 : 0.0015), v = this.vel.clone().add(new V3((Math.random() - 0.5) * sc, 0, (Math.random() - 0.5) * sc));
+        this.match.combat.bomb(this.releasePoint(st).add(new V3(i ? 0.6 : 0, 0, 0).applyQuaternion(this.quat)), v, this, st.s); }
+      st.n -= n; this.releaseMass(st, n); }
+    return true;
   }
   // where a bomb released now would land (same ballistics as Combat's bombs), or null
   bombImpact() {
@@ -312,15 +312,20 @@ class Craft {
     return t.pos.clone().addScaledVector(t.vel.clone().sub(this.vel), tof).add(new V3(0, 4.9 * tof * tof, 0));
   }
   fireRockets() {
-    const st = this.stationsOf('r')[0]; if (!st || this.dm.destroyed) return false;
-    const salvo = st.id === 'r4m' ? Math.min(st.n, 6) : Math.min(st.n, 2), lay = Models.layout(this.def);
-    for (let i = 0; i < salvo; i++) { const off = new V3((i % 2 ? 1 : -1) * lay.S * 0.25, lay.wingY - 0.4, lay.wingZ).applyQuaternion(this.quat);
-      const dir = new V3((Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008, -1).normalize().applyQuaternion(this.quat);
-      this.match.combat.rocket(this.pos.clone().add(off), dir, this.vel.clone(), this, st.s); }
-    st.n -= salvo; this.releaseMass(st, salvo); return true;
+    if (this.dm.destroyed) return false; const set = this.releaseSet('r'); if (!set.length) return false;
+    for (const st of set) { const salvo = st.id === 'r4m' ? Math.min(st.n, 3) : 1;
+      for (let i = 0; i < salvo; i++) { const dir = new V3((Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008, -1).normalize().applyQuaternion(this.quat);
+        this.match.combat.rocket(this.releasePoint(st), dir, this.vel.clone(), this, st.s); }
+      st.n -= salvo; this.releaseMass(st, salvo); }
+    return true;
   }
   // best missile & target for the current nose direction (used for the lock tone and AI)
-  missileStation() { const l = this.stationsOf('m'); if (!l.length) return null; return l.sort((a, b) => (b.s.seek === 'ir') - (a.s.seek === 'ir'))[0]; }
+  // the selected missile type (cycled with its key); by default the first infrared type
+  missileTypes() { return [...new Set(this.stationsOf('m').map(s => s.id))]; }
+  missileStation() { const types = this.missileTypes(); if (!types.length) return null;
+    if (!types.includes(this.missileSel)) this.missileSel = types.slice().sort((a, b) => (STORES[b].seek === 'ir') - (STORES[a].seek === 'ir'))[0];
+    return this.releaseSet('m', s => s.id === this.missileSel)[0] || null; }
+  cycleMissile() { const t = this.missileTypes(); if (t.length < 2) return false; this.missileStation(); this.missileSel = t[(t.indexOf(this.missileSel) + 1) % t.length]; return true; }
   seekerTarget(st, aimDir) {
     const s = st.s, m = this.match; let best = null, bs = 1e9; const fwd = aimDir || new V3(0, 0, -1).applyQuaternion(this.quat);
     const range = s.range * (this.lo.mods.radar && s.radar ? 1.25 : 1);
@@ -342,9 +347,7 @@ class Craft {
   }
   fireMissile(target) {
     const st = this.missileStation(); if (!st || !target || this.dm.destroyed) return false;
-    const lay = Models.layout(this.def), side = st.n % 2 ? 1 : -1;
-    const off = new V3(side * Math.min(lay.S * 0.35, 4), lay.wingY - 0.5, lay.wingZ).applyQuaternion(this.quat);
-    this.match.combat.missile(this.pos.clone().add(off), this.vel.clone(), this, st.s, target, st.id);
+    this.match.combat.missile(this.releasePoint(st), this.vel.clone(), this, st.s, target, st.id);
     st.n--; this.releaseMass(st, 1); return true;
   }
   dropFlares() {

@@ -122,6 +122,36 @@ const UI = (() => {
     $$('[data-buy]').forEach(b => b.onclick = () => { const r = Profile.research(b.dataset.buy); if (r.ok) { Profile.checkAchievements(); toastMenu(`${PLANES[b.dataset.buy].name} researched!`); refresh(); renderResearch(); } else toastMenu(r.why); });
   }
   // ---------------------------------------------------------------- modifications
+  // ---- pylon diagram (War Thunder style): the aircraft from above, one box per pylon from the left wingtip to the right one,
+  // the centreline in the middle. Click a box, then pick what hangs on it.
+  let loSel = null, loMirror = true;
+  const KIND_ICON = { b: '💣', r: '🚀', m: '🎯', g: '🔫' };
+  function pylonOrder(pl) { return Loadout.slots(pl).slice().sort((a, b) => a.side * a.rank - b.side * b.rank || a.i - b.i); }
+  function pylonDiagram(pl, m) {
+    const order = pylonOrder(pl), n = order.length, W = 100 / n;
+    // a schematic top view: the boxes sit under the wing positions they stand for
+    let h = `<div class="pylons"><svg class="pylon-plane" viewBox="0 0 100 34" preserveAspectRatio="none"><path d="M50 1 L52.4 9 L52.4 13 L97 19 L97 22 L52.4 21 L51.6 30 L58 33 L42 33 L48.4 30 L47.6 21 L3 22 L3 19 L47.6 13 L47.6 9 Z" /></svg><div class="pylon-row">`;
+    order.forEach((s, k) => { const id = m.slots[s.i], st = id && STORES[id], num = k + 1;
+      h += `<div class="pylon ${loSel === s.i ? 'sel' : ''} ${st ? 'full' : ''}" data-slot="${s.i}" style="width:${W}%" title="${esc(s.name)}">
+        <div class="pn">${num}</div><div class="pk">${s.kinds.split('').map(x => KIND_ICON[x]).join('')}</div>
+        <div class="ps">${st ? esc(shortStore(st)) : '—'}</div><div class="pm">${st ? fmt(st.mass * s.pylons) + ' kg' : '≤' + fmt(s.maxKg) + ' kg'}</div>
+        <div class="pg">${esc(s.bay ? s.name + ' ×' + s.pylons : s.name)}</div></div>`; });
+    return h + `</div></div>`;
+  }
+  const shortStore = st => st.name.replace(/ \(.*\)$/, '').replace(/^(Bomb|bomb) /, '');
+  function pylonPicker(pl, m) {
+    const sl = Loadout.slots(pl), s = loSel != null ? sl[loSel] : null;
+    if (!s) return `<p class="muted small" style="margin-top:8px">Click a pylon to choose what it carries.</p>`;
+    const num = pylonOrder(pl).indexOf(s) + 1, opts = Object.keys(STORES).filter(id => Loadout.allowed(pl, s, id)), cur = m.slots[s.i];
+    let h = `<div class="picker"><div class="row sp"><b>Pylon ${num} — ${esc(s.name)}${s.bay ? ' (internal, ' + s.pylons + ' stations)' : ''}</b>
+      ${s.mirror >= 0 ? `<label class="small"><input type="checkbox" id="lo-mirror" ${loMirror ? 'checked' : ''}> Same on the other wing (pylon ${pylonOrder(pl).indexOf(sl[s.mirror]) + 1})</label>` : ''}</div>
+      <div class="small muted">Carries ${s.kinds.split('').map(k => KIND_NAMES[k].toLowerCase()).join(', ')} · up to ${fmt(s.maxKg)} kg${s.bay ? ' per station' : ''}</div><div class="pick-list">
+      <button data-fit="" class="${!cur ? 'sel' : ''}">— Empty —</button>`;
+    for (const id of opts) { const st = STORES[id], own = m.stores[id];
+      h += own ? `<button data-fit="${id}" class="${cur === id ? 'sel' : ''}">${KIND_ICON[st.kind]} ${esc(st.name)} <span class="muted">${fmt(st.mass * s.pylons)} kg</span></button>`
+        : `<button data-buystore="${id}" class="ghost">${KIND_ICON[st.kind]} ${esc(st.name)} <span class="muted">· buy ◎${fmt(st.price)}</span></button>`; }
+    return h + `</div><div class="row" style="margin-top:8px"><button id="lo-clear">Empty every pylon</button></div></div>`;
+  }
   function renderMods() {
     const p = P(); modsPlane = modsPlane && p.owned[modsPlane] ? modsPlane : p.selected;
     const pl = PLANES[modsPlane], m = Profile.modsOf(pl.id);
@@ -140,14 +170,11 @@ const UI = (() => {
       }
       if (!pl.guns.length) h += `<p class="muted">This aircraft has no forward guns.</p>`;
     } else if (modsTab === 'loadout') {
-      const kg = Profile.loadoutMass(pl.id);
+      const kg = Profile.loadoutMass(pl.id), sl = Loadout.slots(pl);
       h += `<div class="card" style="margin-bottom:12px"><div class="row sp"><h3 style="margin:0">Loadout</h3><span>Payload <b>${fmt(kg)}</b> / ${fmt(pl.payload)} kg</span></div><div class="bar"><i style="width:${pl.payload ? Math.min(100, kg / pl.payload * 100) : 0}%"></i></div>`;
-      if (!pl.hp.length) h += `<p class="muted">This aircraft has no hardpoints: it cannot carry bombs, rockets, missiles or gun pods.</p>`;
-      pl.hp.forEach((st, i) => {
-        const opts = Object.keys(STORES).filter(id => storeAllowed(pl, id, st));
-        const kinds = st[1].split('').map(k => KIND_NAMES[k]).join(', ');
-        h += `<div class="lo-row"><div><b>${esc(st[0])}</b><div class="small muted">${st[3]} pylon${st[3] > 1 ? 's' : ''} · ${kinds} · ≤${st[2]} kg each</div></div><div><select data-st="${i}"><option value="">— empty —</option>${opts.map(id => `<option value="${id}" ${m.loadout[i] === id ? 'selected' : ''} ${m.stores[id] ? '' : 'disabled'}>${esc(STORES[id].name)} · ${STORES[id].mass * st[3]} kg${m.stores[id] ? '' : ' (not bought)'}</option>`).join('')}</select></div></div>`;
-      });
+      if (!sl.length) h += `<p class="muted">This aircraft has no hardpoints: it cannot carry bombs, rockets, missiles or gun pods.</p>`;
+      else h += pylonDiagram(pl, m);
+      if (sl.length) h += pylonPicker(pl, m);
       h += `</div><h3>Ordnance for this aircraft</h3><p class="muted small">Only weapons that fit this aircraft's hardpoints, era and nation are listed. Buy them once, then fit them above.</p>`;
       const avail = storesFor(pl);
       for (const k of ['b', 'r', 'm', 'g']) {
@@ -168,7 +195,7 @@ const UI = (() => {
       }
     }
     body(h);
-    $('#mods-plane').onchange = e => { modsPlane = e.target.value; Game.showPlane(modsPlane); renderMods(); };
+    $('#mods-plane').onchange = e => { modsPlane = e.target.value; loSel = null; Game.showPlane(modsPlane); renderMods(); };
     $$('[data-mt]').forEach(b => b.onclick = () => { modsTab = b.dataset.mt; renderMods(); });
     const after = ok => { if (!ok) toastMenu('Not enough coins'); Profile.checkAchievements(); refresh(); renderMods(); };
     $$('[data-buybelt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.buybelt.split('|'); after(Profile.buyBelt(pl.id, g, k)); });
@@ -176,7 +203,10 @@ const UI = (() => {
     $$('[data-buystore]').forEach(b => b.onclick = () => after(Profile.buyStore(pl.id, b.dataset.buystore)));
     $$('[data-buyupg]').forEach(b => b.onclick = () => after(Profile.buyUpgrade(pl.id, b.dataset.buyupg)));
     $$('[data-toggle]').forEach(b => b.onclick = () => { Profile.toggleUpgrade(pl.id, b.dataset.toggle); renderMods(); });
-    $$('[data-st]').forEach(s => s.onchange = () => { const r = Profile.setStation(pl.id, +s.dataset.st, s.value || null); if (!r.ok) toastMenu(r.why); renderMods(); });
+    $$('[data-slot]').forEach(b => b.onclick = () => { loSel = +b.dataset.slot; renderMods(); });
+    $$('[data-fit]').forEach(b => b.onclick = () => { const r = Profile.setSlot(pl.id, loSel, b.dataset.fit || null, loMirror); if (!r.ok) toastMenu(r.why); renderMods(); });
+    const mi = $('#lo-mirror'); if (mi) mi.onchange = e => { loMirror = e.target.checked; };
+    const lc = $('#lo-clear'); if (lc) lc.onclick = () => { for (const s of Loadout.slots(pl)) Profile.setSlot(pl.id, s.i, null, false); renderMods(); };
     Game.showPlane(pl.id);
   }
   // ---------------------------------------------------------------- achievements & profile

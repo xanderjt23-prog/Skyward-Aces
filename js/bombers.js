@@ -58,6 +58,24 @@ const TYPES = { gotha: 'Heavy bomber', ho400: 'Heavy bomber', he111: 'Medium bom
   tu16: 'Jet bomber', f105: 'Fighter-bomber', a4: 'Attack aircraft', su24: 'Strike aircraft', f15e: 'Strike fighter', il2: 'Ground-attack aircraft',
   f104g: 'Interceptor', f104j: 'Interceptor', lightning: 'Interceptor', tornadof3: 'Interceptor', mig15: 'Interceptor', me262: 'Jet fighter', p38l: 'Heavy fighter', p47d: 'Fighter-bomber',
   typhoon1b: 'Fighter-bomber', f4u1d: 'Fighter-bomber', f4e: 'Multirole fighter', f4ej: 'Multirole fighter', f15c: 'Air superiority fighter', f15j: 'Air superiority fighter', su27: 'Air superiority fighter', f22a: 'Air superiority fighter' };
+// ---- bombsights of the level bombers (bomb aimer in the nose). gyro: gyro-stabilised optics that stay level while the
+// aircraft rolls and pitches; kind: tachometric (Norden, Lotfe 7: the sight solves the dropping angle from true speed and
+// height), vector (RAF Mark XIV: a computing sight with the sword-shaped graticule), drift (WW1 / early course-setting sights:
+// wires set for wind and drift). Named where the type is documented; otherwise described by its class.
+const SIGHTS = {
+  norden: { name: 'Norden M-9', kind: 'tachometric', gyro: true }, nordenEarly: { name: 'Norden (early model)', kind: 'tachometric', gyro: true },
+  lotfe7: { name: 'Lotfernrohr 7', kind: 'tachometric', gyro: false }, lotfe7c: { name: 'Lotfernrohr 7C', kind: 'tachometric', gyro: true }, lotfe7k: { name: 'Lotfernrohr 7K', kind: 'tachometric', gyro: true },
+  mk14: { name: 'Mark XIV bomb sight', kind: 'vector', gyro: true }, csbs: { name: 'Course Setting Bomb Sight', kind: 'drift', gyro: false }, goerz: { name: 'Goerz bombsight', kind: 'drift', gyro: false },
+  drift: { name: 'Optical drift sight', kind: 'drift', gyro: false }, optical: { name: 'Optical bombsight', kind: 'tachometric', gyro: false }, opb: { name: 'OPB optical bombsight', kind: 'tachometric', gyro: false },
+  opb5: { name: 'OPB-5S', kind: 'tachometric', gyro: true }, opb11: { name: 'OPB-11R', kind: 'tachometric', gyro: true }, t2: { name: 'T2 bombsight', kind: 'vector', gyro: true },
+};
+const BOMBSIGHT_OF = { b17g: 'norden', b29: 'norden', b25j: 'norden', b10: 'nordenEarly', he111: 'lotfe7', do17: 'lotfe7', ju88: 'lotfe7c', ar234: 'lotfe7k',
+  lancaster: 'mk14', blenheim: 'csbs', hart: 'csbs', dh9a: 'csbs', ho400: 'csbs', dh4: 'drift', br14: 'drift', muromets: 'drift', gotha: 'goerz',
+  amiot143: 'optical', leo451: 'optical', ki21: 'optical', g4m: 'optical', tb3: 'opb', sb2: 'opb', pe2: 'opb', tu2: 'opb', il28: 'opb5', tu16: 'opb11', canberra: 't2', vautour: 'optical' };
+// ---- voice warning systems ("Bitching Betty" in US jets, "Nagging Nora" in the Typhoon, the RI-65 "Rita" in Soviet / Russian
+// fighters, the French voice in Dassault jets). Aircraft without one get no spoken warnings.
+const VOICE_OF = { f16c: 'en-US', fa18e: 'en-US', f22a: 'en-US', ef2000g: 'en-GB', ef2000uk: 'en-GB', rafalec: 'fr-FR', m2000c: 'fr-FR', m2000d: 'fr-FR',
+  mig29: 'ru-RU', mig29g: 'ru-RU', su27: 'ru-RU', su35s: 'ru-RU', su34: 'ru-RU', su57: 'ru-RU' };
 const DIVE_BRAKES = ['ju87', 'sbd', 'd3a', 'pe2', 'a1h'];
 for (const p of PLANE_LIST) {
   // flaps: none on WW1 / biplanes; automatic manoeuvre flaps on 4th/5th-generation jets; otherwise selectable
@@ -66,6 +84,8 @@ for (const p of PLANE_LIST) {
   p.combatFlaps = p.flaps === 'manual' && p.kind !== 'jet' && p.role !== 'bomber';
   p.airbrake = (p.kind === 'jet' && p.era >= 4) || DIVE_BRAKES.includes(p.id);
   if (TYPES[p.id]) p.type = TYPES[p.id];
+  p.bombsight = BOMBSIGHT_OF[p.id] ? SIGHTS[BOMBSIGHT_OF[p.id]] : null;
+  p.voice = VOICE_OF[p.id] || null; p.rwr = p.kind === 'jet' && p.era >= 5; // radar-warning / ground-proximity tones from the Cold War on
   if (!p.type) p.type = p.role === 'bomber' ? 'Bomber' : p.role === 'attack' ? 'Attack aircraft' : p.kind === 'jet' ? (p.era >= 6 ? 'Multirole fighter' : 'Jet fighter') : p.shape === 'bi' || p.shape === 'tri' ? 'Biplane fighter' : 'Fighter';
   // short name (without the maker) for markers and cards
   if (!p.short) { let n = p.name; for (const mk of MAKERS.concat(['Airco', 'Martin', 'Douglas', 'Fairchild Republic', 'General Dynamics', 'Hannover', 'Dornier', 'Arado', 'Fiat', 'Panavia', 'Bristol', 'de Havilland', 'Avro', 'English Electric', 'Blackburn', 'Sikorsky', 'Aichi', 'Breguet', 'Lioré et Olivier', 'Sud Aviation', 'SEPECAT'])) if (n.startsWith(mk + ' ')) { n = n.slice(mk.length + 1); break; } p.short = n; }
