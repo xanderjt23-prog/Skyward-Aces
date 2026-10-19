@@ -1,5 +1,9 @@
 // ============================================================================
-// Sound: all synthesised with WebAudio. Modelled on how the real sounds are
+// Sound: real recordings where we have them (assets/sounds, credited in CREDITS.md / js/soundcredits.js) - engine
+// loops (a Rolls-Royce Merlin, a radial, a propeller cruise, a Saab Draken jet), gunshots recorded from the same
+// rifle cartridges the aircraft machine guns fired (.30-06, 7.62x54R, Japanese 7.7 mm), a cannon, explosions and
+// real fly-bys - layered with WebAudio synthesis that follows the aircraft (engine order, rpm, cylinders, spool).
+// Everything that has no recording is synthesised. Modelled on how the real sounds are
 // made rather than played from recordings:
 //  - piston engines: exhaust pulses at the cylinder firing frequency (rpm/60 x
 //    cylinders/2), a half-order rumble, uneven combustion, propeller wash;
@@ -14,6 +18,24 @@ const Sound = (() => {
   let ctx = null, master = null, sfx = null, noise = null, vol = 0.7;
   const L = { pos: new THREE.Vector3(), ok: false }, SPEED = 343;
   const B = {}; // generated sample buffers
+  // ---- recordings: loaded once audio starts (each file is a small script, so it works from file:// pages too)
+  const REC = {}, REC_KEYS = ['merlin', 'radial', 'propcruise', 'draken', 'spitfire', 'shot3006', 'shot3006far', 'shot762r', 'shotarisaka', 'cannon', 'expl1', 'expl2', 'expl3'];
+  function loadRecordings() {
+    for (const k of REC_KEYS) {
+      const decode = () => { const sm = window.SKY_SAMPLES && window.SKY_SAMPLES[k]; if (!sm || !ctx) return; const bin = Uint8Array.from(atob(sm.b64), c => c.charCodeAt(0));
+        ctx.decodeAudioData(bin.buffer).then(b => { REC[k] = b; delete window.SKY_SAMPLES[k]; if (eng && !eng.rec) attachRec(eng); }).catch(() => {}); };
+      if (window.SKY_SAMPLES && window.SKY_SAMPLES[k]) { decode(); continue; }
+      const sc = document.createElement('script'); sc.src = 'assets/sounds/' + k + '.js'; sc.onload = decode; document.head.appendChild(sc);
+    }
+  }
+  // a piece of a recording: [start, end] in seconds
+  const SEG = { merlin: [1, 11.5], radial: [4.6, 9.4], propcruise: [0.05, 5.95], draken: [40, 46.5], dpass: [12.6, 16.6], spass: [9, 14.5] };
+  function playRec(key, gain, at, rate, filterHz, seg) {
+    const b = REC[key]; if (!b) return null; const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rate || 1;
+    const g = ctx.createGain(); g.gain.value = gain;
+    if (filterHz) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filterHz; s.connect(f); f.connect(g); } else s.connect(g);
+    g.connect(sfx); if (seg) s.start(at || now(), seg[0], seg[1] - seg[0]); else s.start(at || now()); return s;
+  }
   function init() {
     if (ctx) return;
     try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
@@ -23,7 +45,7 @@ const Sound = (() => {
     master.connect(comp); comp.connect(ctx.destination);
     sfx = ctx.createGain(); sfx.connect(master);
     noise = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    build();
+    build(); loadRecordings();
   }
   function setVolume(v) { vol = v; if (master) master.gain.value = v; }
   function resume() { init(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
@@ -77,6 +99,7 @@ const Sound = (() => {
 
   // ---- guns -----------------------------------------------------------------
   const gunState = new Map();
+  const gunId = g => { for (const k in GUNS) if (GUNS[k] === g) return k; return ''; };
   function gunClass(g) { return g.cal <= 8 ? 'rifle' : g.cal < 15 ? 'hmg' : g.cal < 27 ? 'cannon' : 'heavy'; }
   // called every frame a gun group is firing: shots are scheduled at the real cyclic rate
   function fire(key, gun, barrels, pos, mine) {
@@ -91,7 +114,12 @@ const Sound = (() => {
     if (st.next < t + sp.delay) st.next = t + sp.delay;
     const cls = gunClass(gun), buf = B[cls][sp.far ? 1 : 0];
     const base = (mine ? 0.32 : 0.5) * { rifle: 0.55, hmg: 0.8, cannon: 1, heavy: 1.1 }[cls];
-    while (st.next < t + sp.delay + 0.06) { play(buf, base * sp.gain * (0.85 + Math.random() * 0.3), st.next, 0.94 + Math.random() * 0.12); st.next += 1 / rate; }
+    // recorded report: rifle calibres use the real cartridge (.30-06 / 7.62x54R / Japanese 7.7 mm); heavier guns the same report
+    // played slower (deeper) over the synthesised body, cannon the recorded cannon played fast and short
+    const rec = sp.far ? 'shot3006far' : cls === 'rifle' ? (/shkas|pv1/.test(gunId(gun)) ? 'shot762r' : /type8|type9/.test(gunId(gun)) ? 'shotarisaka' : 'shot3006') : cls === 'hmg' ? 'shot3006' : 'cannon';
+    const rr = { rifle: 1, hmg: 0.78, cannon: 2.1, heavy: 1.6 }[cls], rg = { rifle: 0.9, hmg: 0.8, cannon: 0.55, heavy: 0.7 }[cls] * (mine ? 0.55 : 0.8);
+    while (st.next < t + sp.delay + 0.06) { const j = 0.94 + Math.random() * 0.12, v = sp.gain * (0.85 + Math.random() * 0.3);
+      const hasRec = REC[rec]; play(buf, base * v * (hasRec ? 0.55 : 1), st.next, j); if (hasRec) playRec(rec, rg * v, st.next, rr * j, sp.far ? 1500 : 0, cls === 'cannon' || cls === 'heavy' ? [0, 0.6] : null); st.next += 1 / rate; }
   }
   // above ~2700 rounds a minute the reports merge into a continuous growl at the firing rate (M61, GSh, GAU-8)
   const growls = new Map();
@@ -119,7 +147,9 @@ const Sound = (() => {
   // ---- one-shots ------------------------------------------------------------
   function boom(size, pos) {
     if (!ctx) return; const sp = spatial(pos, 120 * Math.max(0.5, size)); if (sp.gain < 0.01) return;
-    play(B.boom[sp.far ? 1 : 0], Math.min(1.4, 0.9 * Math.sqrt(size)) * sp.gain, now() + sp.delay, 0.85 + 0.3 / Math.max(0.6, size));
+    const g0 = Math.min(1.4, 0.9 * Math.sqrt(size)) * sp.gain, at = now() + sp.delay, key = size > 2.2 ? 'expl3' : Math.random() < 0.5 ? 'expl1' : 'expl2';
+    if (REC[key]) { playRec(key, g0 * 1.2, at, 0.9 + 0.2 / Math.max(0.6, size) + Math.random() * 0.08, sp.far ? 500 : 0); play(B.boom[sp.far ? 1 : 0], g0 * 0.45, at, 0.85); } // the recording, with the synthesised pressure thump under it
+    else play(B.boom[sp.far ? 1 : 0], g0, at, 0.85 + 0.3 / Math.max(0.6, size));
   }
   function flak(pos) { if (!ctx) return; const sp = spatial(pos, 150); if (sp.gain < 0.02) return; play(B.flak[0], 0.8 * sp.gain, now() + sp.delay, 0.9 + Math.random() * 0.2, sp.far ? 700 : 0); }
   function hit(heavy) { if (!ctx) return; play(B.hit, heavy ? 0.9 : 0.5, now(), heavy ? 0.7 : 0.9 + Math.random() * 0.3); }
@@ -175,7 +205,7 @@ const Sound = (() => {
       const pg = ctx.createGain(); pg.gain.value = 0; pn.connect(pf); pf.connect(pam); pam.connect(pg); pg.connect(out);
       Object.assign(e, { spec, lpf, plfo, pg });
     }
-    eng = e;
+    eng = e; attachRec(e);
   }
   // p: the player's aircraft
   function engineSet(p) {
@@ -196,6 +226,7 @@ const Sound = (() => {
       e.w1.frequency.setTargetAtTime(1800 + n1 * 3200, t, 0.1); e.w2.frequency.setTargetAtTime((1800 + n1 * 3200) * 1.52, t, 0.1); e.wgain.gain.setTargetAtTime(0.012 * n1, t, 0.1);
       e.ag.gain.setTargetAtTime(p.afterburner && running ? 0.55 : 0, t, 0.15);
       e.out.gain.setTargetAtTime(running || n1 > 0.05 ? 0.9 * cough : 0, t, 0.08);
+      if (e.rec && e.rec.main) { e.rec.main.s.playbackRate.setTargetAtTime(0.62 + 0.45 * n1 + (p.afterburner ? 0.05 : 0), t, 0.15); e.rec.main.g.gain.setTargetAtTime((0.5 + 5.5 * n1 * n1) * (p.afterburner ? 1.6 : 1), t, 0.15); }
     } else {
       const s = e.spec, target = running ? s.rpm[0] + (s.rpm[1] - s.rpm[0]) * Math.min(1, thr * 0.85 + sf * 0.2) * (thr > 1 ? 1.05 : 1) : 0;
       e.rpm += (target - e.rpm) * 0.05;
@@ -205,7 +236,18 @@ const Sound = (() => {
       const blades = e.def.era >= 3 ? 3.5 : 2; e.plfo.frequency.setTargetAtTime(Math.max(1, e.rpm / 60 * 0.5 * blades), t, 0.05);
       e.pg.gain.setTargetAtTime(running ? 0.1 + 0.15 * sf : 0, t, 0.1);
       e.out.gain.setTargetAtTime(e.rpm > 50 ? (0.16 + 0.14 * Math.min(1, thr)) * cough : 0, t, 0.06);
+      if (e.rec && e.rec.main) { const rr = Math.max(0.55, Math.min(1.35, e.rpm / s.rpm[1] * (e.kind === 'rotary' ? 1.25 : 1)));
+        e.rec.main.s.playbackRate.setTargetAtTime(rr, t, 0.08); if (e.rec.cruise) { e.rec.cruise.s.playbackRate.setTargetAtTime(rr, t, 0.08); e.rec.cruise.g.gain.setTargetAtTime(0.3 + 0.9 * Math.min(1, thr), t, 0.1); } }
     }
+  }
+  // the recorded engine loop: Merlin for inline engines (with the propeller cruise recording), the radial recording for
+  // radial and rotary engines, the Draken for jets; the synthesis stays underneath for the engine-specific order and beat
+  function attachRec(e) {
+    const key = e.kind === 'jet' ? 'draken' : e.kind === 'inline' ? 'merlin' : 'radial'; if (!REC[key]) return;
+    const loop = (k, gain) => { const b = REC[k]; if (!b) return null; const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.loop = true; s.loopStart = SEG[k][0]; s.loopEnd = SEG[k][1];
+      g.gain.value = gain; s.connect(g); g.connect(e.out); s.start(0, SEG[k][0] + Math.random() * (SEG[k][1] - SEG[k][0])); e.nodes.push(s); return { s, g }; };
+    e.rec = { main: loop(key, e.kind === 'jet' ? 6 : 2.2), cruise: e.kind === 'jet' ? null : loop('propcruise', 0.9) };
+    if (e.kind !== 'jet' && e.osc) for (const o of e.osc) o.o.disconnect(), o.half.disconnect(); // the recording carries the exhaust note now
   }
   function engineStop() { if (!eng) return; for (const n of eng.nodes) try { n.stop(); } catch (e) {} try { eng.out.disconnect(); eng.wind.g.disconnect(); eng.buffet.disconnect(); } catch (e) {} eng = null; }
 
@@ -221,6 +263,9 @@ const Sound = (() => {
       voices.push({ o, f, g, ng, c: null });
     }
     const t = now();
+    for (const c of near) { const rel = c.pos.clone().sub(L.pos), d = rel.length(), closing = -c.vel.dot(rel) / Math.max(1, d);
+      if (d < 220 && closing > 40 && (!c._passT || t - c._passT > 6)) { c._passT = t; const jet = c.def.kind === 'jet', sp = spatial(c.pos, 120);
+        playRec(jet ? 'draken' : 'spitfire', (jet ? 1.6 : 1.4) * sp.gain, t, 0.9 + Math.random() * 0.15, 0, SEG[jet ? 'dpass' : 'spass']); } }
     voices.forEach((v, i) => {
       const c = near[i];
       if (!c) { v.g.gain.setTargetAtTime(0, t, 0.2); return; }
@@ -250,5 +295,5 @@ const Sound = (() => {
   }
   function stopAll() { if (window.speechSynthesis) speechSynthesis.cancel(); engineStop(); for (const v of voices) v.g.gain.value = 0; for (const [, gr] of growls) gr.g.gain.value = 0; lockTone(0); }
   function tick() { if (ctx) tickGuns(); }
-  return { init, resume, setVolume, setListener, fire, boom, flak, hit, launch, clunk, lockTone, warn, voice, engineStart, engineSet, engineStop, flyby, stopAll, tick, gunClass };
+  return { init, resume, setVolume, setListener, fire, boom, flak, hit, launch, clunk, lockTone, warn, voice, recordings: () => Object.keys(REC), engineInfo: () => eng && { kind: eng.kind, recorded: !!(eng.rec && eng.rec.main), rate: eng.rec && eng.rec.main ? +eng.rec.main.s.playbackRate.value.toFixed(2) : null }, engineStart, engineSet, engineStop, flyby, stopAll, tick, gunClass };
 })();

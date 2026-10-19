@@ -1,0 +1,52 @@
+[
+ {
+  "key": "shot3006",
+  "use": "Rifle-calibre machine guns (.30-06 Springfield M1917, near)",
+  "title": "B_24P.wav",
+  "source": "The Free Firearm Sound Library (Still North Media), via OpenGameArt",
+  "page": "https://opengameart.org/content/the-free-firearm-sound-library",
+  "licence": "CC0"
+ },
+ {
+  "key": "shot3006far",
+  "use": "Distant gunfire (.30-06, mid distance)",
+  "title": "B_16P.wav",
+  "source": "The Free Firearm Sound Library (Still North Media), via OpenGameArt",
+  "page": "https://opengameart.org/content/the-free-firearm-sound-library",
+  "licence": "CC0"
+ },
+ {
+  "key": "shot762r",
+  "use": "7.62x54R machine guns (Mosin-Nagant, near)",
+  "title": "M_21P.wav",
+  "source": "The Free Firearm Sound Library (Still North Media), via OpenGameArt",
+  "page": "https://opengameart.org/content/the-free-firearm-sound-library",
+  "licence": "CC0"
+ },
+ {
+  "key": "shotarisaka",
+  "use": "Japanese rifle-calibre guns (Arisaka)",
+  "title": "E_18P.wav",
+  "source": "The Free Firearm Sound Library (Still North Media), via OpenGameArt",
+  "page": "https://opengameart.org/content/the-free-firearm-sound-library",
+  "licence": "CC0"
+ },
+ {
+  "key": "propcruise",
+  "use": "Propeller aircraft cruise (cockpit engine loop)",
+  "title": "Propeller-plane-flying-steady-01.wav",
+  "page": "https://commons.wikimedia.org/wiki/File:Propeller-plane-flying-steady-01.wav",
+  "author": "Versatile Virtuoso",
+  "licence": "CC BY-SA 4.0",
+  "note": "trimmed to 6 s, mono, 22 kHz"
+ },
+ {
+  "key": "cannon",
+  "use": "Aircraft cannon reports (body of the shot)",
+  "title": "cannon_fire_0.ogg",
+  "page": "https://opengameart.org/content/cannon-fire",
+  "licence": "CC0",
+  "author": "Thimras",
+  "source": "Thimras, via OpenGameArt"
+ }
+]

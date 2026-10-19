@@ -235,7 +235,9 @@ const UI = (() => {
       <h3 style="margin-top:18px">Controls</h3><p class="small muted">Mouse moves the aim circle and the aircraft follows it. Click a binding, then press a key or mouse button (Esc cancels).</p>
       <div id="binds">${Input.ACTIONS.map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
       <button id="pf-binds-reset" style="margin-top:8px">Reset controls to defaults</button><br>
-      <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>`);
+      <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>
+      <div class="card" style="margin-top:14px"><h3>Sound credits</h3><p class="small muted">The engines, guns, explosions and fly-bys use these real recordings (public domain and Creative Commons).</p>
+      ${(typeof SOUND_CREDITS !== 'undefined' ? SOUND_CREDITS : []).map(c => `<div class="small" style="margin:3px 0"><b>${esc(c.use)}</b> — <a href="${esc(c.page)}" target="_blank" rel="noopener">${esc(c.title)}</a> by ${esc(c.author)}, ${esc(c.licence)}${c.note ? ' (' + esc(c.note) + ')' : ''}</div>`).join('')}</div>`);
     $('#pf-save').onclick = () => { const v = $('#pf-name').value.trim().slice(0, 18); if (v) { p.name = v; Profile.save(); refresh(); toastMenu('Saved'); } };
     $('#pf-sens').oninput = e => { st.sens = +e.target.value; $('#pf-sv').textContent = st.sens.toFixed(2); Profile.save(); };
     $('#pf-vol').oninput = e => { st.volume = +e.target.value; Sound.setVolume(st.volume); Profile.save(); };
