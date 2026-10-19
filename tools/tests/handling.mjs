@@ -22,6 +22,14 @@ export default async function (t) {
     const o = await run(6, 6); const mb = Math.max(...o.map(x => Math.abs(x.bank)));
     console.log(pl, 'aim', deg, 'deg right: max bank', mb.toFixed(0), '| off:', f(o.filter((x, i) => i % 5 === 0), 'off'));
   }
+  // 1c. mouse pulled back (aim below the nose): a moderate dive is a push with the wings level; only a very steep one rolls
+  //     over. [degrees below, degrees to the side]
+  if (!process.env.ONLY || process.env.ONLY === 'down') for (const pl of ['p51d', 'f16c', 'bf109g']) for (const [dn, sd] of [[10, 0], [20, 0], [35, 0], [20, 3], [60, 0]]) {
+    await start(pl); await t.eval(`(() => { const p = Game.match.player, a = Flight.axes(p), y = Math.atan2(-a.fwd.x, -a.fwd.z); Game.setAim(y - ${sd} / 57.3, Math.asin(a.fwd.y) - ${dn} / 57.3); return 1; })()`);
+    const o = await run(5, 5); const mb = Math.max(...o.map(x => Math.abs(x.bank)));
+    console.log(pl, 'aim', dn, 'down', sd, 'side: max bank', mb.toFixed(0), '| min G', Math.min(...o.map(x => x.g)).toFixed(1), '| off:', f(o.filter((x, i) => i % 4 === 0), 'off'));
+  }
+  if (process.env.ONLY) return;
   // 2. keyboard roll: hold D for 1.2 s then release; the bank should be held and the view should not jump
   await start('p51d');
   await t.eval("Input.keys.KeyD = true; 1"); const r1 = await run(1.2, 6); await t.eval("Input.keys.KeyD = false; 1"); const r2 = await run(6, 15);

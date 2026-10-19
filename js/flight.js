@@ -204,12 +204,22 @@ const Flight = (() => {
       const k = 0.32 / Math.max(1, Math.min(2, (c.speed || 0) / 180));
       // while the aim is close, the nose sitting a little above it must not wind the bank up (pulling in a bank lifts the nose)
       const evMin = off < 0.3 ? -0.4 * k : off > 0.7 ? -9 : -0.4 * k - (off - 0.3) * 20;
-      let phiC = Math.atan2(psi, Math.max(evMin, ev) + k);
+      // aim below the nose: a pilot pushes the stick for a moderate dive (wings stay level, bank only for the sideways
+      // part) and only rolls over and pulls for a very steep one (split-S); so the downward part of the error counts
+      // towards the bank only beyond ~45 deg below
+      // (applies when the aim is mostly below rather than mostly to the side, so ordinary turns are unchanged)
+      const down = ev < 0 ? Math.max(0, Math.min(1, (-ev - Math.abs(psi) * 1.5) / 0.08)) : 0, over0 = Math.max(0, Math.min(1, (-ev - 0.72) / 0.14));
+      // once committed to rolling over (split-S), stay with it until the nose is nearly on the aim - no flip back half way
+      c._split = over0 >= 1 || (!!c._split && off > 0.25); const over = c._split ? 1 : over0;
+      const push = down * (1 - over), evB = ev * (1 - push);
+      let phiC = Math.atan2(psi, Math.max(evMin, evB) + k);
+      phiC *= 1 - 0.6 * push * Math.min(1, -ev / 0.25); // pushing over: only a gentle bank for the sideways part
       if (Math.abs(phiC) > 2.8 && Math.abs(psi) < 0.05) phiC = Math.abs(phiC) * (Math.sign(phi) || 1); // straight down: roll whichever way is shorter
       const phiD = Math.max(-2.6, Math.min(2.6, phiC + phiFF * Math.max(0, Math.cos(phiC))));
       let dphi = phiD - phi; if (dphi > Math.PI) dphi -= 2 * Math.PI; if (dphi < -Math.PI) dphi += 2 * Math.PI;
       let roll = Math.max(-1, Math.min(1, dphi * 2.6 / Math.max(lim.p, 0.3)));
-      let pitch = Math.max(-0.5, Math.min(1, (pv * 2.8 + ffq) / Math.max(lim.q, 0.05)));
+      // a firm forward push is fine for a pilot (about -1.5 to -2 G); beyond that the eyes red out
+      let pitch = Math.max(c.gVision < -0.3 ? -0.4 : -0.75, Math.min(1, (pv * 2.8 + ffq) / Math.max(lim.q, 0.05)));
       if (pitch < 0 && off > 0.2 && Math.abs(dphi) > 0.5) pitch = Math.max(pitch, -0.1); // no negative G while still rolling into a big turn
       // chasing a turning target (the aim keeps sweeping and is well off the nose): roll the aim over the canopy and pull, as a pilot would
       const wb = sus * Math.max(0, Math.min(1, (off - 0.1) / 0.15));

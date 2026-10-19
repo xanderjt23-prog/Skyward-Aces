@@ -172,21 +172,58 @@ const HUD = (() => {
     text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
   }
   function round(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
-  // ---- damage schematic: the hit boxes seen from above, coloured by condition
+  // ---- damage schematic: the aircraft's own plan view (fuselage outline, wing planform, tailplane, fins, nacelles from
+  // its airframe spec), each part coloured by the condition of the component it belongs to; engines, fuel tanks,
+  // ammunition and crew are marked where they really are
+  const planCache = {};
+  function planOf(def) {
+    if (planCache[def.id]) return planCache[def.id];
+    const sp = Airframe.spec(def), L = sp.L, z0 = -L / 2, poly = [], N = 40;
+    // fuselage: the widest part of the cross-section (core, intake trunks, engine tunnels, the deck) at each station
+    const half = z => { if (sp.arch === 'CHINED_STEALTH') return Math.max(sp.at(z).w, sp.chineW ? sp.chineW(z) : 0); let w = sp.at(z).w; if (sp.section) for (const q of sp.section(z).prims) w = Math.max(w, Math.abs(q.x) + q.w); return w; };
+    const fl = [], fr = []; for (let i = 0; i <= N; i++) { const z = z0 + L * i / N, w = Math.max(0.05, half(z)); fl.push([-w, z]); fr.unshift([w, z]); }
+    poly.push({ part: 'fuselage', pts: fl.concat(fr) });
+    // wings (every wing of a biplane), left and right, from the real planform
+    for (const g of sp.wings) for (const sd of [-1, 1]) { const le = [], te = [];
+      for (let i = 0; i <= 16; i++) { const a = sp.wingAt(i / 16, g); le.push([sd * a.x, a.le]); te.unshift([sd * a.x, a.le + a.c]); }
+      le.unshift([sd * g.x0 * 0.5, le[0][1]]); te.push([sd * g.x0 * 0.5, te[te.length - 1][1]]); poly.push({ part: sd < 0 ? 'wingL' : 'wingR', pts: le.concat(te) }); }
+    if (sp.stab) { const st = sp.stab; for (const sd of [-1, 1]) { const at = f => { const x = st.x0 + (st.b - st.x0) * f; return [x, st.zLE + st.sw * (x - st.x0), st.rc * (1 - f) + st.tc * f]; };
+      const a = at(0), b = at(1); poly.push({ part: 'tailH', pts: [[sd * Math.max(0.05, a[0] * 0.5), a[1]], [sd * b[0], b[1]], [sd * b[0], b[1] + b[2]], [sd * Math.max(0.05, a[0] * 0.5), a[1] + a[2]]] }); } }
+    for (const fn of sp.fins) { const w = Math.max(0.12, fn.rc * 0.06) + Math.abs(Math.sin(fn.cant)) * fn.h * 0.5, tipZ = fn.zLE + fn.sw * fn.h;
+      poly.push({ part: 'tailV', pts: [[fn.x - w / 2, fn.zLE], [fn.x + w / 2, fn.zLE], [fn.x + w / 2, Math.max(fn.zLE + fn.rc, tipZ + fn.tc)], [fn.x - w / 2, Math.max(fn.zLE + fn.rc, tipZ + fn.tc)]] }); }
+    if (sp.extra.canards) { const cd = sp.extra.canards, zc = sp.canopy.z + cd.offset, x0 = sp.at(zc).w * 0.85, c = cd.length * 0.9;
+      for (const sd of [-1, 1]) poly.push({ part: 'fuselage', pts: [[sd * x0, zc - c * 0.5], [sd * (x0 + cd.length), zc - c * 0.5 + Math.tan(cd.sweep) * cd.length], [sd * (x0 + cd.length), zc - c * 0.5 + Math.tan(cd.sweep) * cd.length + c * 0.3], [sd * x0, zc + c * 0.5]] }); }
+    // engine nacelles / pods outside the fuselage, each tied to its engine component
+    sp.engines.forEach((e, i) => { if (e.kind === 'fus' || e.kind === 'tunnel' || e.kind === 'prop') return; const r = e.r, z1 = e.z - e.len / 2, z2 = e.z + e.len / 2;
+      poly.push({ part: 'engine' + i, pts: [[e.x - r * 0.6, z1], [e.x + r * 0.6, z1], [e.x + r, z1 + e.len * 0.2], [e.x + r * 0.8, z2], [e.x - r * 0.8, z2], [e.x - r, z1 + e.len * 0.2]] });
+      if (e.boom) { const zb = sp.fins.length ? sp.fins[0].zLE + sp.fins[0].rc : L * 0.45; poly.push({ part: 'fuselage', pts: [[e.x - r * 0.7, e.z], [e.x + r * 0.7, e.z], [e.x + r * 0.4, zb], [e.x - r * 0.4, zb]] }); } // P-38: tail booms
+    });
+    // drawn from the bottom up: wings and tailplanes, then nacelles, the fuselage and the fins on top
+    const order = q => q.part.startsWith('wing') ? 0 : q.part === 'tailH' ? 1 : q.part.startsWith('engine') ? 2 : q.part === 'fuselage' ? 3 : 4;
+    poly.sort((a, b) => order(a) - order(b));
+    let mx = 0, mz0 = Infinity, mz1 = -Infinity; for (const q of poly) for (const [x, z] of q.pts) { mx = Math.max(mx, Math.abs(x)); mz0 = Math.min(mz0, z); mz1 = Math.max(mz1, z); }
+    return (planCache[def.id] = { poly, mx, mz0, mz1 });
+  }
   function damageView(p) {
-    const dm = p.dm, lay = Models.layout(p.def), bx = 18, by = H - 230, bw = 190, bh = 200;
+    const dm = p.dm, bx = 18, by = H - 230, bw = 190, bh = 200, plan = planOf(p.def);
     g.fillStyle = 'rgba(8,14,22,0.55)'; round(bx, by, bw, bh, 10); g.fill();
     text('AIRCRAFT CONDITION', bx + 10, by + 16, COL.dim, 10, 'left', true);
-    const sc = Math.min((bw - 30) / lay.S, (bh - 70) / lay.L), cx = bx + bw / 2, cy = by + 24 + (bh - 70) / 2 + 6;
-    const order = ['wing', 'tailH', 'tailV', 'fuselage', 'fuel', 'ammo', 'engine', 'crew'];
-    for (const type of order) for (const c of dm.comps) {
-      if (c.type !== type) continue;
-      const f = c.dead ? 0 : c.hp / c.max;
-      let col = c.dead ? 'rgba(40,40,40,0.9)' : f > 0.75 ? 'rgba(90,200,110,0.55)' : f > 0.4 ? 'rgba(255,200,70,0.8)' : 'rgba(255,80,60,0.9)';
-      if (c.type === 'crew' && !c.dead) col = f > 0.99 ? 'rgba(120,200,255,0.9)' : 'rgba(255,80,60,0.95)';
-      if (c.dead && (c.type === 'wing' || c.type === 'tailH')) col = 'rgba(0,0,0,0)';
-      g.fillStyle = col; g.fillRect(cx + c.lo.x * sc, cy + c.lo.z * sc, (c.hi.x - c.lo.x) * sc, (c.hi.z - c.lo.z) * sc);
-      if (c.fire > 0) text('🔥', cx + c.c.x * sc, cy + c.c.z * sc + 4, '#fff', 12, 'center');
+    const aw = bw - 24, ah = bh - 74, sc = Math.min(aw / (plan.mx * 2), ah / (plan.mz1 - plan.mz0)), cx = bx + bw / 2, cy = by + 24 + ah / 2 - (plan.mz0 + plan.mz1) / 2 * sc + 4;
+    const comp = id => dm.comps.find(c => c.id === id);
+    const state = c => { if (!c) return 'rgba(90,200,110,0.5)'; const f = c.dead ? 0 : c.hp / c.max; return c.dead ? 'rgba(40,40,40,0.9)' : f > 0.75 ? 'rgba(90,200,110,0.55)' : f > 0.4 ? 'rgba(255,200,70,0.85)' : 'rgba(255,80,60,0.92)'; };
+    const draw = (pts, fill, line) => { g.beginPath(); pts.forEach(([x, z], i) => { const X = cx + x * sc, Y = cy + z * sc; if (i) g.lineTo(X, Y); else g.moveTo(X, Y); }); g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); } g.strokeStyle = line || 'rgba(0,0,0,0.55)'; g.lineWidth = 1; g.stroke(); };
+    for (const q of plan.poly) { const c = comp(q.part);
+      if ((q.part === 'wingL' && dm.wingOff[0]) || (q.part === 'wingR' && dm.wingOff[1]) || (q.part === 'tailH' && c && c.dead && dm.tailOff)) { draw(q.pts, null, 'rgba(255,90,79,0.5)'); continue; } // shot off: only the outline
+      draw(q.pts, state(c)); }
+    // internal components: engines in the fuselage, fuel tanks, ammunition, crew
+    for (const c of dm.comps) {
+      if (c.type === 'wing' || c.type === 'tailH' || c.type === 'tailV' || c.type === 'fuselage') continue;
+      if (c.type === 'engine' && plan.poly.some(q => q.part === c.id)) { if (c.fire > 0) text('🔥', cx + c.c.x * sc, cy + c.c.z * sc + 4, '#fff', 12, 'center'); continue; }
+      const X = cx + c.c.x * sc, Y = cy + c.c.z * sc, f = c.dead ? 0 : c.hp / c.max;
+      if (c.type === 'engine') { const w = Math.max(4, (c.hi.x - c.lo.x) * sc * 0.8), h = Math.max(6, (c.hi.z - c.lo.z) * sc); g.fillStyle = state(c); g.fillRect(X - w / 2, Y - h / 2, w, h); g.strokeStyle = 'rgba(0,0,0,0.6)'; g.strokeRect(X - w / 2, Y - h / 2, w, h); }
+      else { const r = c.type === 'crew' ? 3.2 : 2.6; g.fillStyle = c.type === 'crew' ? (c.dead ? 'rgba(40,40,40,0.95)' : f > 0.99 ? 'rgba(120,200,255,0.95)' : 'rgba(255,80,60,0.95)') : c.type === 'fuel' ? (c.dead || c.leak > 0 ? 'rgba(255,160,40,0.95)' : 'rgba(230,220,120,0.9)') : (c.dead ? 'rgba(40,40,40,0.9)' : 'rgba(200,200,200,0.85)');
+        g.beginPath(); if (c.type === 'ammo') g.rect(X - r, Y - r, r * 2, r * 2); else g.arc(X, Y, r, 0, Math.PI * 2); g.fill(); }
+      if (c.fire > 0) text('🔥', X, Y + 4, '#fff', 12, 'center');
     }
     // status lines
     const st = [], fx = dm.fx;
