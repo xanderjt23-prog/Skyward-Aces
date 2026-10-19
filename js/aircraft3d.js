@@ -226,7 +226,7 @@
     // ================= STAGE 1: core fuselage by architecture, welded into one closed skin =================
     // the main body runs from the nose to the blunt exhaust plane (fuselage jets) or the tail; intake mouths are crease stations
     const deck = sp.arch === 'TWIN_NACELLE_DECK', chined = sp.arch === 'CHINED_STEALTH';
-    const zMain = sp.boom ? sp.nozzleZ : deck ? sp.tunnel.zB : L / 2;
+    const zMain = deck ? sp.tunnel.zB : sp.nozzleZ !== null && sp.engines.some(e => e.kind === 'fus') ? sp.nozzleZ : L / 2; // jets: the skin ends at the exhaust plane
     const mouthZ = deck ? sp.tunnel.zA : chined ? (e0.intakeProfile === 'side_box' ? sp.intakeZ : null) : sp.intakeZ !== null && sp.trunks(sp.intakeZ).length ? sp.intakeZ : null;
     const boxSides = rule(e0.intakeProfile === 'side_box' && !deck, 'side_box intakes: fuselage sides flattened into hard panels from the intake mouth to the wing trailing edge');
     const flatA = boxSides ? z0 + e0.intake.at * L : 0, flatB = boxSides ? sp.wing.rootZ + sp.wing.rc : 0;
@@ -271,10 +271,19 @@
     rule(secs.some(q => q.prims.some(p => p.part === 'bridge')), 'solid bridging deck welds the tunnels\' inner walls together from the intakes to the tail (no gap on the centreline)');
     rule(secs.some(q => q.prims.some(p => p.part === 'trunk')), 'intake trunks blended into the fuselage skin (smooth union, no clamped-on boxes)');
     rule(secs.some(q => q.prims.some(p => p.part === 'housing')), 'rear fuselage swells around the engines and ends blunt at the exhaust plane');
-    if (rule(sp.boom, 'tail boom above the exhausts (fuselage stops at the nozzle plane below it)')) {
-      const bs = []; for (let i = 0; i <= 14; i++) { const z = sp.nozzleZ - 0.05 + (L / 2 - sp.nozzleZ + 0.05) * i / 14, b = sp.boom(z); bs.push({ z, w: Math.max(0.02, b.w), h: Math.max(0.02, b.h), y: b.y }); }
+    if (deck && rule(true, 'tail booms outboard of the engines, carrying the fins and tailplanes past the nozzles')) {
+      const zb0 = sp.tunnel.zT - 0.5, zb1 = sp.tunnel.zB + sp.entry.engines.nozzleLength * 0.75;
+      for (const sd of [-1, 1]) { const bs = []; for (let i = 0; i <= 12; i++) { const z = zb0 + (zb1 - zb0) * i / 12, b = Object.assign({}, sp.tailBoom(Math.min(z, sp.tunnel.zB))), k = i < 11 ? 1 : i === 11 ? 0.8 : 0.45;
+          if (z > sp.tunnel.zB - 0.3) { const ng = nozzleEngines.find(g => Math.sign(g.x) === sd), top = b.y + b.h, bot = Math.max(top - b.h * 2, ng.y + ng.r * 1.04); // aft of the exhaust plane only above the nozzle
+            if (Math.abs(b.x - Math.abs(ng.x)) < ng.r + b.w) { b.y = (top + bot) / 2; b.h = Math.max(0.03, (top - bot) / 2); } }
+          bs.push({ z, w: b.w * k, h: b.h * (0.7 + 0.3 * k), y: b.y + b.h * 0.3 * (1 - k), x: sd * b.x }); }
+        body.add(loftBody(bs, 20, 3.5, 'tail boom'), camo); tag(body, 'fus', fusUV(sd * sp.tunnel.at(zb1).x, () => sp.tailBoom(sp.tunnel.zB).y, () => 0.3)); } }
+    if (rule(sp.boom, 'fairing above the exhausts carrying the fin root (the fuselage stops at the nozzle plane below it)')) {
+      const bs = []; for (let i = 0; i <= 14; i++) { const z = sp.nozzleZ - 0.4 + (sp.boomEnd - sp.nozzleZ + 0.4) * i / 14, b = sp.boom(z); bs.push({ z, w: Math.max(0.02, b.w), h: Math.max(0.02, b.h), y: b.y }); }
       body.add(loftBody(bs, 28, sp.n, 'tail boom'), camo); tag(body, 'fus', mainUV);
     }
+    if (sp.strakes && rule(true, 'side strakes carrying the tailplanes beside the nozzle')) { const k = sp.strakes;
+      for (const sd of [-1, 1]) { const g = loftBody([0, 0.1, 0.8, 1].map((t, i) => ({ z: k.z0 + (k.z1 - k.z0) * t, w: k.w * [0.4, 1, 1, 0.5][i], h: k.h * [0.4, 1, 1, 0.5][i], y: k.y, x: sd * (k.x - k.w * 0.4) })), 16, 3, 'tail strake'); body.add(g, camo); tag(body, 'fus', mainUV); } }
     // intake mouths of the trunks / tunnels: a raked lip ring with a dark mouth plate just inside it
     if (mouthZ !== null && !chined) { const rake = e0.intake ? e0.intake.rake : 0;
       for (const p of station(mouthZ).prims.filter(p => p.part === 'trunk' || p.part === 'tunnel')) {
@@ -301,20 +310,31 @@
     // standing slightly proud of the body, dark heat-stained inner wall, and deep inside it the flame holder, the turbine
     // cone and a dark engine face that seals the part
     const nozzle = (e, x, y, zn) => {
-      const ro = e.r, ri = e.r * 0.86, ln = e.nl || e.r * (pl.ab ? 0.55 : 0.32), sx = e.rect ? 1.25 : 1, sy = e.rect ? 0.62 : 1, petals = pl.ab && !e.rect ? 18 : 0;
-      const ringPaint = (px, py) => { const dx = (px - x) / sx, dy = (py - y) / sy, r = Math.hypot(dx, dy);
-        if (r < (ri + ro) / 2) return 0x262320;                                      // inner wall: dark, heat-stained
-        const base = pl.ab ? burnt : metal; return petals && Math.floor((Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * petals * 2) % 2 ? shade(base, 0.82) : base; }; // afterburner petals
-      // afterburning nozzles converge then flare slightly (con-di petals); dry nozzles are a plain tapering tailpipe
-      const outer = pl.ab ? [[ro, zn], [ro * 0.95, zn + ln * 0.55], [ro * 0.93, zn + ln]] : [[ro, zn], [ro * 0.96, zn + ln]];
-      const inner = pl.ab ? [[ri * 0.98, zn + ln], [ri * 0.9, zn + ln * 0.55], [ri, zn]] : [[ri * 0.98, zn + ln], [ri, zn]];
-      body.add(latheRing([[ri, zn - 0.35], [ro, zn - 0.35], ...outer, ...inner], 40, 'nozzle', x, y, sx, sy, e.rect ? 4 : 2), ringPaint);
-      body.parts[body.parts.length - 1].skin = 3;                                    // metal skin in the shader (streaks, no camouflage)
+      const style = e.style || (pl.ab ? 'feathered' : 'plain'), ab = style !== 'plain';
+      const ro = e.r, ri = e.r * 0.88, ln = e.nl || e.r * (ab ? 0.55 : 0.32), sx = e.rect ? 1.25 : 1, sy = e.rect ? 0.62 : 1, np = e.rect ? 0 : 16;
+      // real exhaust metal: a hot-blued / straw titanium band next to the skin, darkening to sooty steel at the lip
+      const ringPaint = (px, py, pz) => { const dx = (px - x) / sx, dy = (py - y) / sy, rr = Math.hypot(dx, dy), u = Math.max(0, Math.min(1, (pz - zn) / ln));
+        if (rr < ri * 0.99 || (pz > zn + ln - 0.02 && rr < (ri + ro) / 2)) return 0x24211e;                       // sooty inner wall
+        const c = new THREE.Color(ab ? 0x8c8478 : 0x7d7c78).lerp(new THREE.Color(ab ? 0x4a4038 : 0x55524c), u);
+        if (np && Math.floor((Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * np * 2 + 0.5) % 2) c.multiplyScalar(0.86);  // overlapping petals
+        return c.getHex(); };
+      // profile: from inside the skin, the outer surface converges (boat-tail), then for afterburners the divergent petals run
+      // straight to a scalloped lip; inside, the throat narrows then opens to the exit
+      const outer = ab ? [[ro, zn - 0.3], [ro, zn], [ro * 0.92, zn + ln * 0.45], [ro * 0.86, zn + ln]] : [[ro, zn - 0.3], [ro, zn], [ro * 0.94, zn + ln]];
+      const inner = ab ? [[ri * 0.95, zn + ln], [ri * 0.82, zn + ln * 0.5], [ri * 0.86, zn - 0.3]] : [[ri * 0.98, zn + ln], [ri, zn - 0.3]];
+      const g = latheRing([...outer, ...inner], np ? np * 4 : 36, 'nozzle', x, y, sx, sy, e.rect ? 4 : 2);
+      if (np && ab) { const pa = g.attributes.position; // scalloped exit: each petal's trailing edge stands out a little past its neighbours
+        for (let k = 0; k < pa.count; k++) { if (pa.getZ(k) < zn + ln - 0.01) continue; const a = Math.atan2(pa.getY(k) - y, pa.getX(k) - x); pa.setZ(k, pa.getZ(k) + 0.045 * Math.max(0, Math.cos(a * np))); }
+        g.computeVertexNormals(); }
+      body.add(g, ringPaint); body.parts[body.parts.length - 1].skin = 3;
+      if (style === 'bare') { // F-15: no feathers - the actuator rods and their brackets run along the outside of the nozzle
+        for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a), p0 = new V(x + c * ro * 1.02, y + s2 * ro * 1.02, zn - 0.05), p1 = new V(x + c * ro * 0.92, y + s2 * ro * 0.92, zn + ln * 0.75);
+          body.add(tube([p0, p1], 0.028), 0x6e6a64); body.add(box(0.07, 0.05, 0.1), 0x4a4640, [p1.x, p1.y, p1.z], [0, 0, a]); } }
       const zf = zn + 0.02;                                                          // engine face on the exhaust plane: the void is the full tailpipe
-      body.add(latheRing([[0.001, zf - 0.02], [ri * 1.01, zf - 0.02], [ri * 1.01, zf + 0.02], [0.001, zf + 0.02]], 28, 'engine face', x, y, sx, sy, e.rect ? 4 : 2), 0x0d0c0b);
+      body.add(latheRing([[0.001, zf - 0.02], [ri * 0.83, zf - 0.02], [ri * 0.83, zf + 0.02], [0.001, zf + 0.02]], 28, 'engine face', x, y, sx, sy, e.rect ? 4 : 2), 0x0d0c0b);
       if (!e.rect) {
-        body.add(latheRing([[ri * 0.55, zf + 0.04], [ri * 0.66, zf + 0.04], [ri * 0.66, zf + 0.11], [ri * 0.55, zf + 0.11]], 20, 'flame holder', x, y), 0x3a3632);
-        body.add(latheRing([[0.001, zf + 0.025], [ri * 0.3, zf + 0.025], [0.001, zf + 0.02 + ri * 0.5]], 16, 'turbine cone', x, y), 0x2e2b28);
+        body.add(latheRing([[ri * 0.5, zf + 0.04], [ri * 0.6, zf + 0.04], [ri * 0.6, zf + 0.11], [ri * 0.5, zf + 0.11]], 20, 'flame holder', x, y), 0x3a3632);
+        body.add(latheRing([[0.001, zf + 0.025], [ri * 0.28, zf + 0.025], [0.001, zf + 0.02 + ri * 0.45]], 16, 'turbine cone', x, y), 0x2e2b28);
       }
       if (pl.ab) { const gg = new THREE.Mesh(zcyl(ri * 0.9, ri * 0.06, L * 0.32, 12), mat('glow')); gg.scale.set(sx, sy, 1); gg.position.set(x, y, zn + ln + L * 0.16); gg.visible = false; glows.push(gg); }
     };

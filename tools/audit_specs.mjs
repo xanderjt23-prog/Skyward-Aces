@@ -153,7 +153,11 @@ for (const pl of PLANE_LIST) {
     if (fj.length === 2) { const g = fj[0], gap = Math.hypot(fj[0].x - fj[1].x, fj[0].y - fj[1].y), need = 2 * g.r * (fj[0].x !== fj[1].x ? (g.rect ? 1.25 : 1) : (g.rect ? 0.62 : 1));
       if (gap < need - 1e-6) flag(id, `the two exhaust nozzles overlap (${gap.toFixed(2)} m apart, need ${need.toFixed(2)} m)`); }
     if (sp.boom) for (const z of rng(sp.nozzleZ + 0.05, pl.len / 2, 8)) { const b = sp.boom(z); if (b.y - b.h < Math.max(...fj.map(g => g.y + g.r)) - 1e-6) { flag(id, 'tail boom hangs down into the exhausts at z ' + z.toFixed(1)); break; } }
-    if (!sp.boom && sp.nozzleZ < pl.len / 2 - 0.3 && e.fuselageArchitecture !== 'TWIN_NACELLE_DECK') flag(id, 'nozzles short of the tail but no boom: the body would run on over the exhausts');
+    // everything aft of the exhaust plane must still be carried: a central fin root by the fairing above the jets, fuselage tailplanes by side strakes
+    if (e.fuselageArchitecture === 'SINGLE_TUBE' && sp.engines.some(g => g.kind === 'fus')) {
+      for (const f of sp.fins) if (Math.abs(f.x) < 0.5 && f.zLE + f.rc > sp.nozzleZ + 0.15 && !(sp.boom && sp.boomEnd >= f.zLE + f.rc)) flag(id, 'fin root overhangs the exhausts with nothing under it');
+      if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > sp.nozzleZ && !sp.strakes) flag(id, 'tailplane root aft of the exhaust plane with nothing to carry it');
+      if (sp.nozzleZ + Math.max(...fj.map(g => g.nl || 0)) > pl.len / 2 + 0.05) flag(id, 'nozzles stick out past the published overall length'); }
   }
   // stage 3: intake trunks sink back into the core where they end (no step); cranked outer panels really bent
   if (sp.intakeZ !== null && sp.trunks(sp.intakeZ).length) {

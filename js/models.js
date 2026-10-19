@@ -104,26 +104,36 @@ const Models = (() => {
     float sKind = floor(vSkin / 10.0 + 0.01), sTag = vSkin - sKind * 10.0;
     if (sTag > 0.5) {
       vec3 col = diffuseColor.rgb; float seam = 0.0, rivet = 0.0, fwm = 1.0; vec2 pid = vec2(0.0);
-      if (sKind > 1.5) {                                                           // fuselage: frame joints at irregular stations, a few long seams round the section
-        float fz = max(fwidth(vUV.x), 1e-5), fa = max(fwidth(vUV.y), 1e-5), iz, ia; fwm = max(fz, fa);
-        float dz = sSeams(vUV.x, uFrame, uSeed, iz), da = sSeams(vUV.y + 50.0, 0.85, uSeed + 7.0, ia);
-        seam = max(sCover(dz, fz, 0.0035), sCover(da, fa, 0.0035)); pid = vec2(iz, ia);
-        rivet = max(sCover(length(vec2(dz - 0.022, (fract(vUV.y / 0.075) - 0.5) * 0.075)), fwm, 0.0028), sCover(length(vec2(da - 0.022, (fract(vUV.x / 0.075) - 0.5) * 0.075)), fwm, 0.0028));
-      } else if (sKind > 0.5) {                                                    // wing / tail surface: spar and hinge lines along the span, ribs across it
-        float span = vUV.x, cm = vUV.y * vUV.z, fs = max(fwidth(span), 1e-5), fc = max(fwidth(cm), 1e-5), ir; fwm = max(fs, fc);
-        float dr = sSeams(span, 0.7, uSeed + 3.0, ir), d1 = abs(vUV.y - 0.14) * vUV.z, d2 = abs(vUV.y - 0.66) * vUV.z, d3 = abs(vUV.y - 0.745) * vUV.z;
+      // real stressed skin is laid in long, stretched strips: continuous seams run fore-and-aft on the fuselage and spanwise on
+      // the wings (darkest), while the short butt joints across a strip are sparse, staggered from strip to strip and faint
+      float tone = 0.0;
+      if (sKind > 1.5) {                                                           // fuselage: long strips round the section
+        float fz = max(fwidth(vUV.x), 1e-5), fa = max(fwidth(vUV.y), 1e-5), ia, ib, ir; fwm = max(fz, fa);
+        float da = sSeams(vUV.y + 50.0, 0.48, uSeed + 7.0, ia);                     // longitudinal strip seams
+        float db = sSeams(vUV.x + sHash(vec2(ia, uSeed)) * 9.0, uFrame * 2.2, uSeed + ia * 3.1, ib); // butt joints, own spacing per strip
+        float dr = sSeams(vUV.x, uFrame * 0.55, uSeed + 1.0, ir);                  // frame rivet rows (rivets only)
+        seam = max(sCover(da, fa, 0.003) * 0.75, sCover(db, fz, 0.0025) * 0.4); pid = vec2(ib, ia);
+        rivet = max(sCover(length(vec2(dr, (fract(vUV.y / 0.06) - 0.5) * 0.06)), fwm, 0.0022), sCover(length(vec2(da - 0.018, (fract(vUV.x / 0.06) - 0.5) * 0.06)), fwm, 0.0022));
+        tone = sHash(vec2(ia, uSeed + 2.0)) - 0.5;                                  // whole strips differ slightly, never block by block
+      } else if (sKind > 0.5) {                                                    // wing / tail surface: spanwise seams on the spars and hinge line
+        float span = vUV.x, cm = vUV.y * vUV.z, fs = max(fwidth(span), 1e-5), fc = max(fwidth(cm), 1e-5), ir, ij; fwm = max(fs, fc);
+        float d1 = abs(vUV.y - 0.14) * vUV.z, d2 = abs(vUV.y - 0.42) * vUV.z, d3 = abs(vUV.y - 0.66) * vUV.z, dh = abs(vUV.y - 0.745) * vUV.z;
+        float strip = vUV.y < 0.14 ? 0.0 : vUV.y < 0.42 ? 1.0 : vUV.y < 0.66 ? 2.0 : 3.0;
+        float dj = sSeams(span + strip * 0.83, 1.9, uSeed + strip * 5.0, ij), dr = sSeams(span, 0.5, uSeed + 3.0, ir);
         if (uFabric > 0.5) {                                                       // doped fabric: rib tapes and a faint sag between the ribs, no metal seams
           float ip, dp = sSeams(span, 0.3, 1.0, ip); col *= 1.0 + 0.05 * sCover(dp, fs, 0.012) - 0.03 * smoothstep(0.03, 0.15, dp);
-        } else seam = max(max(sCover(dr, fs, 0.0035), sCover(min(d1, d2), fc, 0.003)), sCover(d3, fc, 0.006));
-        pid = vec2(ir, floor(vUV.y / 0.33));
-        rivet = sCover(length(vec2(min(d1, d2) - 0.02, (fract(span / 0.07) - 0.5) * 0.07)), fwm, 0.0026);
+        } else seam = max(max(sCover(min(d1, d3), fc, 0.003) * 0.75, sCover(d2, fc, 0.0025) * 0.4), max(sCover(dh, fc, 0.005), sCover(dj, fs, 0.0025) * 0.4));
+        pid = vec2(ij, strip);
+        rivet = max(sCover(length(vec2(min(d1, d3) - 0.016, (fract(span / 0.06) - 0.5) * 0.06)), fwm, 0.0022), sCover(length(vec2(dr, (fract(cm / 0.06) - 0.5) * 0.06)), fwm, 0.0022));
+        tone = sHash(vec2(strip, uSeed + 4.0)) - 0.5;
       } else { fwm = max(length(fwidth(vOP)), 1e-5); pid = floor(vOP.xz / 1.4); } // other skinned parts: tone only
       gSkinH = sHash(pid + uSeed);
+      float wear = sFbm(vOP * 0.7) - 0.5;                                          // broad, soft weathering instead of hard panel blocks
       if (sTag > 1.5 && sTag < 2.5 && uPattern > 0.5) col = sCamo(vOP) * (sLum(col) / max(0.02, sLum(uTop)));
       if (sTag > 2.5) col *= 0.9 + 0.18 * sNoise(vec3(vOP.x * 11.0, vOP.y * 11.0, vOP.z * 0.6));                // heat-streaked metal
-      else col *= 1.0 + (gSkinH - 0.5) * uVar;                                                                   // adjacent panels differ slightly
+      else col *= 1.0 + tone * uVar * 0.5 + wear * 0.07;                                                     // strips differ slightly; soft weathering
       float near = 1.0 - smoothstep(0.012, 0.035, fwm), close = 1.0 - smoothstep(0.002, 0.006, fwm);
-      col *= 1.0 - uLines * (seam * 0.22 * near + rivet * 0.12 * close);
+      col *= 1.0 - uLines * (seam * 0.2 * near + rivet * 0.08 * close);
       diffuseColor.rgb = col;
     }`;
   const skinCache = {};
@@ -142,7 +152,7 @@ const Models = (() => {
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + SKIN_GLSL).replace('#include <color_fragment>', SKIN_FRAG)
         .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\nspecularStrength *= 0.8 + 0.4 * gSkinH;'); // panels catch the light differently
     };
-    m.customProgramCacheKey = () => 'aircraft-skin-2';
+    m.customProgramCacheKey = () => 'aircraft-skin-3';
     return (skinCache[pl.id] = m);
   }
   // camouflage schemes from each air arm's real practice (nation, era, role); colours are the period paint standards

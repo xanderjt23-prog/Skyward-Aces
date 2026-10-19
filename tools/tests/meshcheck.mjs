@@ -77,7 +77,7 @@ export default async function (t) {
         for (let i = 0; i <= 16; i++) { const z = zA + (zB - zA) * i / 16;
           for (const x of [0, -0.4, 0.4]) { ray.set(new THREE.Vector3(x, 30, z), new THREE.Vector3(0, -1, 0)); const hs = ray.intersectObject(body, false); if (!hs.length) out.solid.push(pl.id + ': gap from above at x ' + x + ', z ' + z.toFixed(1)); }
           // from the side: a solid centre means the ray enters the skin once on each side and meets no inner walls near x = 0
-          ray.set(new THREE.Vector3(30, sp.at(z).y - sp.at(z).h * 0.5, z), new THREE.Vector3(-1, 0, 0)); const hx = ray.intersectObject(body, false);
+          ray.set(new THREE.Vector3(30, sp.arch === 'TWIN_NACELLE_DECK' ? sp.tunnel.at(z).y + sp.tunnel.at(z).h * 0.15 : sp.at(z).y - sp.at(z).h * 0.5, z), new THREE.Vector3(-1, 0, 0)); const hx = ray.intersectObject(body, false);
           if (hx.length < 2 || hx.some(h => Math.abs(h.point.x) < 0.3)) out.solid.push(pl.id + ': centre not solid seen from the side at z ' + z.toFixed(1)); } }
       // stage 4: the airframe carries the skin shader with its per-vertex tags
       const a = body.geometry.attributes.aSkin; if (!a || !(skinM.onBeforeCompile && skinM.userData.u)) out.skin.push(pl.id);
