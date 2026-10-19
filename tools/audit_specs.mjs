@@ -72,12 +72,17 @@ function architectureOf(pl) {
   if (pl.kind === 'jet' && pl.eng === 2 && (tail === '2s' || tail === '2c')) return 'TWIN_NACELLE_DECK';
   return 'SINGLE_TUBE';
 }
+// horizontal tail style from the independent reference (canard column, horizontal-tail column)
+function tailStyleOf(pl) { const [, , ht, , canard] = REF[pl.id].split(' '), none = HT[ht] === 'none';
+  return canard === '1' ? (none ? 'canard_forward' : 'three_surface') : none ? 'delta_none' : 'conventional_rear'; }
 if (process.argv.includes('--write')) {
   const file = path.join(root, 'js/airframe.js'); let txt = fs.readFileSync(file, 'utf8'), n = 0;
   for (const pl of ctxOut.PLANE_LIST) {
     const re = new RegExp('(\\n    ' + pl.id + ': \\{ dims: \\{[^}]*\\}, )(fuselageArchitecture: \'\\w+\', )?');
     if (!re.test(txt)) { console.log('cannot find the entry for ' + pl.id); continue; }
     txt = txt.replace(re, (m0, head) => head + "fuselageArchitecture: '" + architectureOf(pl) + "', "); n++;
+    { const a = txt.indexOf('\n    ' + pl.id + ': { dims:'), nx = txt.slice(a + 5).search(/\n    [a-z0-9]+: \{ dims:|\n  \};/), b = nx < 0 ? txt.length : a + 5 + nx; // this entry's text only
+      const body = txt.slice(a, b).replace(/horizontalTailStyle: '\w+', /, '').replace('stabPlanform: ', "horizontalTailStyle: '" + tailStyleOf(pl) + "', stabPlanform: "); txt = txt.slice(0, a) + body + txt.slice(b); }
   }
   fs.writeFileSync(file, txt); console.log('fuselageArchitecture written for ' + n + ' aircraft'); ctxOut = load();
 }
@@ -90,6 +95,7 @@ for (const pl of PLANE_LIST) {
   if (!e) { flag(id, 'no registry entry'); continue; }
   let sp; try { sp = Airframe.spec(pl); } catch (err) { flag(id, 'spec() throws: ' + err.message); continue; }
   const [wing, tail, ht, intake, canard, plan] = ref.split(' ');
+  if (e.horizontalTailStyle !== tailStyleOf(pl)) flag(id, `horizontalTailStyle "${e.horizontalTailStyle}" should be "${tailStyleOf(pl)}" (run with --write)`);
   if (e.fuselageArchitecture !== architectureOf(pl)) flag(id, `fuselageArchitecture "${e.fuselageArchitecture}" should be "${architectureOf(pl)}" (run with --write)`);
   // ---- 1. layout facts
   if (wing === 'B') { if (!e.biplane) flag(id, 'is a biplane but has no biplane block'); }
@@ -164,6 +170,15 @@ for (const pl of PLANE_LIST) {
       if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > sp.nozzleZ && !sp.strakes) flag(id, 'tailplane root aft of the exhaust plane with nothing to carry it');
       if (sp.nozzleZ + Math.max(...fj.map(g => g.nl || 0)) > pl.len / 2 + 0.05) flag(id, 'nozzles stick out past the published overall length'); }
   }
+  // dual-surface layout: the tailplane is a separate surface, clear of the main wing's trailing edge over their common span
+  if (sp.stab && !sp.bi && !['fin_top', 'fin_mid'].includes(e.horizontalTail)) { const st = sp.stab; let gap = Infinity;
+    for (let i = 0; i <= 20; i++) { const x = st.x0 + (st.b - st.x0) * i / 20; if (x > sp.wing.b || x < sp.wing.x0) continue; const w = sp.wingAt(sp.wingF(x)); gap = Math.min(gap, st.zLE + st.sw * (x - st.x0) - (w.le + w.c)); }
+    if (gap < 0.15) flag(id, `tailplane overlaps the main wing (gap ${gap.toFixed(2)} m behind its trailing edge): the surfaces must be separate`);
+    if (st.diamond && st.zLE + st.rc < sp.nozzleZ + (fj[0] ? fj[0].nl || 0 : 0)) flag(id, 'diamond tailplanes must reach past the exhaust nozzles'); }
+  // no flat rear wall: at the exhaust plane the skin wraps the nozzles (side-by-side twins: double-barrel)
+  if (fj.length === 2 && e.fuselageArchitecture === 'SINGLE_TUBE') { const pr = sp.section(sp.nozzleZ - 1e-3).prims; let A = 0, N = 0;
+    for (let x = -4; x <= 4; x += 0.03) for (let y = -3; y <= 3; y += 0.03) { if (!pr.some(q => inside(q, x, y))) continue; A++; if (fj.some(g => Math.hypot((x - g.x) / g.sx, (y - g.y) / g.sy) < g.r)) N++; }
+    if ((A - N) / Math.max(1, N) > 0.9) flag(id, `flat rear wall around the nozzles (${((A - N) / N).toFixed(2)} nozzle areas)`); }
   // stage 3: intake trunks sink back into the core where they end (no step); cranked outer panels really bent
   if (sp.intakeZ !== null && sp.trunks(sp.intakeZ).length) {
     const zEnd = sp.intakeZ + e.intake.length * pl.len + 0.12 * pl.len - 0.01, s = sp.at(zEnd);

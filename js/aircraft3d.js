@@ -182,6 +182,17 @@
       for (let j = 0; j < M; j++) { const p0 = base + j, p1 = base + (j + 1) % M, p2 = base + M + (j + 1) % M, p3 = base + M + j; idx.push(p0, p1, p2, p0, p2, p3); } }
     return orient(indexed(pos, idx), name);
   }
+  // a faceted lifting surface (stealth tailplanes): double-wedge section - sharp leading edge, a ridge at 45% chord, sharp
+  // trailing edge - with every face flat. Built with loftPrism along the span (as its Z), then turned so the span runs along X
+  function facetSurface(st, name) {
+    const secs = st.map(q => { const th = q.t * q.c / 2; return { z: q.x, c: [[q.le, -q.y], [q.le + q.c * 0.45, -(q.y + th)], [q.le + q.c, -q.y], [q.le + q.c * 0.45, -(q.y - th)]] }; });
+    const g = loftPrism(secs, name), m = new THREE.Matrix4().set(0, 0, 1, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1); // (chord, -y, span) -> (span, y, chord): a proper rotation
+    g.applyMatrix4(m); g.computeVertexNormals(); return g;
+  }
+  // mirror of a non-indexed geometry: negate X and swap two corners of every triangle
+  function mirrorFlat(g) { const h = g.clone(), p = h.attributes.position; for (let i = 0; i < p.count; i++) p.setX(i, -p.getX(i));
+    for (let i = 0; i < p.count; i += 3) { const x = p.getX(i + 1), y = p.getY(i + 1), z = p.getZ(i + 1); p.setXYZ(i + 1, p.getX(i + 2), p.getY(i + 2), p.getZ(i + 2)); p.setXYZ(i + 2, x, y, z); }
+    h.computeVertexNormals(); return h; }
   // mirror across the centre plane: negate X and reverse every triangle so the copy still faces outwards
   function mirrorX(g) {
     const h = g.clone(), p = h.attributes.position;
@@ -202,7 +213,7 @@
     const tip = at(1);
     if (opt.square || tip.c < 0.6) st.push({ x: tip.x, le: tip.le, c: Math.max(0.12, tip.c), y: tip.y, t: g.t }); // cropped tip (tip tanks, deltas)
     else for (const [f, kc, kt] of [[0.975, 0.93, 0.85], [0.993, 0.72, 0.6], [1, 0.4, 0.3]]) { // rounded tip: chord and thickness close in
-      const w = at(f), c = w.c * kc; st.push({ x: w.x, le: w.le + (w.c - c) * 0.45, c, y: w.y - (g.droop ? (f - 0.95) * 4 * w.c * 0.4 : 0), t: g.t * kt });
+      const w = at(f), c = w.c * kc; st.push({ x: w.x, le: w.le + (w.c - c) * 0.45, c, y: w.y - (g.droop ? (f - 0.95) * 4 * w.c * 0.4 : 0), t: Math.max(g.t * kt, 0.02 / c) }); // at least ~1 cm thick at the tip
     }
     return st;
   }
@@ -596,9 +607,10 @@
     const st = sp.stab;
     if (st) {
       const at = f => { const x = st.x0 + (st.b - st.x0) * f; return { x, le: st.zLE + st.sw * (x - st.x0), c: st.rc * (1 - f) + st.tc * f, y: st.y + Math.tan(st.dih) * (x - st.x0) }; };
-      const geo = loftSurface(surfStations({ t: st.t }, at), 12, 'stabiliser'), suv = (x, y, z) => { const a = at(Math.max(0, Math.min(1, (Math.abs(x) - st.x0) / (st.b - st.x0)))); return [Math.abs(x), (z - a.le) / a.c, a.c]; };
+      const facet = rule(st.diamond && chined, 'faceted diamond stabilators: double-wedge section, edges aligned with the wing (' + st.swTE + ' deg trailing edge)');
+      const geo = facet ? facetSurface([0, 0.25, 0.5, 0.75, 1].map(f => Object.assign(at(f), { t: 0.045 })), 'stabiliser') : loftSurface(surfStations({ t: st.t }, at), 12, 'stabiliser'), suv = (x, y, z) => { const a = at(Math.max(0, Math.min(1, (Math.abs(x) - st.x0) / (st.b - st.x0)))); return [Math.abs(x), (z - a.le) / a.c, a.c]; };
       body.add(geo, (x, y, z, ny) => { const f = (Math.abs(x) - st.x0) / (st.b - st.x0), a = at(Math.max(0, Math.min(1, f))), fr = (z - a.le) / a.c, base = ny < -0.25 ? pt.bot : pt.top; return fr > 0.7 && (!sp.jet || pl.era <= 4) ? shade(base, 0.86) : base; }); tag(body, 'surf', suv);
-      body.add(mirrorX(geo), (x, y, z, ny) => { const f = (Math.abs(x) - st.x0) / (st.b - st.x0), a = at(Math.max(0, Math.min(1, f))), fr = (z - a.le) / a.c, base = ny < -0.25 ? pt.bot : pt.top; return fr > 0.7 && (!sp.jet || pl.era <= 4) ? shade(base, 0.86) : base; }); tag(body, 'surf', suv);
+      body.add(facet ? mirrorFlat(geo) : mirrorX(geo), (x, y, z, ny) => { const f = (Math.abs(x) - st.x0) / (st.b - st.x0), a = at(Math.max(0, Math.min(1, f))), fr = (z - a.le) / a.c, base = ny < -0.25 ? pt.bot : pt.top; return fr > 0.7 && (!sp.jet || pl.era <= 4) ? shade(base, 0.86) : base; }); tag(body, 'surf', suv);
     }
     const flash = pl.nation === 'fra' ? [0x0055a4, 0xffffff, 0xef4135] : pl.nation === 'uk' ? (pl.era <= 2 ? [0x1c2f6e, 0xffffff, 0xc8102e] : pl.era === 3 ? [0xc8102e, 0xffffff, 0x1c2f6e] : [0xc8102e, 0x1c2f6e]) : null;
     rule(e0.tailConfiguration === 't_tail', 't_tail: tailplane on top of the fin');
