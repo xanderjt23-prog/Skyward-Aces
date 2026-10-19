@@ -66,6 +66,7 @@ const GUNS = {
   gsh30:    { name: '30 mm GSh-30-1', cal: 30, rpm: 1500, ms: 860, dmg: 160, ammo: 150, he: true },
   bk27:     { name: '27 mm Mauser BK-27', cal: 27, rpm: 1700, ms: 1025, dmg: 120, ammo: 150, he: true },
   giat30:   { name: '30 mm GIAT 30M791', cal: 30, rpm: 2500, ms: 1025, dmg: 160, ammo: 125, he: true },
+  gau22:    { name: '25 mm GAU-22/A', cal: 25, rpm: 3300, ms: 1040, dmg: 100, ammo: 180, he: true },
   gau8:     { name: '30 mm GAU-8/A Avenger', cal: 30, rpm: 3900, ms: 1010, dmg: 170, ammo: 1150, he: true },
   // gun-pod guns
   gau13:    { name: '30 mm GAU-13/A', cal: 30, rpm: 2400, ms: 1013, dmg: 160, ammo: 353, he: true },
@@ -140,6 +141,7 @@ const STORES = {
   r74:     { kind: 'm', name: 'R-74M', mass: 105, eras: [7, 7], seek: 'ir', range: 10000, speed: 950, g: 50, fov: 75, rear: false, ccm: 0.8, life: 18, price: 15000, bloc: 'east' },
   aam4:    { kind: 'm', name: 'AAM-4', mass: 222, eras: [7, 7], seek: 'arh', range: 30000, speed: 1250, g: 30, fov: 40, ccm: 0.85, life: 34, price: 14000, nat: ['jpn'], radar: true },
   meteor:  { kind: 'm', name: 'MBDA Meteor', mass: 190, eras: [7, 7], seek: 'arh', range: 40000, speed: 1300, g: 30, fov: 40, ccm: 0.9, life: 45, price: 22000, nat: ['uk', 'fra', 'ger'], radar: true },
+  aim54:   { kind: 'm', name: 'AIM-54A Phoenix', mass: 453, eras: [6, 7], seek: 'arh', range: 60000, speed: 1450, g: 17, fov: 30, ccm: 0.8, life: 60, price: 24000, nat: ['usa'], radar: true },
   aim4d:   { kind: 'm', name: 'AIM-4D Falcon', mass: 61, eras: [5, 5], seek: 'ir', range: 5000, speed: 850, g: 10, fov: 10, rear: true, ccm: 0.15, life: 12, price: 2600, nat: ['usa'] },
   aim9p:   { kind: 'm', name: 'AIM-9P Sidewinder', mass: 82, eras: [5, 6], seek: 'ir', range: 6000, speed: 850, g: 20, fov: 20, rear: true, ccm: 0.35, life: 14, price: 4800, bloc: 'west' },
   aim7f:   { kind: 'm', name: 'AIM-7F Sparrow', mass: 231, eras: [6, 6], seek: 'sarh', range: 18000, speed: 1050, g: 16, fov: 30, ccm: 0.7, life: 26, price: 7500, bloc: 'west', radar: true },

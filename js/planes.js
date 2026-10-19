@@ -186,6 +186,25 @@ P('fra', 'rafalec', 'Dassault Rafale C', 7, 2001, { shape: 'jet_dc', kind: J, en
   desc: 'Omnirole canard-delta with SPECTRA self-protection.' });
 
 // ------------------------------------------------------------------ AI-only aircraft (mission bombers and attackers)
+// ---- added aircraft (published dimensions, weights and performance)
+P('usa', 'f6f5', 'Grumman F6F-5 Hellcat', 3, 1944, { shape: 'mono', spd: 612, clb: 17.4, turn: 17, roll: 85, mass: 5714, span: 13.06, len: 10.24, guns: [['m2', 6, 'wing']], hp: [['Centreline', 'b', 454, 1], ['Wing racks', 'b', 454, 2], ['Rocket rails', 'r', 200, 6]], payload: 1800, g: 8.5, armor: 1.2,
+  desc: 'The carrier fighter that broke Japanese naval air power: rugged, simple, credited with over 5,000 victories.' });
+P('usa', 'f14a', 'Grumman F-14A Tomcat', 6, 1974, { shape: 'jet_tt', kind: J, eng: 2, ab: true, spd: 2485, clb: 229, turn: 21, roll: 180, mass: 27700, span: 19.54, len: 19.1, guns: [['m61', 1, 'nose']], hp: [['Fuselage stations', 'm', 500, 4], ['Glove pylons', 'm', 500, 2], ['Glove rails', 'm', 100, 2]], payload: 6600, g: 7.5, aoa: 30, radar: true, flares: 60,
+  desc: 'Swing-wing fleet defender with the AWG-9 radar and the long-range AIM-54 Phoenix.' });
+P('usa', 'f35a', 'Lockheed Martin F-35A Lightning II', 7, 2016, { shape: 'jet_tt', kind: J, ab: true, spd: 1930, clb: 230, turn: 18, roll: 250, mass: 22470, span: 10.7, len: 15.7, guns: [['gau22', 1, 'nose']], hp: [['Side bays', 'm', 200, 2], ['Main bays', 'mb', 1000, 2]], payload: 2600, g: 9, aoa: 50, radar: true, flares: 60, stealth: 0.45,
+  desc: 'Single-engine stealth strike fighter with sensor fusion; carries its weapons internally.' });
+P('ger', 'fw190d9', 'Focke-Wulf Fw 190 D-9', 3, 1945, { shape: 'mono', spd: 685, clb: 17, turn: 18, roll: 120, mass: 4270, span: 10.5, len: 10.2, guns: [['mg131', 2, 'sync'], ['mg151', 2, 'wing']], hp: [['Centreline', 'b', 500, 1]], payload: 500, g: 8.5, armor: 1.3,
+  desc: 'The long-nosed "Dora": a Jumo 213 inline engine behind an annular radiator turned the Fw 190 into a high-altitude fighter.' });
+P('uk', 'tempest5', 'Hawker Tempest V', 3, 1944, { shape: 'mono', spd: 700, clb: 23.9, turn: 19, roll: 100, mass: 5170, span: 12.5, len: 10.26, guns: [['hispano', 4, 'wing']], hp: [['Wing racks', 'b', 454, 2], ['Rocket rails', 'r', 140, 4]], payload: 900, g: 8.5, armor: 1.3,
+  desc: 'The fastest piston fighter at low level in 1944: V-1 hunter and Me 262 killer.' });
+P('ussr', 'yak9u', 'Yakovlev Yak-9U', 3, 1944, { shape: 'mono', spd: 672, clb: 20, turn: 17, roll: 110, mass: 3204, span: 9.74, len: 8.55, guns: [['shvak', 1, 'sync'], ['ubs', 2, 'sync']], hp: [], payload: 0, g: 9, armor: 1,
+  desc: 'Light, fast Yakovlev with the VK-107 engine, among the best Soviet fighters of 1944-45.' });
+P('ussr', 'mig25pd', 'Mikoyan MiG-25PD Foxbat', 6, 1979, { shape: 'jet_tt', kind: J, eng: 2, ab: true, spd: 3000, clb: 208, turn: 35, roll: 120, mass: 34920, span: 14.01, len: 19.75, guns: [], hp: [['Inner pylons', 'm', 500, 2], ['Outer pylons', 'm', 500, 2]], payload: 2000, g: 5, aoa: 20, radar: true, flares: 30,
+  desc: 'Mach 2.8 steel interceptor built to catch high-flying bombers and reconnaissance aircraft.' });
+P('jpn', 'ki61', 'Kawasaki Ki-61-I Hien', 3, 1943, { shape: 'mono', spd: 580, clb: 13.9, turn: 17, roll: 95, mass: 3130, span: 12.0, len: 8.94, guns: [['ho103', 2, 'sync'], ['ho5', 2, 'wing']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 8.5, armor: 1,
+  desc: 'Japan\'s only inline-engined fighter of the war, with a licence-built DB 601.' });
+P('fra', 'mirageF1c', 'Dassault Mirage F1C', 5, 1973, { shape: 'jet_sw', kind: J, ab: true, spd: 2338, clb: 213, turn: 21, roll: 200, mass: 10900, span: 8.4, len: 15.3, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'mbr', 500, 2], ['Centreline', 'b', 1000, 1], ['Wingtip rails', 'm', 100, 2]], payload: 4000, g: 7, aoa: 22, radar: true, flares: 20,
+  desc: 'Swept-wing successor to the Mirage III: better range, slower landings and a stronger radar.' });
 const AIP = (n, id, name, era, year, c) => P(n, id, name, era, year, Object.assign({ aiOnly: true, role: 'bomber', cost: 0 }, c));
 AIP('ger', 'gotha', 'Gotha G.V', 1, 1917, { shape: 'bomber2', bi: true, eng: 2, spd: 140, clb: 2.5, turn: 30, roll: 30, mass: 3980, span: 23.7, len: 12.4, crew: ['pilot', 'gunner', 'gunner'], turrets: [['parab', 1, 'dorsal'], ['parab', 1, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 50, 6]], payload: 500, g: 3 });
 AIP('uk', 'ho400', 'Handley Page O/400', 1, 1918, { shape: 'bomber2', bi: true, eng: 2, spd: 157, clb: 2, turn: 32, roll: 28, mass: 6060, span: 30.5, len: 19.2, crew: ['pilot', 'gunner', 'gunner'], turrets: [['lewis', 2, 'dorsal'], ['lewis', 1, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 50, 8]], payload: 900, g: 3 });

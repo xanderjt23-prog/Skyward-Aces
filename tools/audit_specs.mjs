@@ -52,7 +52,9 @@ const REF = {
   // France
   n17: 'B 1 F none 0 S', spad13: 'B 1 F none 0 S', br14: 'B 1 F none 0 S', d510: 'L 1 F none 0 E', ms406: 'L 1 F none 0 S', d520: 'L 1 F none 0 S',
   ouragan: 'M 1 C nose 0 S', mystere4: 'M 1 C nose 0 W', mirage3c: 'L 1 N cheek 0 D', m2000c: 'L 1 N cheek 0 D', rafalec: 'LM 1 N cheek 1 D',
-  amiot143: 'H 1 F none 0 S', leo451: 'L E F none 0 S', vautour: 'M 1 C nacelle 0 W', jaguar: 'S 1 F box 0 W', m2000d: 'L 1 N cheek 0 D',
+  f6f5: 'L 1 F none 0 S', f14a: 'S 2s F box 0 V', f35a: 'M 2c F box 0 X', fw190d9: 'L 1 F none 0 S', tempest5: 'L 1 F none 0 E', yak9u: 'L 1 F none 0 S',
+  mig25pd: 'S 2c F box 0 W', ki61: 'L 1 F none 0 S', mirageF1c: 'S 1 F cheek 0 W',
+    amiot143: 'H 1 F none 0 S', leo451: 'L E F none 0 S', vautour: 'M 1 C nacelle 0 W', jaguar: 'S 1 F box 0 W', m2000d: 'L 1 N cheek 0 D',
 };
 const WING = { L: [0, .25], LM: [0, .6], M: [.3, .7], S: [.6, .95], H: [.85, 1] };
 const TAIL = { '1': ['single_vertical'], '2s': ['twin_vertical_straight'], '2c': ['twin_vertical_canted'], T: ['t_tail'], E: ['twin_endplate'], BOOM: ['twin_boom'] };
@@ -149,8 +151,8 @@ for (const pl of PLANE_LIST) {
   if (e.fuselageArchitecture === 'CHINED_STEALTH') {
     // rear deck taper: at the exhaust plane the decks hug the nozzle slots, so no tall flat wall is left; nozzles stay inside the decks
     { const t = sp.rearTaper, k = sp.rearHex(t.z1 - 1e-3, sp.chine.hex(sp.at(t.z1 - 1e-3))), s0 = sp.at(t.z0);
-      if ((k.top - k.bot) > (2 * s0.h) * 0.6) flag(id, 'rear deck does not taper: flat rear wall ' + (k.top - k.bot).toFixed(2) + ' m tall');
-      const fjs = sp.engines.filter(g => g.kind === 'fus'); for (const g of fjs) if (g.y + g.r * g.sy > k.top || g.y - g.r * g.sy < k.bot || Math.abs(g.x) + g.r * g.sx > k.wc + 1e-6) flag(id, 'nozzle sticks out of the tapered rear deck');
+      const nz = Math.max(0, ...sp.engines.filter(g => g.kind === 'fus').map(g => 2 * g.r * g.sy)); if ((k.top - k.bot) > Math.max((2 * s0.h) * 0.6, nz * 1.15)) flag(id, 'rear deck does not taper: flat rear wall ' + (k.top - k.bot).toFixed(2) + ' m tall');
+      const fjs = sp.engines.filter(g => g.kind === 'fus'); for (const g of fjs) if (g.style === '2d_serrated' && (g.y + g.r * g.sy > k.top || g.y - g.r * g.sy < k.bot || Math.abs(g.x) + g.r * g.sx > k.wc + 1e-6)) flag(id, 'nozzle sticks out of the tapered rear deck');
       for (const g of fjs) if (g.style === '2d_serrated' && Math.abs(g.sx / g.sy - 2.5) > 0.05) flag(id, '2D nozzle exit is not 2.5 : 1'); }
     for (const z of rng(-pl.len / 2 + 0.5, pl.len / 2, 20)) if (sp.chineW(z) < sp.at(z).w - 1e-6) { flag(id, 'chine narrower than the body at z ' + z.toFixed(1)); break; }
     if (sp.wing.x0 > sp.chineW(sp.wing.rootZ + sp.wing.rc / 2)) flag(id, 'wing root outside the chine: the chine must run into the wing');

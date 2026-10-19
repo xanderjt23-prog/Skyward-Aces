@@ -139,7 +139,7 @@ const Sound = (() => {
 
   // ---- the player's engine, wind and buffet --------------------------------
   const ROTARY = ['camel', 'dr1', 'n17', 'n17ru', 'n24ko3', 'n28'];
-  const RADIAL = ['p12', 'p26', 'p47d', 'f4u1d', 'fw190a', 'la5fn', 'a6m2', 'ki43', 'ki84', 'n1k2', 'i15', 'i16', 'gladiator', 'ki27', 'ki10', 'b17g', 'b29', 'b5n', 'sbd', 'b25j', 'a1h', 'd3a', 'g4m', 'tu2', 'ki21', 'b10', 'ms406', 'il2', 'yak3'];
+  const RADIAL = ['f6f5', 'p12', 'p26', 'p47d', 'f4u1d', 'fw190a', 'la5fn', 'a6m2', 'ki43', 'ki84', 'n1k2', 'i15', 'i16', 'gladiator', 'ki27', 'ki10', 'b17g', 'b29', 'b5n', 'sbd', 'b25j', 'a1h', 'd3a', 'g4m', 'tu2', 'ki21', 'b10', 'ms406', 'il2', 'yak3'];
   function engineKind(def) { if (def.kind === 'jet') return 'jet'; if (ROTARY.includes(def.id)) return 'rotary'; if (RADIAL.includes(def.id) && def.id !== 'il2' && def.id !== 'yak3' && def.id !== 'ms406') return 'radial'; return 'inline'; }
   const ENG = { rotary: { cyl: 9, rpm: [700, 1250] }, inline: { cyl: 12, rpm: [900, 2700] }, radial: { cyl: 14, rpm: [900, 2500] } };
   let eng = null;
