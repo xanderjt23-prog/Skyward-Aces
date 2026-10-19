@@ -26,7 +26,9 @@ class BotBrain {
       return;
     }
     if (c.gearDown && !c.onGround) c.gearDown = false;
+    this.spotT = (this.spotT || 0) + dt; if (this.spotT > 0.25) { this.spot(this.spotT); this.spotT = 0; }
     if (this.think <= 0) { this.think = 0.8 + Math.random() * 0.8; this.choose(); }
+    if (this.target && !this.aware(this.target) && this.mode === 'air') this.target = null; // lost sight of it
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
     let dir = null, throttle = 1, fire = false, keepBank = false;
     // ---- terrain avoidance: look ahead along the velocity
@@ -99,6 +101,35 @@ class BotBrain {
     // avoid stalling: unload when slow
     if (c.speed < P.vs * 1.35 && c.ctl.pitch > 0.2) { c.ctl.pitch = 0.2; c.ctl.throttle = 1.1; }
   }
+  // ---- situational awareness. Bots are not omniscient: an enemy has to be seen first. Most pilots shot down in WW2
+  // never saw their attacker - the view to the rear (and below and behind above all) was poor, worst from framed and
+  // razorback canopies - so attacks out of the blind spots, the "bounce", usually catch them unaware. Spotting depends on
+  // distance and the target's size, where it is relative to the bot's view, the canopy, weather and night, and the bot's
+  // skill; being hit shows them the attacker at once; jets search ahead with radar. Once seen, a target is tracked
+  // while it stays in sight and remembered for a few seconds after.
+  static rearView(def) { const t = Airframe.spec(def).canopy.type; return def.role === 'bomber' && def.turrets.length ? 0.8 : { bubble: 0.55, open: 0.45, side_by_side: 0.4, greenhouse: 0.35, framed: 0.25, razorback: 0.15, glazed_nose: 0.25, stepped: 0.25 }[t] || 0.3; }
+  spot(dt) {
+    const c = this.c, m = c.match, now = m.time, fwd = new V3(0, 0, -1).applyQuaternion(c.quat), up = new V3(0, 1, 0).applyQuaternion(c.quat);
+    if (!this.seen) { this.seen = new Map(); this.rear = BotBrain.rearView(c.def); }
+    const wx = m.cfg.night ? 0.4 : m.cfg.weather === 'fog' ? 0.5 : m.cfg.weather === 'rain' || m.cfg.weather === 'overcast' ? 0.75 : 1;
+    const radar = c.def.radar && c.def.era >= 5, eyes = 0.45 + this.skill * 0.75;
+    if (c.lastAttacker && now - c.lastHitT < 0.5 && c.lastAttacker.team !== c.team) this.seen.set(c.lastAttacker, now);
+    for (const e of m.crafts) {
+      if (e === c || e.team === c.team || !e.alive || e.wreck) continue;
+      const to = e.pos.clone().sub(c.pos), d = to.length(); if (d > 16000) continue; to.divideScalar(d);
+      const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(fwd)))), below = to.dot(up) < -0.25;
+      if (radar && ang < 0.9 && d < 15000 * (e.def.stealth || 1)) { this.seen.set(e, now); continue; } // radar search ahead
+      const size = Math.max(0.7, Math.min(2.5, (e.def.span + e.def.len) / 22)), R = 4500 * size * wx;
+      if (d > R) continue;
+      // where the target is in the field of view: ahead is easy, abeam fair, behind depends on the canopy, behind-and-below is the blind spot
+      let view = ang < 1.05 ? 1 : ang < 2.1 ? 0.6 : this.rear; if (ang > 2.1 && below) view *= 0.25; else if (below && ang > 1.05) view *= 0.6;
+      const last = this.seen.get(e), tracking = last !== undefined && now - last < 1.5;
+      if (tracking && (view > 0.12 || d < 500)) { this.seen.set(e, now); continue; } // already in sight: keep eyes on it
+      const pd = 1.1 * eyes * view * wx * Math.pow(Math.max(0, 1 - d / R), 1.5) + (d < 250 ? 0.6 * view : 0); // chance per second
+      if (Math.random() < 1 - Math.exp(-pd * dt)) this.seen.set(e, now);
+    }
+  }
+  aware(e) { const t = this.seen && this.seen.get(e); return t !== undefined && this.c.match.time - t < 10; }
   choose() {
     const c = this.c, m = c.match, role = c.def.role;
     if (role === 'bomber' || c.spec.task === 'bomb') { this.mode = 'bomber'; this.ground = this.ground && !this.ground.dead ? this.ground : m.taskTarget(c); return; }
@@ -123,7 +154,7 @@ class BotBrain {
       const flock = m.crafts.filter(e => e.alive && !e.wreck && e.team === c.team && (e.spec.task === 'bomb' || e.def.role === 'bomber'));
       if (flock.length) {
         this.protect = flock.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a));
-        const threat = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && flock.some(b => b.pos.distanceTo(e.pos) < 2200) || (e.alive && e.team !== c.team && m.time - c.lastHitT < 3 && e.pos.distanceTo(c.pos) < 800));
+        const threat = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && this.aware(e) && flock.some(b => b.pos.distanceTo(e.pos) < 2200) || (e.alive && e.team !== c.team && m.time - c.lastHitT < 3 && e.pos.distanceTo(c.pos) < 800));
         this.target = threat.length ? threat.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a)) : null;
         return;
       }
@@ -132,14 +163,14 @@ class BotBrain {
     // interceptors go for the bombers, unless a fighter is on their tail
     if (c.spec.task === 'intercept') {
       const bombers = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && (e.spec.task === 'bomb' || e.def.role === 'bomber'));
-      const jumped = m.time - c.lastHitT < 4 || m.crafts.some(e => e.alive && e.team !== c.team && e.ai && e.ai.target === c && e.pos.distanceTo(c.pos) < 600);
+      const jumped = m.time - c.lastHitT < 4 || m.crafts.some(e => e.alive && e.team !== c.team && e.ai && e.ai.target === c && e.pos.distanceTo(c.pos) < 600 && this.aware(e));
       if (bombers.length && !jumped) { this.target = bombers.reduce((a, e) => (e.pos.distanceTo(c.pos) < a.pos.distanceTo(c.pos) ? e : a)); return; }
     }
     // fighter: pick the most convenient enemy (distance, angle, low altitude penalty), prefer bombers when escorting/intercepting
     let best = null, bs = Infinity;
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
     for (const e of m.crafts) {
-      if (!e.alive || e.team === c.team || e.dm.destroyed) continue;
+      if (!e.alive || e.team === c.team || e.dm.destroyed || !this.aware(e)) continue;
       const to = e.pos.clone().sub(c.pos), d = to.length(); const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(fwd) / d)));
       let s = d + ang * 600 + (e === this.target ? -500 : 0);
       if (e.def.role === 'bomber' && c.spec.task === 'intercept') s -= 2500;

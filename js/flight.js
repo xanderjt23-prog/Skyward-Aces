@@ -229,6 +229,14 @@ const Flight = (() => {
         pitch = pitch * (1 - wb) + Math.min(1, off * 2.8 / Math.max(lim.q, 0.05) * Math.max(0.1, Math.cos(rollErr))) * wb;
       }
       let yaw = Math.max(-1, Math.min(1, (hv * 2.5 + ffr * 0.5) / Math.max(lim.r, 0.05))) * near;
+      // fine tracking: a pilot holding the pipper on a target trims out the steady error (the stick force that holds the
+      // nose up against gravity, the slip). Integrate the small remaining pitch / yaw error while the aim is within a few
+      // degrees, so the guns settle exactly on the aim instead of a constant half a degree off; it bleeds away otherwise
+      const dtI = Math.min(0.1, Math.max(0, now - (c._iT || now))); c._iT = now;
+      const fine = Math.max(0, Math.min(1, 1 - (off - 0.03) / 0.05));
+      c._iP = Math.max(-0.4, Math.min(0.4, ((c._iP || 0) + pv * 4 * dtI * fine) * (fine > 0 ? 1 : Math.exp(-dtI * 3))));
+      c._iY = Math.max(-0.3, Math.min(0.3, ((c._iY || 0) + hv * 3 * dtI * fine) * (fine > 0 ? 1 : Math.exp(-dtI * 3))));
+      pitch += c._iP / Math.max(lim.q, 0.05) * fine; yaw += c._iY / Math.max(lim.r, 0.05) * fine;
       return finish(c, P, out, pitch, roll, yaw, off);
     }
     const rollErr = Math.atan2(loc.x, loc.y);

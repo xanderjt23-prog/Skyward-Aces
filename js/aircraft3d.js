@@ -654,21 +654,41 @@
       glassB.add(sphere(1, 12, 8), 0xffffff, [tp.x, tp.y, tp.z], null, [r, r, r]);
       for (let k = 0; k < t[1]; k++) body.add(zcyl(0.02, 0.025, 0.9, 5), dark, [tp.x + (k - (t[1] - 1) / 2) * 0.12, tp.y, tp.z + (t[2] === 'nose' ? -1 : 1) * (r + 0.4)]); }
 
-    // ---------------- markings: wrapped onto the skin like decals (every vertex moved onto the real surface, keeping its layer offset)
+    // ---------------- markings: wrapped onto the skin like decals (every vertex moved onto the real surface, keeping its
+    // layer offset). Each marking is placed where it fits whole: on the wing within the chord and span, on the fuselage in a
+    // clear stretch of the side (behind the wing and ahead of the tail, else ahead of the wing) and no taller than the body
     const top = sp.wings[sp.wings.length - 1];
-    { const f = Math.min(0.75, Math.max(0.3, (S * 0.32 - top.x0) / (top.b - top.x0))), w = sp.wingAt(f, top), size = Math.min(S * 0.12, 1.8, w.c * 0.8);
-      for (const s of [-1, 1]) { const b = new Builder(); insignia(b, mark, size, [0, 0, 0], 'y', pl.era); const g = b.build(), pa = g.attributes.position;
-        for (let k = 0; k < pa.count; k++) { const x = s * w.x + pa.getX(k), z = w.le + w.c * 0.42 + pa.getZ(k), a = sp.wingAt(Math.max(0, Math.min(1, (Math.abs(x) - top.x0) / (top.b - top.x0))), top);
+    const extent = axis => { const b = new Builder(); insignia(b, mark, 1, [0, 0, 0], axis, pl.era); const g = b.build(); g.computeBoundingBox(); const bb = g.boundingBox;
+      return axis === 'y' ? { ex: Math.max(-bb.min.x, bb.max.x), ez: Math.max(-bb.min.z, bb.max.z) } : { ez: Math.max(-bb.min.z, bb.max.z), ey: Math.max(-bb.min.y, bb.max.y) }; };
+    { const E = extent('y'), f0 = Math.min(0.75, Math.max(0.3, (S * 0.32 - top.x0) / (top.b - top.x0))), w = sp.wingAt(f0, top);
+      const fits = (size, cx, cz) => { for (let k = 0; k <= 8; k++) { const x = cx + (k / 4 - 1) * E.ex * size; if (x < top.x0 + 0.1 || x > top.b - 0.15) return false;
+          const a = sp.wingAt(Math.max(0, Math.min(1, (x - top.x0) / (top.b - top.x0))), top); if (cz - E.ez * size < a.le + a.c * 0.06 || cz + E.ez * size > a.le + a.c * 0.92) return false; } return true; };
+      let size = Math.min(S * 0.12, 1.8, w.c * 0.8), cx = w.x, cz = w.le + w.c * 0.45;
+      for (let n = 0; n < 30 && !fits(size, cx, cz); n++) { size *= 0.93; cx = Math.max(top.x0 + 0.1 + E.ex * size, Math.min(top.b - 0.15 - E.ex * size, cx)); const a = sp.wingAt(Math.max(0, Math.min(1, (cx - top.x0) / (top.b - top.x0))), top); cz = a.le + a.c * 0.47; }
+      if (size > 0.2 && fits(size, cx, cz)) for (const s of [-1, 1]) { const b = new Builder(); insignia(b, mark, size, [0, 0, 0], 'y', pl.era); const g = b.build(), pa = g.attributes.position;
+        for (let k = 0; k < pa.count; k++) { const x = s * cx + pa.getX(k), z = cz + pa.getZ(k), a = sp.wingAt(Math.max(0, Math.min(1, (Math.abs(x) - top.x0) / (top.b - top.x0))), top);
           pa.setXYZ(k, x, a.y + naca(Math.max(0, Math.min(1, (z - a.le) / a.c)), top.t) * a.c + 0.004 + pa.getY(k), z); } // on the upper aerofoil surface
         (s < 0 ? mkL : mkR).parts.push({ g, color: 0xffffff, preColored: true }); } }
-    { const z = z0 + L * (deck ? 0.66 : sp.jet ? 0.66 : 0.68), y = deck ? sp.tunnel.at(z).y : sp.at(z).y, s = sp.at(z);
-      const size = deck ? Math.min(sp.tunnel.at(z).h * 1.4, 1.4) : Math.min(s.h * 1.25, R * 1.3, 1.5);
-      if (size > 0.2) { // the side skin's half-width on a small grid over the marking, interpolated per vertex
-        const N = 6, gz = k => z - size * 0.6 + size * 1.2 * k / N, gy = k => y - size * 0.6 + size * 1.2 * k / N, grid = [];
+    { const E = extent('x'), zEnd = (chined ? sp.rearTaper.z0 : Math.min(L / 2, zMain)) - 0.3, w0 = sp.wingAt(0);
+      // stretches of the side covered by something: the wing root (and LERX / strakes), the canopy, intake mouths, the tailplane root, canards
+      const busy = [[cp.z - cp.len * 0.6, cp.z + cp.len * 0.6]]; if (!chined) busy.push([w0.le - (sp.extra.lerx ? L * 0.2 : 0.3), w0.le + w0.c + 0.3]); // stealth: the wing joins at the chine, the wall below it stays clear
+      if (sp.stab && e0.horizontalTail === 'fuselage') busy.push([sp.stab.zLE - 0.3, sp.stab.zLE + sp.stab.rc + 0.3]);
+      if (sp.intakeZ !== null && e0.intakeProfile !== 'nose_cone' && !chined) busy.push([sp.intakeZ - 0.4, sp.intakeZ + 0.8]);
+      if (sp.extra.canards) busy.push([cp.z + sp.extra.canards.offset - 1.2, cp.z + sp.extra.canards.offset + 1.2]);
+      const free = []; let z = z0 + L * 0.12; for (const [a, b] of busy.slice().sort((p, q) => p[0] - q[0])) { if (a > z) free.push([z, Math.min(a, zEnd)]); z = Math.max(z, b); } if (zEnd > z) free.push([z, zEnd]);
+      const hAt = zz => deck ? sp.tunnel.at(zz).h * 0.75 : chined ? (sp.chine.hex(sp.at(zz)).cy - (sp.at(zz).y - sp.at(zz).h)) * 0.5 : sp.at(zz).h, yAt = zz => deck ? sp.tunnel.at(zz).y : chined ? (sp.chine.hex(sp.at(zz)).cy + sp.at(zz).y - sp.at(zz).h) / 2 : sp.at(zz).y; // stealth: on the flat wall below the chine
+      // the best stretch: room for the whole marking at the largest size, preferring behind the wing
+      let best = null;
+      for (const [a, b] of free) { if (b - a < 0.6) continue; const zc = (a + b) / 2, sz = Math.min((b - a) / (2 * E.ez) * 0.92, Math.min(hAt(zc - (b - a) * 0.25), hAt(zc), hAt(zc + (b - a) * 0.25)) * 2 * 0.82 / (2 * E.ey), 1.5);
+        const score = sz * (zc > w0.le ? 1.15 : 1); if (!best || score > best.score) best = { zc, sz, score }; }
+      if (best && best.sz > 0.22) { let size = best.sz; const zc = best.zc, y = yAt(zc);
+        // shrink until every part of the marking lies on the skin (nothing past the top or bottom of the body)
+        for (let n = 0; n < 12; n++) { let ok = true; for (const dz of [-1, 0, 1]) for (const dy of [-1, 1]) if (surfX(zc + dz * E.ez * size, y + dy * E.ey * size) < Math.max(0.12, (deck ? sp.tunnel.at(zc).w : sp.at(zc).w) * 0.35)) ok = false; if (ok) break; size *= 0.9; }
+        const N = 6, gz = k => zc - E.ez * size * 1.05 + E.ez * size * 2.1 * k / N, gy = k => y - E.ey * size * 1.05 + E.ey * size * 2.1 * k / N, grid = [];
         for (let a = 0; a <= N; a++) { grid.push([]); for (let c = 0; c <= N; c++) grid[a].push(surfX(gz(a), gy(c))); }
         const skinX = (zz, yy) => { const u = Math.max(0, Math.min(N - 1e-6, (zz - gz(0)) / (gz(1) - gz(0)))), v = Math.max(0, Math.min(N - 1e-6, (yy - gy(0)) / (gy(1) - gy(0)))), a = Math.floor(u), c = Math.floor(v), fu = u - a, fv = v - c;
           return (grid[a][c] * (1 - fu) + grid[a + 1][c] * fu) * (1 - fv) + (grid[a][c + 1] * (1 - fu) + grid[a + 1][c + 1] * fu) * fv; };
-        for (const sd of [-1, 1]) { const b = new Builder(); insignia(b, mark, size, [sd * 1e-4, y, z], 'x', pl.era); const g = b.build(), pa = g.attributes.position;
+        if (size > 0.22) for (const sd of [-1, 1]) { const b = new Builder(); insignia(b, mark, size, [sd * 1e-4, y, zc], 'x', pl.era); const g = b.build(), pa = g.attributes.position;
           for (let k = 0; k < pa.count; k++) pa.setX(k, sd * (skinX(pa.getZ(k), pa.getY(k)) + 0.006 + Math.abs(pa.getX(k))));
           g.computeBoundingSphere(); mkB.parts.push({ g, color: 0xffffff, preColored: true }); } } }
 
