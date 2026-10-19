@@ -3,7 +3,7 @@ import path from 'path';
 export default async function (t) {
   await t.goto('file:///' + path.resolve('index.html').replace(/\\/g, '/'));
   await t.eval(`localStorage.clear(); Profile.reset(); const p = Profile.get(); p.coins = 90000; p.xp = 40000; p.totalXp = 26000; ['p51d','p47d','bf109g','f16c','spit9'].forEach(id => p.owned[id] = true); p.selected = 'p47d'; Profile.save(); UI.refresh(); 1`);
-  await t.eval(`Profile.buyStore('p47d', 'b500'); Profile.buyStore('p47d', 'hvar'); Profile.setStation('p47d', 0, 'b500'); Profile.setStation('p47d', 2, 'hvar'); Profile.buyBelt('p47d', 'm2', 'api'); Profile.buyUpgrade('p47d', 'engine'); 1`);
+  await t.eval(`Profile.buyStore('p47d', 'an_m64'); Profile.buyStore('p47d', 'hvar'); Profile.setStation('p47d', 0, 'an_m64'); Profile.setStation('p47d', 2, 'hvar'); Profile.buyBelt('p47d', 'm2', 'api'); Profile.buyUpgrade('p47d', 'engine'); 1`);
   await t.eval("UI.open('mods'); document.querySelector('[data-mt=loadout]').click(); 1"); await t.sleep(300); await t.shot('ui-loadout');
   await t.eval("document.querySelector('[data-mt=upg]').click(); 1"); await t.sleep(200); await t.shot('ui-upgrades');
   await t.eval("UI.open('play'); document.querySelector('#p-sp').click(); 1"); await t.sleep(200); await t.shot('ui-modes');

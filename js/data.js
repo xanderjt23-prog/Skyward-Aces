@@ -95,17 +95,7 @@ const beltPrice = (beltId, era) => Math.round(BELTS[beltId].price * (300 + era *
 // ---- Ordnance carried on hardpoints. kind: b=bomb r=rocket m=missile g=gun pod
 // eras: [min,max]; bloc/nat limit who can mount it.
 const STORES = {
-  // bombs  (dmg = damage to ground targets at the centre, rad = blast radius m)
-  cooper:  { kind: 'b', name: 'Cooper 20 lb bomb', mass: 9, eras: [1, 2], dmg: 140, rad: 14, price: 150 },
-  b50:     { kind: 'b', name: '50 kg bomb', mass: 50, eras: [1, 3], dmg: 420, rad: 22, price: 300 },
-  b100:    { kind: 'b', name: '100 kg bomb', mass: 100, eras: [2, 4], dmg: 750, rad: 28, price: 500 },
-  b250:    { kind: 'b', name: '250 kg bomb (SC 250 / 500 lb)', mass: 250, eras: [3, 5], dmg: 1500, rad: 38, price: 900 },
-  b500:    { kind: 'b', name: '500 kg bomb (SC 500 / 1000 lb)', mass: 500, eras: [3, 5], dmg: 2600, rad: 48, price: 1500 },
-  b1000:   { kind: 'b', name: '1000 kg bomb (2000 lb)', mass: 1000, eras: [3, 5], dmg: 4300, rad: 62, price: 2400 },
-  mk82:    { kind: 'b', name: 'Mk 82 / FAB-250M62', mass: 230, eras: [5, 7], dmg: 1900, rad: 40, price: 1800 },
-  mk84:    { kind: 'b', name: 'Mk 84 / FAB-1000', mass: 900, eras: [5, 7], dmg: 5600, rad: 66, price: 3600 },
-  gbu12:   { kind: 'b', name: 'GBU-12 Paveway II (guided)', mass: 230, eras: [6, 7], dmg: 2100, rad: 40, guided: true, price: 4200, bloc: 'west' },
-  kab500:  { kind: 'b', name: 'KAB-500L (guided)', mass: 520, eras: [6, 7], dmg: 3300, rad: 52, guided: true, price: 4800, bloc: 'east' },
+  // bombs: see BOMB_LIST below (real designations per nation and period; damage and blast radius scale with the mass)
   // rockets (count = rockets per station)
   leprieur:{ kind: 'r', name: 'Le Prieur rockets (x4)', mass: 12, count: 4, eras: [1, 1], dmg: 90, rad: 8, speed: 120, airDmg: 70, price: 250 },
   rs82:    { kind: 'r', name: 'RS-82 rockets (x4)', mass: 28, count: 4, eras: [2, 3], dmg: 240, rad: 12, speed: 340, airDmg: 160, price: 500, bloc: 'east' },
@@ -117,6 +107,13 @@ const STORES = {
   zuni:    { kind: 'r', name: 'Zuni 5-inch pod (x4)', mass: 250, count: 4, eras: [5, 6], dmg: 900, rad: 22, speed: 720, airDmg: 320, price: 2000, bloc: 'west' },
   hydra:   { kind: 'r', name: 'Hydra 70 pod (x7)', mass: 160, count: 7, eras: [6, 7], dmg: 520, rad: 16, speed: 740, airDmg: 240, price: 2400, bloc: 'west' },
   s8:      { kind: 'r', name: 'B-8 pod, S-8 rockets (x10)', mass: 360, count: 10, eras: [6, 7], dmg: 560, rad: 17, speed: 610, airDmg: 260, price: 2400, bloc: 'east' },
+  tinytim: { kind: 'r', name: '11.75 in Tiny Tim rocket', mass: 581, count: 1, eras: [3, 4], dmg: 3200, rad: 40, speed: 250, airDmg: 600, price: 2400, nat: ['usa'] },
+  rs132:   { kind: 'r', name: 'RS-132 rockets (x2)', mass: 46, count: 2, eras: [3, 4], dmg: 520, rad: 16, speed: 350, airDmg: 260, price: 800, nat: ['ussr'] },
+  wgr21:   { kind: 'r', name: 'Werfer-Granate 21 (x1)', mass: 112, count: 1, eras: [3, 4], dmg: 700, rad: 25, speed: 320, airDmg: 900, price: 1300, nat: ['ger'] },
+  s24:     { kind: 'r', name: 'S-24 240 mm rocket', mass: 235, count: 1, eras: [5, 7], dmg: 2400, rad: 34, speed: 600, airDmg: 400, price: 2600, bloc: 'east' },
+  s13:     { kind: 'r', name: 'B-13L pod, S-13 rockets (x5)', mass: 505, count: 5, eras: [6, 7], dmg: 900, rad: 20, speed: 650, airDmg: 300, price: 3200, bloc: 'east' },
+  sneb:    { kind: 'r', name: 'Matra F4 pod, SNEB 68 mm (x18)', mass: 225, count: 18, eras: [5, 7], dmg: 330, rad: 13, speed: 700, airDmg: 200, price: 2200, nat: ['fra', 'uk'] },
+  crv7:    { kind: 'r', name: 'LAU-5003 pod, CRV7 70 mm (x19)', mass: 230, count: 19, eras: [6, 7], dmg: 380, rad: 14, speed: 1100, airDmg: 260, price: 3000, nat: ['uk'] },
   // missiles. seek: ir (heat) | sarh (needs the launcher radar on the target) | arh (own radar)
   // range m, speed m/s, g = max manoeuvre, fov = seeker half-angle deg, rear = rear-aspect only, ccm = flare resistance 0..1
   aim9b:   { kind: 'm', name: 'AIM-9B Sidewinder', mass: 75, eras: [4, 5], seek: 'ir', range: 3500, speed: 750, g: 11, fov: 12, rear: true, ccm: 0.1, life: 12, price: 2400, bloc: 'west' },
@@ -135,7 +132,7 @@ const STORES = {
   s530d:   { kind: 'm', name: 'Super 530D', mass: 270, eras: [6, 7], seek: 'sarh', range: 22000, speed: 1200, g: 20, fov: 35, ccm: 0.8, life: 28, price: 9000, nat: ['fra'], radar: true },
   r27r:    { kind: 'm', name: 'R-27R', mass: 253, eras: [6, 7], seek: 'sarh', range: 22000, speed: 1100, g: 22, fov: 35, ccm: 0.75, life: 28, price: 9000, bloc: 'east', radar: true },
   aam3:    { kind: 'm', name: 'AAM-3', mass: 91, eras: [6, 7], seek: 'ir', range: 8000, speed: 900, g: 40, fov: 40, rear: false, ccm: 0.65, life: 16, price: 9000, nat: ['jpn'] },
-  aim120:  { kind: 'm', name: 'AIM-120 AMRAAM', mass: 152, eras: [6, 7], seek: 'arh', range: 30000, speed: 1250, g: 30, fov: 40, ccm: 0.85, life: 34, price: 14000, bloc: 'west', radar: true },
+  aim120:  { kind: 'm', name: 'AIM-120C AMRAAM', mass: 152, eras: [6, 7], seek: 'arh', range: 30000, speed: 1250, g: 30, fov: 40, ccm: 0.85, life: 34, price: 14000, bloc: 'west', radar: true },
   r77:     { kind: 'm', name: 'R-77', mass: 175, eras: [7, 7], seek: 'arh', range: 30000, speed: 1200, g: 35, fov: 40, ccm: 0.85, life: 34, price: 14000, bloc: 'east', radar: true },
   aim9x:   { kind: 'm', name: 'AIM-9X Sidewinder', mass: 85, eras: [7, 7], seek: 'ir', range: 10000, speed: 950, g: 50, fov: 90, rear: false, ccm: 0.85, life: 18, price: 16000, bloc: 'west' },
   irist:   { kind: 'm', name: 'IRIS-T', mass: 87, eras: [7, 7], seek: 'ir', range: 10000, speed: 950, g: 55, fov: 90, rear: false, ccm: 0.85, life: 18, price: 16000, nat: ['ger', 'uk'] },
@@ -143,6 +140,20 @@ const STORES = {
   r74:     { kind: 'm', name: 'R-74M', mass: 105, eras: [7, 7], seek: 'ir', range: 10000, speed: 950, g: 50, fov: 75, rear: false, ccm: 0.8, life: 18, price: 15000, bloc: 'east' },
   aam4:    { kind: 'm', name: 'AAM-4', mass: 222, eras: [7, 7], seek: 'arh', range: 30000, speed: 1250, g: 30, fov: 40, ccm: 0.85, life: 34, price: 14000, nat: ['jpn'], radar: true },
   meteor:  { kind: 'm', name: 'MBDA Meteor', mass: 190, eras: [7, 7], seek: 'arh', range: 40000, speed: 1300, g: 30, fov: 40, ccm: 0.9, life: 45, price: 22000, nat: ['uk', 'fra', 'ger'], radar: true },
+  aim4d:   { kind: 'm', name: 'AIM-4D Falcon', mass: 61, eras: [5, 5], seek: 'ir', range: 5000, speed: 850, g: 10, fov: 10, rear: true, ccm: 0.15, life: 12, price: 2600, nat: ['usa'] },
+  aim9p:   { kind: 'm', name: 'AIM-9P Sidewinder', mass: 82, eras: [5, 6], seek: 'ir', range: 6000, speed: 850, g: 20, fov: 20, rear: true, ccm: 0.35, life: 14, price: 4800, bloc: 'west' },
+  aim7f:   { kind: 'm', name: 'AIM-7F Sparrow', mass: 231, eras: [6, 6], seek: 'sarh', range: 18000, speed: 1050, g: 16, fov: 30, ccm: 0.7, life: 26, price: 7500, bloc: 'west', radar: true },
+  r13m:    { kind: 'm', name: 'R-13M', mass: 90, eras: [5, 6], seek: 'ir', range: 5000, speed: 800, g: 15, fov: 18, rear: true, ccm: 0.3, life: 14, price: 4200, bloc: 'east' },
+  r40t:    { kind: 'm', name: 'R-40TD', mass: 475, eras: [5, 6], seek: 'ir', range: 15000, speed: 1100, g: 8, fov: 20, rear: false, ccm: 0.3, life: 24, price: 6500, bloc: 'east' },
+  r40r:    { kind: 'm', name: 'R-40RD', mass: 475, eras: [5, 6], seek: 'sarh', range: 30000, speed: 1100, g: 8, fov: 30, ccm: 0.55, life: 34, price: 7500, bloc: 'east', radar: true },
+  r27et:   { kind: 'm', name: 'R-27ET (long-range heat seeker)', mass: 343, eras: [6, 7], seek: 'ir', range: 14000, speed: 1150, g: 25, fov: 35, rear: false, ccm: 0.6, life: 26, price: 11000, bloc: 'east' },
+  r27er:   { kind: 'm', name: 'R-27ER', mass: 350, eras: [6, 7], seek: 'sarh', range: 30000, speed: 1200, g: 24, fov: 35, ccm: 0.8, life: 36, price: 12000, bloc: 'east', radar: true },
+  r771:    { kind: 'm', name: 'R-77-1', mass: 190, eras: [7, 7], seek: 'arh', range: 35000, speed: 1250, g: 38, fov: 45, ccm: 0.9, life: 38, price: 18000, bloc: 'east', radar: true },
+  magic1:  { kind: 'm', name: 'Matra R.550 Magic 1', mass: 89, eras: [5, 6], seek: 'ir', range: 5000, speed: 850, g: 25, fov: 25, rear: true, ccm: 0.3, life: 12, price: 4800, nat: ['fra'] },
+  s530f:   { kind: 'm', name: 'Super 530F', mass: 245, eras: [6, 6], seek: 'sarh', range: 20000, speed: 1150, g: 20, fov: 35, ccm: 0.75, life: 26, price: 8500, nat: ['fra'], radar: true },
+  micaem:  { kind: 'm', name: 'MICA EM', mass: 112, eras: [7, 7], seek: 'arh', range: 30000, speed: 1200, g: 50, fov: 50, ccm: 0.85, life: 30, price: 16000, nat: ['fra'], radar: true },
+  asraam:  { kind: 'm', name: 'AIM-132 ASRAAM', mass: 88, eras: [7, 7], seek: 'ir', range: 12000, speed: 1050, g: 50, fov: 90, rear: false, ccm: 0.85, life: 18, price: 16000, nat: ['uk'] },
+  aim120d: { kind: 'm', name: 'AIM-120D AMRAAM', mass: 161, eras: [7, 7], seek: 'arh', range: 45000, speed: 1300, g: 32, fov: 45, ccm: 0.9, life: 45, price: 22000, nat: ['usa'], radar: true },
   // gun pods
   gp_lewis:{ kind: 'g', name: 'Foster-mount Lewis gun', mass: 13, eras: [1, 1], gun: 'lewis', guns: 1, price: 400, nat: ['uk', 'fra', 'usa', 'ussr'] },
   gp_mg151:{ kind: 'g', name: 'Rüstsatz gondola (MG 151/20)', mass: 135, eras: [3, 3], gun: 'mg151', guns: 1, price: 1500, nat: ['ger'] },
@@ -151,6 +162,51 @@ const STORES = {
   gp_suu23:{ kind: 'g', name: 'SUU-23/A gun pod (M61)', mass: 780, eras: [5, 6], gun: 'm61', guns: 1, price: 4000, bloc: 'west' },
   gp_gpu5: { kind: 'g', name: 'GPU-5/A gun pod (30 mm)', mass: 860, eras: [6, 7], gun: 'gau13', guns: 1, price: 6000, bloc: 'west' },
 };
+// ---- Bombs by their real designations. [id, name, kg, [first era, last era], who carries it, type]
+// who: a nation list, or 'west' / 'east'. type: gp general purpose | hc high capacity (thin case, big blast) | ap armour
+// piercing / semi-armour piercing (smaller blast) | cl cluster (wide spread of small bomblets) | rt retarded (parachute /
+// Snakeye fins: safe low-level release) | lgb laser-guided | gps satellite-guided. Damage and blast radius follow the mass.
+const BOMB_LIST = [
+  // ---- WW1
+  ['cooper', 'Cooper 20 lb bomb', 9, [1, 2], ['uk', 'usa', 'fra', 'ussr'], 'gp'],
+  ['rl112', '112 lb RL bomb', 51, [1, 2], ['uk', 'usa'], 'gp'], ['rl230', '230 lb RL bomb', 104, [1, 2], ['uk'], 'gp'],
+  ['puw12', 'P.u.W. 12.5 kg bomb', 12.5, [1, 2], ['ger'], 'gp'], ['puw50', 'P.u.W. 50 kg bomb', 50, [1, 2], ['ger'], 'gp'], ['puw100', 'P.u.W. 100 kg bomb', 100, [1, 2], ['ger'], 'gp'], ['puw300', 'P.u.W. 300 kg bomb', 300, [1, 1], ['ger'], 'gp'],
+  ['ga10', 'Gros-Andreau 10 kg bomb', 10, [1, 2], ['fra'], 'gp'], ['ga50', 'Gros-Andreau 50 kg bomb', 50, [1, 2], ['fra'], 'gp'],
+  ['pood', '1 pood (16 kg) bomb', 16, [1, 2], ['ussr'], 'gp'], ['pood5', '5 pood (82 kg) bomb', 82, [1, 2], ['ussr'], 'gp'],
+  // ---- between the wars
+  ['m30', 'M30 100 lb GP bomb', 45, [2, 2], ['usa'], 'gp'], ['m31', 'M31 300 lb GP bomb', 136, [2, 2], ['usa'], 'gp'], ['m32', 'M32 600 lb GP bomb', 272, [2, 2], ['usa'], 'gp'], ['m33', 'M33 1100 lb GP bomb', 499, [2, 2], ['usa'], 'gp'],
+  ['fra50', '50 kg G.P. bomb (French 1930s)', 50, [2, 3], ['fra'], 'gp'], ['fra200', '200 kg G.P. bomb (French 1930s)', 200, [2, 3], ['fra'], 'gp'], ['fra500', '500 kg G.P. bomb (French 1930s)', 500, [2, 3], ['fra'], 'gp'],
+  ['type94_60', 'Type 97 No. 6 (60 kg)', 60, [2, 3], ['jpn'], 'gp'],
+  // ---- WW2
+  ['an_m30', 'AN-M30 100 lb GP bomb', 45, [3, 4], ['usa'], 'gp'], ['an_m57', 'AN-M57 250 lb GP bomb', 113, [3, 4], ['usa'], 'gp'], ['an_m64', 'AN-M64 500 lb GP bomb', 227, [3, 4], ['usa'], 'gp'],
+  ['an_m65', 'AN-M65 1000 lb GP bomb', 454, [3, 4], ['usa'], 'gp'], ['an_m66', 'AN-M66 2000 lb GP bomb', 907, [3, 4], ['usa'], 'gp'], ['an_m1a2', 'AN-M1A2 cluster (6 x 20 lb frag)', 57, [3, 4], ['usa'], 'cl'],
+  ['sc50', 'SC 50 bomb', 50, [2, 3], ['ger'], 'gp'], ['sc250', 'SC 250 bomb', 250, [2, 4], ['ger'], 'gp'], ['sc500', 'SC 500 bomb', 500, [3, 4], ['ger'], 'gp'], ['sd250', 'SD 250 fragmentation bomb', 250, [3, 4], ['ger'], 'ap'],
+  ['sc1000', 'SC 1000 "Hermann"', 1000, [3, 4], ['ger'], 'gp'], ['sc1800', 'SC 1800 "Satan"', 1800, [3, 4], ['ger'], 'gp'], ['ab250', 'AB 250 container (SD 2 bomblets)', 250, [3, 4], ['ger'], 'cl'],
+  ['gp250', '250 lb GP Mk IV', 113, [2, 4], ['uk'], 'gp'], ['mc500', '500 lb MC Mk II', 227, [3, 4], ['uk'], 'gp'], ['mc1000', '1000 lb MC Mk I', 454, [3, 4], ['uk'], 'gp'],
+  ['hc4000', '4000 lb HC "Cookie"', 1810, [3, 4], ['uk'], 'hc'],
+  ['fab50', 'FAB-50', 50, [2, 4], ['ussr'], 'gp'], ['fab100', 'FAB-100', 100, [2, 4], ['ussr'], 'gp'], ['fab250', 'FAB-250', 250, [2, 4], ['ussr'], 'gp'], ['fab500', 'FAB-500', 500, [3, 4], ['ussr'], 'gp'],
+  ['fab1000', 'FAB-1000', 1000, [3, 4], ['ussr'], 'gp'], ['ptab', 'PTAB-2.5-1.5 cassettes (anti-tank)', 90, [3, 4], ['ussr'], 'cl'],
+  ['t99_25', 'Type 98 No. 25 (250 kg)', 250, [3, 4], ['jpn'], 'gp'], ['t99_25ap', 'Type 99 No. 25 (250 kg SAP)', 250, [3, 4], ['jpn'], 'ap'], ['t99_80', 'Type 99 No. 80 (800 kg AP)', 800, [3, 3], ['jpn'], 'ap'], ['t92_50', 'Type 92 50 kg', 50, [3, 4], ['jpn'], 'gp'],
+  // ---- Cold War and modern
+  ['m117', 'M117 750 lb bomb', 340, [4, 6], ['usa'], 'gp'], ['mk81', 'Mk 81 250 lb', 119, [5, 7], 'west', 'gp'], ['mk82', 'Mk 82 500 lb', 241, [5, 7], 'west', 'gp'], ['mk82se', 'Mk 82 Snakeye (retarded)', 252, [5, 7], 'west', 'rt'],
+  ['mk83', 'Mk 83 1000 lb', 447, [5, 7], 'west', 'gp'], ['mk84', 'Mk 84 2000 lb', 925, [5, 7], 'west', 'gp'], ['cbu87', 'CBU-87 Combined Effects Munition', 430, [6, 7], ['usa', 'uk', 'ger', 'jpn'], 'cl'],
+  ['gbu12', 'GBU-12 Paveway II (500 lb laser-guided)', 277, [6, 7], 'west', 'lgb'], ['gbu10', 'GBU-10 Paveway II (2000 lb laser-guided)', 934, [6, 7], ['usa', 'uk'], 'lgb'],
+  ['gbu38', 'GBU-38 JDAM (500 lb GPS-guided)', 253, [7, 7], ['usa', 'jpn'], 'gps'], ['gbu31', 'GBU-31 JDAM (2000 lb GPS-guided)', 934, [7, 7], ['usa'], 'gps'],
+  ['uk1000', '1000 lb GP Mk 20', 454, [5, 7], ['uk'], 'gp'], ['bl755', 'BL755 cluster bomb', 277, [5, 7], ['uk', 'ger'], 'cl'], ['pw1000', 'Paveway II 1000 lb (laser-guided)', 450, [6, 7], ['uk'], 'lgb'],
+  ['samp250', 'SAMP 250 kg bomb', 250, [5, 7], ['fra'], 'gp'], ['samp400', 'SAMP 400 kg bomb', 400, [5, 7], ['fra'], 'gp'], ['bap100', 'BAP 100 runway-cratering bomb', 32, [6, 7], ['fra'], 'ap'],
+  ['belouga', 'BLG 66 Belouga cluster bomb', 305, [6, 7], ['fra'], 'cl'], ['aasm', 'AASM Hammer (250 kg guided)', 340, [7, 7], ['fra'], 'gps'],
+  ['fab250m54', 'FAB-250M54', 268, [5, 6], ['ussr'], 'gp'], ['fab500m62', 'FAB-500M62', 500, [5, 7], ['ussr'], 'gp'], ['ofab250', 'OFAB-250-270', 266, [5, 7], ['ussr'], 'gp'],
+  ['fab1500', 'FAB-1500M54', 1550, [5, 6], ['ussr'], 'gp'], ['rbk500', 'RBK-500 cluster bomb', 500, [6, 7], ['ussr'], 'cl'], ['kab500', 'KAB-500L (laser-guided)', 525, [6, 7], ['ussr'], 'lgb'], ['kab500s', 'KAB-500S (satellite-guided)', 560, [7, 7], ['ussr'], 'gps'],
+];
+for (const [id, name, kg, eras, who, type] of BOMB_LIST) {
+  // blast: ~420 damage and 22 m at 50 kg, ~4300 and 62 m at 1000 kg; thin-cased HC bombs blast further, AP bombs less
+  const k = { gp: [1, 1], hc: [1.45, 1.3], ap: [0.85, 0.7], cl: [0.75, 1.6], rt: [1, 1], lgb: [1.05, 1], gps: [1.05, 1] }[type];
+  STORES[id] = { kind: 'b', name, mass: kg, eras, dmg: Math.round(420 * Math.pow(kg / 50, 0.777) * k[0]), rad: Math.round(8 * Math.pow(kg, 0.3) * k[1]), type,
+    guided: type === 'lgb' || type === 'gps', price: Math.round(55 * Math.pow(kg, 0.55) * (1 + (eras[0] - 1) * 0.3) * (type === 'lgb' || type === 'gps' ? 2.4 : type === 'cl' ? 1.4 : 1) / 10) * 10,
+    ...(Array.isArray(who) ? { nat: who } : { bloc: who }) };
+}
+// saves from before the named bombs: each old generic bomb becomes the nearest bomb by mass that the aircraft can carry
+const OLD_BOMBS = { b50: 50, b100: 100, b250: 250, b500: 500, b1000: 1000 };
 const KIND_NAMES = { b: 'Bombs', r: 'Rockets', m: 'Missiles', g: 'Gun pods' };
 
 // ---- Airframe upgrades. Bought once per aircraft, then installed / removed freely.

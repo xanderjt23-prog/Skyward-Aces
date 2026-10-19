@@ -48,7 +48,15 @@ const Profile = (() => {
     if (!m) m = p.mods[planeId] = { belts: {}, beltSel: {}, stores: {}, loadout: null, upg: {}, inst: {} };
     const pl = PLANES[planeId];
     if (!m.slots || m.slots.length !== Loadout.slots(pl).length) m.slots = Loadout.normalise(pl, m.loadout, false); // per pylon (older saves: per group)
+    migrateBombs(pl, m);
     return m;
+  }
+  // the generic bombs of older versions (b50 .. b1000) become the named bomb of the nearest mass this aircraft carries
+  function migrateBombs(pl, m) {
+    const sl = Loadout.slots(pl), near = (kg, slot) => Object.keys(STORES).filter(id => STORES[id].kind === 'b' && (slot ? Loadout.allowed(pl, slot, id) : storesFor(pl).includes(id)))
+      .sort((a, b) => Math.abs(STORES[a].mass - kg) - Math.abs(STORES[b].mass - kg))[0] || null;
+    for (const old in OLD_BOMBS) if (m.stores[old]) { delete m.stores[old]; const n = near(OLD_BOMBS[old]); if (n) m.stores[n] = true; }
+    m.slots = m.slots.map((id, i) => id && OLD_BOMBS[id] ? near(OLD_BOMBS[id], sl[i]) : id);
   }
   function gunsOf(pl) { const s = new Set(pl.guns.map(g => g[0])); return [...s]; }
   function buy(cost) { if (p.coins < cost) return false; p.coins -= cost; bump('modsBought', 1); return true; }
