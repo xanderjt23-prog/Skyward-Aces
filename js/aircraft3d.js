@@ -228,14 +228,16 @@
     pl = lv ? Object.assign(Object.create(pl), { livery: lv }) : pl;
     // every craft gets its own meshes (wings are hidden when shot off) over shared geometry
     const c = cache[key], g = new THREE.Group();
-    const mk = (src, parent) => { const m = new THREE.Mesh(src.geometry, src.material); m.position.copy(src.position); m.rotation.copy(src.rotation); m.scale.copy(src.scale); m.visible = src.visible; m.name = src.name; for (const ch of src.children) m.add(mk(ch)); if (parent) parent.add(m); return m; };
+    const mk = (src, parent) => { const m = new THREE.Mesh(src.geometry, src.material); m.userData = src.userData; m.position.copy(src.position); m.rotation.copy(src.rotation); m.scale.copy(src.scale); m.visible = src.visible; m.name = src.name; for (const ch of src.children) m.add(mk(ch)); if (parent) parent.add(m); return m; };
     const body = mk(c.body, g), glass = mk(c.glass, g), wingL = mk(c.wingL, g), wingR = mk(c.wingR, g);
     const pilot = glass.children.find(o => o.name === 'pilot') || null;
     const marks = c.marks ? mk(c.marks, g) : null, lamps = c.lamps ? mk(c.lamps, g) : null;
     const props = c.props.map(p => { const q = new THREE.Group(); q.position.copy(p.position); for (const ch of p.children) q.add(mk(ch)); g.add(q); return q; });
     const glows = c.glows.map(gl => mk(gl, g));
     const gear = c.gear ? mk(c.gear, g) : null;
-    g.userData = { props, glows, wingL, wingR, body, glass, pilot, marks, lay: Models.layout(pl), gear };
+    // moving surfaces: flap panels on the wings, air-brake panels on the body (hinge axis and travel in userData.hinge)
+    const movers = []; g.traverse(o => { if (o.userData && o.userData.hinge) movers.push(o); });
+    g.userData = { props, glows, wingL, wingR, body, glass, pilot, marks, lay: Models.layout(pl), gear, movers };
     return g;
   };
 
@@ -701,6 +703,35 @@
     if (pilotB.parts.length) { const pm = new THREE.Mesh(pilotB.build(), mat('vc')); pm.name = 'pilot'; grp.glass.add(pm); }
     if (ckB.parts.length) grp.glass.add(new THREE.Mesh(ckB.build(), mat('vc')));
     grp.wingL = new THREE.Mesh(wl.build(skin), skinM); grp.wingR = new THREE.Mesh(wr.build(skin), skinM);
+    // ---- flaps: a panel under the trailing edge of the inner wing (0.74 chord to the trailing edge), hinged at its front
+    // edge; it lies inside the wing when up and swings down when lowered (split / plain flap). Built in hinge-local
+    // coordinates and rotated about the hinge line (inner to outer hinge point) by the aircraft each frame
+    const hingePanel = (pts, color, name, hinge) => { const b = new Builder(); b.add(pts.geo, color); const m = new THREE.Mesh(b.build(skin), skinM);
+      m.position.set(...pts.at); m.name = name; m.userData = { hinge }; return m; };
+    if (pl.flaps && pl.flaps !== 'none' && !sp.bi) { const g = sp.wings[0], f0 = 0.1, f1 = sp.wing.tc > sp.wing.rc * 0.15 ? 0.5 : 0.36;
+      const st = [f0, (f0 + f1) / 2, f1].map(f => { const w = sp.wingAt(f, g); return { x: w.x, le: w.le + w.c * 0.74, c: w.c * 0.25, y: w.y - naca(0.86, g.t) * w.c * 0.55, t: 0.06 }; });
+      const a = new V(st[0].x, st[0].y, st[0].le), b2 = new V(st[2].x, st[2].y, st[2].le), axis = b2.clone().sub(a).normalize();
+      const geo = loftSurface(st, 6, 'flap'); geo.translate(-a.x, -a.y, -a.z);
+      for (const [wing, s] of [[grp.wingR, 1], [grp.wingL, -1]]) { const gg = s > 0 ? geo : mirrorX(geo);
+        const m = hingePanel({ geo: gg, at: [s * a.x, a.y, a.z] }, camo, 'flap', { kind: 'flap', axis: [s * axis.x, axis.y, axis.z], sign: s }); wing.add(m); }
+      rule(true, 'flap panels hinged at 74% chord, ' + Math.round(f0 * 100) + '-' + Math.round(f1 * 100) + '% semi-span, animated'); }
+    // ---- air brakes: jets - side panels on the rear fuselage hinged at their front edge (a dorsal panel on the twin-tail deck
+    // jets, F-15 / Su-27 style); dive bombers - perforated plates under the wings that swing down 80-90 deg
+    grp.brakes = [];
+    if (pl.airbrake) {
+      if (!sp.jet) { const g = sp.wings[0]; for (const f of [0.28, 0.48]) { const w = sp.wingAt(f, g), len = Math.min(1.2, w.c * 0.45), wid = Math.max(0.6, (g.b - g.x0) * 0.18);
+          const geo = box(wid, 0.03, len); geo.translate(0, 0, len / 2);
+          for (const [wing, s] of [[grp.wingR, 1], [grp.wingL, -1]]) wing.add(hingePanel({ geo, at: [s * w.x, w.y - naca(0.2, g.t) * w.c - 0.03, w.le + w.c * 0.2] }, shade(pt.bot, 0.8), 'divebrake', { kind: 'brake', axis: [1, 0, 0], sign: -1, max: 85 })); }
+        rule(true, 'dive brakes under the wings, animated'); }
+      else if (deck) { const z = sp.wing.rootZ + sp.wing.rc * 0.15, len = Math.min(2.6, L * 0.13), wid = Math.min(1.4, sp.at(z).w * 1.4), y = sp.topAt(z) + 0.01;
+        const geo = box(wid, 0.05, len); geo.translate(0, 0.025, len / 2); body.parts.length; grp.brakes.push(hingePanel({ geo, at: [0, y, z] }, pt.top, 'speedbrake', { kind: 'brake', axis: [1, 0, 0], sign: 1, max: 45 }));
+        rule(true, 'dorsal speed brake behind the cockpit, animated'); }
+      else { const z = z0 + L * 0.62, y = sp.at(z).y, len = Math.min(1.6, L * 0.09), hh = Math.min(0.7, sp.at(z).h * 0.8), x = surfX(z, y);
+        for (const s of [-1, 1]) { const geo = box(0.04, hh, len); geo.translate(0, 0, len / 2);
+          grp.brakes.push(hingePanel({ geo, at: [s * (x + 0.02), y, z] }, pt.top, 'speedbrake', { kind: 'brake', axis: [0, 1, 0], sign: -s, max: 55 })); }
+        rule(true, 'side speed brakes on the rear fuselage, animated'); }
+      for (const m of grp.brakes) grp.body.add(m);
+    }
     const mergePre = (b) => { // markings: some parts arrive already coloured (rotated insignia)
       const pre = b.parts.filter(p => p.preColored), plain = new Builder(); plain.parts = b.parts.filter(p => !p.preColored);
       const geos = []; if (plain.parts.length) geos.push(plain.build()); for (const p of pre) geos.push(p.g);

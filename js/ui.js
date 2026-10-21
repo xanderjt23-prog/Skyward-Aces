@@ -240,6 +240,7 @@ const UI = (() => {
       <div class="field"><label>Volume</label><input type="range" id="pf-vol" min="0" max="1" step="0.05" value="${st.volume}"></div>
       <div class="field"><label><input type="checkbox" id="pf-inv" ${st.invert ? 'checked' : ''}> Invert mouse Y</label></div>
       <div class="field"><label><input type="checkbox" id="pf-assist" ${st.assist !== false ? 'checked' : ''}> Gunnery assist — when your aim circle is on the red lead marker, the instructor tracks it for you</label></div>
+      <div class="field"><label>Gunnery assist range: <span id="pf-arv">${Math.round((st.assistRange == null ? 1 : st.assistRange) * 100)}%</span> <span class="small muted">(100% = from 1.2 km, 0% = never)</span></label><input type="range" id="pf-arange" min="0" max="1" step="0.05" value="${st.assistRange == null ? 1 : st.assistRange}"></div>
       <div class="field"><label>Crosshair colour</label><div class="row"><input type="color" id="pf-cross" value="${st.cross || '#ffffff'}"><span class="small muted">Pick a colour that stands out against snow, sea or sky.</span></div></div>
       <h3 style="margin-top:18px">Controls</h3><p class="small muted">Mouse moves the aim circle and the aircraft follows it. Click a binding, then press a key or mouse button (Esc cancels).</p>
       <div id="binds">${Input.ACTIONS.map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
@@ -253,6 +254,7 @@ const UI = (() => {
     $('#pf-inv').onchange = e => { st.invert = e.target.checked; Profile.save(); };
     $('#pf-cross').oninput = e => { st.cross = e.target.value; Profile.save(); };
     $('#pf-assist').onchange = e => { st.assist = e.target.checked; Profile.save(); };
+    $('#pf-arange').oninput = e => { st.assistRange = +e.target.value; $('#pf-arv').textContent = Math.round(st.assistRange * 100) + '%'; Profile.save(); };
     $('#pf-binds-reset').onclick = () => { Input.reset(); renderProfile(); };
     $$('[data-bind]').forEach(b => b.onclick = () => captureBind(b));
     $('#pf-reset').onclick = () => { if (confirm('Reset all progress? This cannot be undone.')) { Profile.reset(); refresh(); renderProfile(); Game.showPlane(P().selected); } };

@@ -6,6 +6,7 @@
 const V3 = THREE.Vector3;
 const CONV = [0, 150, 220, 300, 400, 500, 500, 500]; // gun convergence by era (m)
 
+const _ax = new THREE.Vector3();
 class Craft {
   static SERVICE_TIME = 12;
   static FLAP_NAMES = ['up', 'combat', 'take-off', 'landing'];
@@ -114,8 +115,11 @@ class Craft {
     const target = g > tol ? Math.min(1, (g - tol) / 2.2) : g < -2.5 ? -Math.min(1, (-g - 2.5) / 1.5) : 0;
     const v = this.gVision || 0, k = Math.abs(target) > Math.abs(v) ? dt / 1.1 : dt / 0.7; // blood drains slower than it returns
     this.gVision = v + (target - v) * Math.min(1, k);
+    // the brain keeps ~4-6 s of oxygen after the blood pressure at eye level drops, so G-LOC comes several seconds after a
+    // hard pull, not at once; above the tolerance the pilot also tires (straining), so even 9 G with a G-suit ends in G-LOC
+    // after tens of seconds. Below the tolerance it recovers.
     let s = this.gStress || 0;
-    if (g > hard) s += (g - hard) * 0.45 * dt; else if (g < -3.5) s += (-g - 3.5) * 0.5 * dt; else s -= 0.22 * dt;
+    if (g > hard) s += ((g - hard) * 0.12 + (g - tol) * 0.015) * dt; else if (g > tol) s += (g - tol) * 0.015 * dt; else if (g < -3.5) s += (-g - 3.5) * 0.25 * dt; else s -= 0.22 * dt;
     this.gStress = Math.max(0, s);
     if (this.glocT > 0) { this.glocT -= dt; if (this.glocT <= 0) this.gStress = 0.45; }
     else if (this.gStress >= 1 && this.dm.fx.ctrl) { this.glocT = 4.5 + Math.random() * 1.5; if (this === this.match.player) this.match.events.push({ t: this.match.time, e: 'gloc', text: 'G-LOC — blacked out!' }); }
@@ -363,6 +367,17 @@ class Craft {
     for (const p of u.props) p.rotation.z += dt * (12 + thr * 60);
     this.updateStoreMeshes();
     if (u.gear) u.gear.visible = !!(this.gearDown || (this.netFlags & 16) && !this.local);
+    // flaps and air brakes move at a real hydraulic / electric pace (a few seconds end to end), not instantly
+    if (u.movers && u.movers.length) {
+      const notch = this.local ? this.flaps : (this.netFlags >> 6) & 3, brake = this.local ? this.airbrakeOut : !!(this.netFlags & 32);
+      let flapT = this.flapsBroken ? 0 : [0, 12, 25, 45][notch] || 0;
+      if (this.def.flaps === 'auto' && this.alive) flapT = Math.max(0, Math.min(18, (this.alpha * 57.3 - 4) * 1.6)) * (this.speed < this.perf.vmax * 0.6 ? 1 : 0); // manoeuvre flaps follow the AoA
+      this.flapA = (this.flapA || 0) + Math.max(-dt * 9, Math.min(dt * 9, flapT - (this.flapA || 0)));
+      this.brakeA = (this.brakeA || 0) + Math.max(-dt * 0.8, Math.min(dt * 0.8, (brake ? 1 : 0) - (this.brakeA || 0))); // ~1.3 s to open
+      this.brakeA = Math.max(0, Math.min(1, this.brakeA));
+      for (const m of u.movers) { const h = m.userData.hinge, ang = h.kind === 'flap' ? this.flapA * h.sign : this.brakeA * (h.max || 45) * h.sign;
+        m.quaternion.setFromAxisAngle(_ax.set(h.axis[0], h.axis[1], h.axis[2]), ang * Math.PI / 180); }
+    }
     const ab = this.afterburner || (this.netFlags & 4);
     for (const gl of u.glows) { gl.visible = !!ab && !this.wreck; if (ab) gl.scale.set(1, 1, 0.8 + Math.random() * 0.4); }
     // smoke and fire trails from damaged components
@@ -390,7 +405,7 @@ class Craft {
   packState() {
     const p = this.pos, q = this.quat, v = this.vel, r1 = x => Math.round(x * 10) / 10, r3 = x => Math.round(x * 1000) / 1000;
     let f = 0; const t = this.match.time;
-    if (t - (this.firingGuns || -9) < 0.15) f |= 1; if (t - (this.firingTurret || -9) < 0.15) f |= 2; if (this.afterburner) f |= 4; if (this.wreck) f |= 8; if (this.gearDown) f |= 16;
+    if (t - (this.firingGuns || -9) < 0.15) f |= 1; if (t - (this.firingTurret || -9) < 0.15) f |= 2; if (this.afterburner) f |= 4; if (this.wreck) f |= 8; if (this.gearDown) f |= 16; if (this.airbrakeOut) f |= 32; f |= (this.flaps & 3) << 6;
     const s = [this.id, this.alive ? 1 : 0, r1(p.x), r1(p.y), r1(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w), r1(v.x), r1(v.y), r1(v.z), Math.round(this.ctl.throttle * 100), f];
     return s;
   }

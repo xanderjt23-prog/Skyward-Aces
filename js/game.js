@@ -139,9 +139,10 @@ const Game = (() => {
     const m = G.match;
     G.aimDir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     let steerDir = G.aimDir; G.assisting = false;
-    if (Profile.get().settings.assist !== false && G.target && G.target.alive) {
+    const st0 = Profile.get().settings, aRange = 1200 * (st0.assistRange == null ? 1 : st0.assistRange); // the range it starts helping at (100% = 1.2 km)
+    if (st0.assist !== false && aRange > 0 && G.target && G.target.alive) {
       const d = G.target.pos.distanceTo(p.pos);
-      if (d < 1500) { const ld = p.leadPoint(G.target).sub(p.pos).normalize(); if (Math.acos(Math.max(-1, Math.min(1, ld.dot(G.aimDir)))) < 0.07) { steerDir = ld; G.assisting = true; } }
+      if (d < aRange) { const ld = p.leadPoint(G.target).sub(p.pos).normalize(); if (Math.acos(Math.max(-1, Math.min(1, ld.dot(G.aimDir)))) < 0.07) { steerDir = ld; G.assisting = true; } }
     }
     Flight.steer(p, steerDir, p.ctl, { allowPush: false, pilot: true });
     // on the wheels the aim steers the nose wheel; the wings stay level

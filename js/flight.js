@@ -13,6 +13,7 @@ const Flight = (() => {
   //  - drag is set so the listed top speed is reached at the altitude the type was fastest at:
   //    low for WW1 / interwar types and subsonic jets, ~5 km for WW2 fighters, ~10 km with afterburner
   const SONIC = 330;
+  const FBW = ['f16c', 'f2a', 'fa18e', 'f22a', 'f35a', 'ef2000g', 'ef2000uk', 'rafalec', 'm2000c', 'm2000d', 'su27', 'su35s', 'su57', 'su34'];
   const TVC = ['f22a', 'su35s', 'su57']; // thrust-vectoring nozzles
   // flap settings 0 up / 1 combat / 2 take-off / 3 landing: stall speed factor, drag factor, max speed (fraction of vmax)
   const FLAP_VS = [1, 0.92, 0.85, 0.77], FLAP_DRAG = [1, 1.05, 1.16, 1.4], FLAP_VFE = [9, 0.72, 0.58, 0.45];
@@ -59,6 +60,8 @@ const Flight = (() => {
     P.cI = 1.5 * (jet ? P.a0dry * 1.2 : P.a0) / (P.gMax * G * P.gMax * G);
     P.roll = def.roll * Math.PI / 180; P.aoa = def.aoa * Math.PI / 180;
     P.tvc = TVC.includes(def.id); P.superman = P.tvc || def.aoa >= 40;
+    // fly-by-wire jets whose flight control system holds the load factor at the limit whatever the pilot does
+    P.fbw = FBW.includes(def.id);
     P.wPost = P.tvc ? 1.7 : 1.1; // pitch rate the nose can be hauled through post-stall (manual override only)
     // G tolerance of the pilot: no G-suit before the jet age, G-suits and straining technique after
     P.gTol = [0, 4.5, 4.8, 5.0, 5.5, 6.0, 7.0, 7.5][def.era];
@@ -98,7 +101,8 @@ const Flight = (() => {
     let pc = ctl.pitch * auth * fx.elev, rc = ctl.roll * auth * fx.ail, yc = ctl.yaw * auth * fx.rud;
     if (!ctrlOk) { pc = fx.drift[0]; rc = fx.drift[1]; yc = 0; }
     let tp = pc * (pc > 0 ? lim : lim * 0.5) * compress;
-    if (ctl.manual && P.superman && pc > 0.6) tp = Math.max(tp, pc * P.wPost * (P.tvc ? Math.max(0.4, Math.min(1, ctl.throttle)) : Math.min(1, v / (P.vs * 2.2))));
+    // post-stall pitch authority only below corner speed: a cobra is flown at ~400 km/h, not at high speed
+    if (ctl.manual && P.superman && pc > 0.6 && v < P.vc) tp = Math.max(tp, pc * P.wPost * (P.tvc ? Math.max(0.4, Math.min(1, ctl.throttle)) : Math.min(1, v / (P.vs * 2.2))));
     const tr = rc * P.roll * lowSpeed * compress * Math.min(fx.ailL, fx.ailR) / Math.max(0.35, (fx.ailL + fx.ailR) / 2);
     const ty = yc * P.wInst * 0.22 * lowSpeed;
     const k = 1 - Math.exp(-dt * 6);
@@ -132,7 +136,8 @@ const Flight = (() => {
     const cl = aAbs < P.aoa ? alpha / P.aoa : Math.sign(alpha) * Math.max(Math.abs(Math.sin(2 * alpha)) * 0.65, 1 - (aAbs - P.aoa) * 2.5);
     const wingLift = (fx.liftL + fx.liftR) / 2;
     let L = cl * qn * G * wingLift;
-    const Lmax = P.gMax * G * 1.5; if (Math.abs(L) > Lmax) L = Math.sign(L) * Lmax;
+    // fly-by-wire: the G limiter holds the limit load (and -3 G); other aircraft can be overstressed up to the ultimate load
+    const Lmax = P.fbw ? (L > 0 ? P.gMax : 3) * G : P.gMax * G * 1.5; if (Math.abs(L) > Lmax) L = Math.sign(L) * Lmax;
     tmp.copy(up).addScaledVector(vhat, -up.dot(vhat)); if (tmp.lengthSq() > 1e-6) tmp.normalize();
     acc.addScaledVector(tmp, L);
     // side force from sideslip
