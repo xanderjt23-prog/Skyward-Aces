@@ -79,7 +79,7 @@ const UI = (() => {
   // ---------------------------------------------------------------- hangar
   // real photographs (Wikimedia Commons, js/photocredits.js): the image with its credit, or null when there is none
   const photoOf = (kind, id) => (typeof PHOTO_CREDITS !== 'undefined' && PHOTO_CREDITS[kind + '/' + id]) || null;
-  const credit = c => `Photo: ${c.author} · ${c.licence} · Wikimedia Commons`;
+  const credit = c => `Photo: ${String(c.author).replace(/^(.+?)\1$/, '$1')} · ${c.licence} · Wikimedia Commons`;
   const photoTag = (kind, id, cls) => { const c = photoOf(kind, id); return c ? `<img class="${cls || 'photo'}" src="${c.src}" loading="lazy" alt="" title="${esc(credit(c))}">` : ''; };
   function renderHangar() {
     hangarNation = hangarNation || cur().nation; const p = P();
