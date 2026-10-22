@@ -19,25 +19,29 @@ const HUD = (() => {
     clear();
     const m = game.match, p = m.player, cam = game.camera; if (!m) return;
     const fwd = p && p.alive ? new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat) : null;
+    // cockpit view: the aircraft's own sight / HUD replaces the game's screen aids; arcade keeps small unlabelled
+    // markers for spotting, realistic mode shows nothing but the cockpit
+    const pit = game.camMode === 'nose' && p && p.alive, bare = pit && m.cfg.realistic;
     // markers for aircraft
     const maxD = m.half * 0.9;
     for (const c of m.crafts) {
-      if (c === p || !c.alive) continue;
-      const d = cam.position.distanceTo(c.pos); if (d > maxD) continue;
+      if (c === p || !c.alive || bare) continue;
+      const d = cam.position.distanceTo(c.pos); if (d > maxD || (pit && d > 6000)) continue;
       const s = proj(c.pos, cam); if (!s) continue;
       const enemy = !p || c.team !== p.team, col = c.wreck ? 'rgba(200,200,200,0.5)' : enemy ? COL.enemy : COL.ally;
       g.fillStyle = col; g.beginPath(); g.moveTo(s.x - 5, s.y - 14); g.lineTo(s.x + 5, s.y - 14); g.lineTo(s.x, s.y - 8); g.fill();
-      if (d < 3500 || c === game.target) { text(`${c.def.short}${c.human ? ' · ' + c.name : ''}`, s.x, s.y - 18, col, 11, 'center');
+      if (!pit && (d < 3500 || c === game.target)) { text(`${c.def.short}${c.human ? ' · ' + c.name : ''}`, s.x, s.y - 18, col, 11, 'center');
         text(d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1) + ' km', s.x, s.y + 16, col, 10, 'center'); }
-      if (c === game.target) { g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(s.x - 12, s.y - 12, 24, 24); }
+      if (c === game.target && !pit) { g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(s.x - 12, s.y - 12, 24, 24); }
     }
     // bases + health bars when close
     for (const b of m.bases) {
-      if (b.dead) continue;
+      if (b.dead || bare) continue;
       const s = proj(b.pos, cam); if (!s) continue;
       const d = cam.position.distanceTo(b.pos), enemy = !p || b.team !== p.team, col = enemy ? COL.enemy : COL.ally;
       const sz = { small: 'S', medium: 'M', big: 'L' }[b.size];
       g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(s.x - 7, s.y - 7, 14, 14); text(sz, s.x, s.y + 4, col, 10, 'center', true);
+      if (pit) continue;
       if (b.objective) text('★', s.x + 12, s.y + 4, '#ffd34d', 12, 'left');
       if (b.home) text(b.team === (p ? p.team : 0) ? 'HOME AIRFIELD' : 'ENEMY AIRFIELD', s.x, s.y + 20, col, 10, 'center', true);
       const near = Math.max(1800, m.half * 0.22);
@@ -48,22 +52,23 @@ const HUD = (() => {
     }
     // tanks: a small marker, health bar up close
     for (const v of m.vehicles.list) {
-      if (v.dead) continue; const d = cam.position.distanceTo(v.pos); if (d > 4500) continue;
+      if (v.dead || bare) continue; const d = cam.position.distanceTo(v.pos); if (d > 4500) continue;
       const s = proj(v.pos.clone().add(new THREE.Vector3(0, 3, 0)), cam); if (!s) continue;
       const col = !p || v.team !== p.team ? COL.enemy : COL.ally;
       g.fillStyle = col; g.beginPath(); g.moveTo(s.x, s.y - 5); g.lineTo(s.x + 5, s.y); g.lineTo(s.x, s.y + 5); g.lineTo(s.x - 5, s.y); g.fill();
-      if (d < 1500) { const f = v.hp / v.max; g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(s.x - 15, s.y - 12, 30, 4); g.fillStyle = col; g.fillRect(s.x - 15, s.y - 12, 30 * f, 4); text(v.name, s.x, s.y + 16, col, 9, 'center'); }
+      if (d < 1500 && !pit) { const f = v.hp / v.max; g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(s.x - 15, s.y - 12, 30, 4); g.fillStyle = col; g.fillRect(s.x - 15, s.y - 12, 30 * f, 4); text(v.name, s.x, s.y + 16, col, 9, 'center'); }
     }
     if (p && p.alive && !p.wreck) {
       // nose reticle (where the guns converge) and mouse-aim circle
       const conv = CONV[p.def.era];
       const ns = proj(p.pos.clone().addScaledVector(fwd, conv), cam), cc = Profile.get().settings.cross || '#ffffff';
       // drawn twice: a dark outline first so the reticle shows on snow, cloud and sea alike
-      if (ns) for (const [col, w] of [['rgba(0,0,0,0.65)', 4], [cc, 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(ns.x - 14, ns.y); g.lineTo(ns.x - 5, ns.y); g.moveTo(ns.x + 5, ns.y); g.lineTo(ns.x + 14, ns.y); g.moveTo(ns.x, ns.y + 5); g.lineTo(ns.x, ns.y + 12); g.stroke(); ring(ns.x, ns.y, 2, col, w); }
-      if (game.mouseAim) { const as = proj(cam.position.clone().addScaledVector(game.aimDir, 2000), cam); if (as) { ring(as.x, as.y, 9, 'rgba(0,0,0,0.55)', 3.5); ring(as.x, as.y, 9, cc, 1.5); } }
+      if (ns && !pit) for (const [col, w] of [['rgba(0,0,0,0.65)', 4], [cc, 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(ns.x - 14, ns.y); g.lineTo(ns.x - 5, ns.y); g.moveTo(ns.x + 5, ns.y); g.lineTo(ns.x + 14, ns.y); g.moveTo(ns.x, ns.y + 5); g.lineTo(ns.x, ns.y + 12); g.stroke(); ring(ns.x, ns.y, 2, col, w); }
+      // the mouse-aim circle is the control input, not an aircraft system: in the cockpit only a small faint dot
+      if (game.mouseAim) { const as = proj(cam.position.clone().addScaledVector(game.aimDir, 2000), cam); if (as) { if (pit) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.arc(as.x, as.y, 2.5, 0, Math.PI * 2); g.fill(); } else { ring(as.x, as.y, 9, 'rgba(0,0,0,0.55)', 3.5); ring(as.x, as.y, 9, cc, 1.5); } } }
       // gun lead indicator: shown from a range that depends on the aircraft's gunsight (fixed sights in WW1, radar-ranging gunsights on jets)
       const t = game.target;
-      if (t && t.alive) {
+      if (t && t.alive && !pit) {
         const gun = p.guns[0], ms = gun ? gun.g.ms : 800, d = t.pos.distanceTo(p.pos);
         // bullets inherit our velocity, so lead by the relative velocity and lift for the drop
         if (d < LEAD_RANGE[p.def.era]) { const lp = p.leadPoint(t), ls = proj(lp, cam);
@@ -75,12 +80,12 @@ const HUD = (() => {
       // bomb sight: where bombs released now would hit. Realistic mode shows it only on aircraft with a computing bomb
       // sight in the HUD (CCIP on 4th-generation jets); level bombers use their bombsight view instead
       const ccip = !m.cfg.realistic || (p.def.kind === 'jet' && p.def.era >= 6);
-      if (game.camMode !== 'sight' && ccip && p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) bombSight(game, p, cam);
+      if (game.camMode !== 'sight' && !pit && ccip && p.count('b') > 0 && p.pos.y - m.world.groundAt(p.pos.x, p.pos.z) > 30) bombSight(game, p, cam);
       if (game.camMode === 'sight' && p.def.bombsight) sightView(game, p);
       // missile seeker
-      if (game.seeker) { const ss = proj(game.seeker.pos, cam); if (ss) { g.strokeStyle = game.locked ? '#ff3b30' : '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.arc(ss.x, ss.y, 18, 0, Math.PI * 2); g.stroke(); if (game.locked) text('LOCK', ss.x, ss.y - 24, '#ff3b30', 11, 'center', true); } }
-      if (m.hitMarker && m.time - m.hitMarker < 0.12 && ns) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2; for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.beginPath(); g.moveTo(ns.x + a * 8, ns.y + b * 8); g.lineTo(ns.x + a * 15, ns.y + b * 15); g.stroke(); } }
-      offscreen(game, p, cam); gauges(game, p); damageView(p); radar(game, p); warnings(game, p);
+      if (game.seeker && !pit) { const ss = proj(game.seeker.pos, cam); if (ss) { g.strokeStyle = game.locked ? '#ff3b30' : '#ffd34d'; g.lineWidth = 2; g.beginPath(); g.arc(ss.x, ss.y, 18, 0, Math.PI * 2); g.stroke(); if (game.locked) text('LOCK', ss.x, ss.y - 24, '#ff3b30', 11, 'center', true); } }
+      if (m.hitMarker && m.time - m.hitMarker < 0.12 && ns && !pit) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2; for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.beginPath(); g.moveTo(ns.x + a * 8, ns.y + b * 8); g.lineTo(ns.x + a * 15, ns.y + b * 15); g.stroke(); } }
+      if (!bare) offscreen(game, p, cam); gauges(game, p); if (!pit) { damageView(p); radar(game, p); } warnings(game, p);
     }
     topBar(game);
     if (p && p.alive && document.pointerLockElement !== document.getElementById('view') && !game.paused && !m.over) text('Click to take control (mouse aim)', W / 2, H * 0.62, '#ffd34d', 18, 'center', true);
@@ -170,8 +175,8 @@ const HUD = (() => {
       parts.push(`[${Input.label(Input.bind('weapon' + (i + 1)))}] ${short} ×${n}${s.kind === 'm' && id === game.armed && game.locked ? ' LOCK' : ''}`); });
     if (p.def.flares) parts.push(`${p.def.chaff ? "FLARE/CHAFF" : "FLARES"} ${p.flares} [${Input.label(Input.bind("flares"))}]`);
     if (game.match.cfg.realistic) parts.push(Models.layout(p.def).fixed ? 'GEAR FIXED' : p.gearDown ? 'GEAR ▼ DOWN' : 'GEAR ▲ UP');
-    if (pit) { const t2 = parts.join('   '); g.font = '12px sans-serif'; const w2 = g.measureText(t2).width + 24; g.fillStyle = 'rgba(8,14,22,0.5)'; round(cx - w2 / 2, 62, w2, 22, 8); g.fill(); text(t2, cx, 77, COL.white, 12, 'center'); }
-    else text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
+    if (pit && Cockpit.style(p.def) !== 'modern') { const t2 = parts.join('   '); g.font = '12px sans-serif'; const w2 = g.measureText(t2).width + 24; g.fillStyle = 'rgba(8,14,22,0.5)'; round(cx - w2 / 2, 62, w2, 22, 8); g.fill(); text(t2, cx, 77, COL.white, 12, 'center'); }
+    else if (!pit) text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');
   }
   function round(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   // ---- damage schematic: the aircraft's own plan view (fuselage outline, wing planform, tailplane, fins, nacelles from
