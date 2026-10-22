@@ -7,7 +7,7 @@
 const Tutorial = (() => {
   const K = a => Input.label(Input.bind(a));
   // the number key of the first weapon type on the player's aircraft that passes `test` (each type has its own key)
-  const WK = test => { const p = Game.match && Game.match.player, i = p ? p.weaponSlots().findIndex(id => test(STORES[id])) : -1; return i < 0 ? '?' : K('weapon' + (i + 1)); };
+  const WK = test => { const p = Game.match && Game.match.player, i = p ? p.weaponSlots().findIndex(id => id && test(STORES[id])) : -1; return i < 0 ? '?' : K('weapon' + (i + 1)); };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const agl = (m, p) => p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
   const bankDeg = p => { const ax = Flight.axes(p); return Math.atan2(-ax.right.y, ax.up.y) * 180 / Math.PI; };
@@ -36,7 +36,7 @@ const Tutorial = (() => {
     const ir = sl.map(s => best(s, isIR)), rad = sl.map(s => best(s, isRadar));
     return { belts: {}, perSlot: true, mods: {}, stores: sl.map((s, i) => s.band === 5 && ir[i] ? ir[i] : rad[i] && s.band >= 1 && s.band !== 5 ? rad[i] : ir[i]) }; }
   // the name of the first store on the player's aircraft that passes `test`
-  const WN = test => { const p = Game.match && Game.match.player, id = p && p.weaponSlots().find(id => test(STORES[id])); return id ? STORES[id].name.replace(/ \(.*\)$/, '') : 'missile'; };
+  const WN = test => { const p = Game.match && Game.match.player, id = p && p.weaponSlots().find(id => id && test(STORES[id])); return id ? STORES[id].name.replace(/ \(.*\)$/, '') : 'missile'; };
   const target = (id, plane, x, y, z, extra) => ({ id, team: 1, name: 'Target', plane, bot: true, owner: 'H', skill: 0, task: 'air', loadout: { belts: {}, stores: [], mods: {} }, lives: 1, passive: true, spawnAt: [x, y, z], ...(extra || {}) });
 
   const LIST = [

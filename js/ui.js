@@ -152,6 +152,7 @@ const UI = (() => {
         : `<button data-buystore="${id}" class="ghost">${KIND_ICON[st.kind]} ${esc(st.name)} <span class="muted">· buy ◎${fmt(st.price)}</span></button>`; }
     return h + `</div><div class="row" style="margin-top:8px"><button id="lo-clear">Empty every pylon</button></div></div>`;
   }
+  let keyPick = null; // the weapon picked in Modifications -> Weapon keys, waiting for its key
   function renderMods() {
     const p = P(); modsPlane = modsPlane && p.owned[modsPlane] ? modsPlane : p.selected;
     const pl = PLANES[modsPlane], m = Profile.modsOf(pl.id);
@@ -175,6 +176,16 @@ const UI = (() => {
       if (!sl.length) h += `<p class="muted">This aircraft has no hardpoints: it cannot carry bombs, rockets, missiles or gun pods.</p>`;
       else h += pylonDiagram(pl, m);
       if (sl.length) h += pylonPicker(pl, m);
+      // weapon keys: click a weapon, then the key to fire it with
+      if (sl.length) {
+        const fake = { stations: Loadout.of(pl, { stores: m.slots, perSlot: true }).map((id, i) => id && { id, s: STORES[id] }).filter(Boolean), lo: { keys: m.keys || {} } };
+        const slots = Craft.prototype.weaponSlots.call(fake);
+        const used = [...new Set(fake.stations.map(s => s.id))].filter(id => STORES[id].kind !== 'g');
+        h += `<div class="card" style="margin-top:10px"><h3 style="margin-top:0">Weapon keys</h3>${used.length ? `<p class="small muted">Click a weapon, then the key you want to fire it with.</p>
+          <div class="row">${used.map(id => `<button class="${keyPick === id ? 'primary' : ''}" data-kw="${id}">${esc(STORES[id].name)}</button>`).join('')}</div>
+          <div class="row" style="margin-top:8px">${[0, 1, 2, 3, 4, 5, 6, 7].map(k => `<button class="keycap ${keyPick ? 'click' : ''}" data-kk="${k}"><kbd>${esc(Input.label(Input.bind('weapon' + (k + 1))))}</kbd><span class="small">${slots[k] ? esc(STORES[slots[k]].name.replace(/ \(.*\)$/, '')) : '—'}</span></button>`).join('')}</div>`
+          : '<p class="small muted">Fit some weapons above, then choose their keys here.</p>'}</div>`;
+      }
       h += `</div><h3>Ordnance for this aircraft</h3><p class="muted small">Only weapons that fit this aircraft's hardpoints, era and nation are listed. Buy them once, then fit them above.</p>`;
       const avail = storesFor(pl);
       for (const k of ['b', 'r', 'm', 'g']) {
@@ -208,6 +219,8 @@ const UI = (() => {
     $$('[data-buybelt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.buybelt.split('|'); after(Profile.buyBelt(pl.id, g, k)); });
     $$('[data-belt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.belt.split('|'); Profile.selectBelt(pl.id, g, k); renderMods(); });
     $$('[data-buystore]').forEach(b => b.onclick = () => after(Profile.buyStore(pl.id, b.dataset.buystore)));
+    $$('[data-kw]').forEach(b => b.onclick = () => { keyPick = keyPick === b.dataset.kw ? null : b.dataset.kw; renderMods(); });
+    $$('[data-kk]').forEach(b => b.onclick = () => { if (!keyPick) return toastMenu('Click a weapon first'); Profile.setWeaponKey(pl.id, keyPick, +b.dataset.kk); keyPick = null; renderMods(); });
     $$('[data-buyupg]').forEach(b => b.onclick = () => after(Profile.buyUpgrade(pl.id, b.dataset.buyupg)));
     $$('[data-buylivery]').forEach(b => b.onclick = () => after(Profile.buyLivery(pl.id, b.dataset.buylivery)));
     $$('[data-livery]').forEach(b => b.onclick = () => { Profile.setLivery(pl.id, b.dataset.livery || null); renderMods(); });
@@ -234,7 +247,7 @@ const UI = (() => {
     const key = { mpWins: r => r.mpWins, mpKills: r => r.mpKills, kd: r => r.mpBattles >= 5 ? kd(r) : -1, wr: r => r.mpBattles >= 5 ? wr(r) : -1, level: r => r.level }[boardSort];
     rows.sort((a, b) => key(b) - key(a) || b.level - a.level);
     const opts = [['mpWins', 'Multiplayer wins'], ['mpKills', 'Multiplayer kills'], ['kd', 'K/D (5+ battles)'], ['wr', 'Win rate (5+ battles)'], ['level', 'Level']];
-    body(`<h2>Leaderboard</h2><p class="muted">Built without a server: when you join a multiplayer game, your game and the others swap pilot cards, including every card they already know, so the board grows with each player you meet. Only multiplayer battles count. Each card shows what that player's own game reports.</p>
+    body(`<h2>Leaderboard</h2>
       <div class="row" style="margin-bottom:10px"><label class="small">Rank by</label><select id="lb-sort">${opts.map(([k, n]) => `<option value="${k}" ${k === boardSort ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">${rows.length - 1} other pilot${rows.length === 2 ? '' : 's'} known</span></div>
       <table class="board"><tr><th>#</th><th>Pilot</th><th>Level</th><th>Battles</th><th>Wins</th><th>Win rate</th><th>Kills</th><th>K/D</th><th></th></tr>
       ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' <span class="pill">you</span>' : ''}</td><td>${r.level}</td><td>${fmt(r.mpBattles)}</td><td>${fmt(r.mpWins)}</td><td>${r.mpBattles ? Math.round(wr(r) * 100) + '%' : '—'}</td><td>${fmt(r.mpKills)}</td><td>${r.mpBattles ? kd(r).toFixed(2) : '—'}</td>
@@ -263,7 +276,7 @@ const UI = (() => {
       <div class="field"><label>Gunnery assist range: <span id="pf-arv">${Math.round((st.assistRange == null ? 1 : st.assistRange) * 100)}%</span> <span class="small muted">(100% = from 1.2 km, 0% = never)</span></label><input type="range" id="pf-arange" min="0" max="1" step="0.05" value="${st.assistRange == null ? 1 : st.assistRange}"></div>
       <div class="field"><label>Crosshair colour</label><div class="row"><input type="color" id="pf-cross" value="${st.cross || '#ffffff'}"><span class="small muted">Pick a colour that stands out against snow, sea or sky.</span></div></div>
       <h3 style="margin-top:18px">Controls</h3><p class="small muted">Mouse moves the aim circle and the aircraft follows it. Click a binding, then press a key or mouse button (Esc cancels).</p>
-      <div id="binds">${Input.ACTIONS.map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
+      <div id="binds">${Input.ACTIONS.filter(([id]) => !/^weapon\d/.test(id)).map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
       <button id="pf-binds-reset" style="margin-top:8px">Reset controls to defaults</button><br>
       <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>
       <div class="card" style="margin-top:14px"><h3>Sound credits</h3><p class="small muted">The engines, guns, explosions and fly-bys use these real recordings (public domain and Creative Commons).</p>

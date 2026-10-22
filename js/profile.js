@@ -94,6 +94,12 @@ const Profile = (() => {
     const m = modsOf(planeId); if (m.stores[storeId]) return true;
     if (!buy(STORES[storeId].price)) return false; m.stores[storeId] = true; save(); return true;
   }
+  // weapon keys: put a weapon type on key k (0-7); whatever was on that key moves to the weapon's old key
+  function setWeaponKey(planeId, storeId, k) {
+    const m = modsOf(planeId), keys = m.keys || (m.keys = {}), old = keys[storeId];
+    for (const id in keys) if (keys[id] === k && id !== storeId) { if (old != null) keys[id] = old; else delete keys[id]; }
+    keys[storeId] = k; save();
+  }
   function loadoutMass(planeId, lo) { const pl = PLANES[planeId]; return Loadout.mass(pl, lo || modsOf(planeId).slots); }
   // put a store on one pylon slot (null empties it); mirror: the same on the matching slot of the other wing.
   // Checks what the pylon can carry, its weight limit and the total payload.
@@ -126,7 +132,7 @@ const Profile = (() => {
     const pl = PLANES[planeId], m = modsOf(planeId), belts = {};
     for (const g of gunsOf(pl)) belts[g] = hasBelt(planeId, g, m.beltSel[g]) ? (m.beltSel[g] || 'std') : 'std';
     const inst = {}; for (const k in m.inst) if (m.inst[k] && m.upg[k]) inst[k] = true;
-    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst, livery: m.livery || null };
+    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst, livery: m.livery || null, keys: Object.assign({}, m.keys || {}) };
   }
 
   // ---- stats & achievements
@@ -184,7 +190,7 @@ const Profile = (() => {
   load();
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
-    buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
+    buyBelt, hasBelt, selectBelt, buyStore, setWeaponKey, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
     bump, checkAchievements, progress, rewards, applyBattle, tutorialDone, myCard, shareCards, mergeCards,
   };
 })();

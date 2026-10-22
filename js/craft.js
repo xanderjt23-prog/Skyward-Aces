@@ -290,9 +290,16 @@ class Craft {
   stationsOf(kind) { return this.stations.filter(s => s.s.kind === kind && s.n > 0); }
   // weapon slots: every store type carried (missiles first, infrared before radar, then bombs, rockets), fixed for the sortie
   // so the keys never shift as weapons are used up
+  // the player's own key choices (Modifications -> Weapon keys) come first; the rest fill the free keys in that order.
+  // Unused keys are null.
   weaponSlots() {
     if (!this._wslots) { const ids = [...new Set(this.stations.filter(s => s.s.kind !== 'g').map(s => s.id))], ord = id => { const st = STORES[id]; return ({ m: 0, b: 2, r: 3 })[st.kind] + (st.kind === 'm' && st.seek !== 'ir' ? 1 : 0); };
-      this._wslots = ids.sort((a, b) => ord(a) - ord(b)); }
+      ids.sort((a, b) => ord(a) - ord(b));
+      const keys = this.lo.keys || {}, out = [];
+      for (const id of ids) { const k = keys[id]; if (Number.isInteger(k) && k >= 0 && k < 8 && out[k] == null) out[k] = id; }
+      for (const id of ids) if (!out.includes(id)) { let k = 0; while (out[k] != null) k++; out[k] = id; }
+      for (let k = 0; k < out.length; k++) if (out[k] === undefined) out[k] = null;
+      this._wslots = out; }
     return this._wslots;
   }
   countOf(id) { return this.stations.filter(s => s.id === id).reduce((a, s) => a + s.n, 0); }
