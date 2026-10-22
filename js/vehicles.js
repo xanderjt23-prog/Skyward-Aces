@@ -22,21 +22,10 @@ class Vehicles {
     mesh.position.copy(v.pos); mesh.rotation.y = v.heading; m.scene.add(mesh);
     this.list.push(v); return v;
   }
-  // simple shapes per era: WW1 rhomboid, then hull + turret + gun; team stripe on the turret
+  // the tank of its era (props.js): WW1 rhomboid, then a sloped hull on tracks and road wheels with turret and gun;
+  // the team colour on the turret roof
   static model(era, team) {
-    const b = new Models.Builder(), olive = era >= 6 ? 0x6b6e4a : era >= 4 ? 0x58603e : 0x4f5638, dark = 0x262626, tc = Models.TEAM_COL[team];
-    if (era === 1) {
-      b.add(Models.box(4.2, 2.2, 8), olive, [0, 1.3, 0]);
-      for (const s of [-1, 1]) { b.add(Models.box(0.7, 2.4, 8.4), dark, [s * 2.2, 1.25, 0]); b.add(Models.box(0.8, 0.8, 1.4), olive, [s * 2.7, 1.4, -0.5]); b.add(Models.zcyl(0.08, 0.08, 1.6, 5), dark, [s * 3.1, 1.4, -1.6]); }
-      b.add(Models.box(1.5, 0.3, 1.5), tc, [0, 2.5, 0]);
-    } else {
-      const L = era >= 5 ? 9 : era >= 3 ? 6.5 : 4.5, W = era >= 5 ? 3.6 : era >= 3 ? 3 : 2.2, gun = era >= 5 ? 6 : era >= 3 ? 4 : 2;
-      b.add(Models.box(W, 1.2, L), olive, [0, 1.1, 0]);
-      for (const s of [-1, 1]) b.add(Models.box(0.6, 1.1, L * 1.02), dark, [s * (W / 2 + 0.25), 0.7, 0]);
-      b.add(Models.box(W * 0.7, era >= 5 ? 0.9 : 1.0, L * 0.4), olive, [0, 2.1, 0.2]);
-      b.add(Models.zcyl(0.12, era >= 5 ? 0.15 : 0.12, gun, 6), dark, [0, 2.15, -L * 0.2 - gun / 2]);
-      b.add(Models.box(W * 0.72, 0.12, 0.6), tc, [0, 2.62, 0.4]);
-    }
+    const b = new Models.Builder(); Props.tankBody(Props.at(b, 0, 0, 0), era, Models.TEAM_COL[team]);
     return new THREE.Mesh(b.build(), Models.mat('vc'));
   }
   // host: drive between waypoints in the team's half, turning slowly; clients: glide to the host's positions
