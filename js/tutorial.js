@@ -37,8 +37,124 @@ const Tutorial = (() => {
     return { belts: {}, perSlot: true, mods: {}, stores: sl.map((s, i) => s.band === 5 && ir[i] ? ir[i] : rad[i] && s.band >= 1 && s.band !== 5 ? rad[i] : ir[i]) }; }
   // the name of the first store on the player's aircraft that passes `test`
   const WN = test => { const p = Game.match && Game.match.player, id = p && p.weaponSlots().find(id => id && test(STORES[id])); return id ? STORES[id].name.replace(/ \(.*\)$/, '') : 'missile'; };
-  const target = (id, plane, x, y, z, extra) => ({ id, team: 1, name: 'Target', plane, bot: true, owner: 'H', skill: 0, task: 'air', loadout: { belts: {}, stores: [], mods: {} }, lives: 1, passive: true, spawnAt: [x, y, z], ...(extra || {}) });
+  const target = (id, plane, x, y, z, extra) => ({ id, team: 1, name: 'Target', plane, bot: true, owner: 'H', skill: 0, task: 'air', loadout: { belts: {}, stores: [], mods: {} }, lives: 1, passive: true, spawnAt: [x, y, z], tid: id, ...(extra || {}) });
 
+  // ================================================================ maneuver guides
+  // A step can show the way:
+  //   gates: k => [[x, y, f], ...]  a path in the frame of the player's position and heading when the step began
+  //          (x right, y up, f forward), sized from k.R (the 4 G turn radius at the current speed). Fly through the
+  //          rings in order; stray too far and the path is laid out again from where you are.
+  //   rel:   { who, pts: [[x, y, f], ...], r }  rings that ride along with another aircraft (its heading and the
+  //          vertical), for maneuvers flown against an opponent
+  //   setup(c) once, script(c, dt) every frame: the other aircraft fly scripted, kinematic paths (see botMove)
+  const V3 = THREE.Vector3, UP = new V3(0, 1, 0);
+  function frame(p) { const f = new V3(0, 0, -1).applyQuaternion(p.quat).setY(0); if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize(); return { o: p.pos.clone(), f, r: new V3().crossVectors(f, UP).normalize() }; }
+  const at = (F, x, y, fz) => F.o.clone().addScaledVector(F.r, x).addScaledVector(UP, y).addScaledVector(F.f, fz);
+  const turnR = p => { const v = Math.max(p.speed, p.perf.vs * 1.8); return Math.max(220, Math.min(1400, v * v / (9.81 * 4))); };
+  const arc = (n, fn) => Array.from({ length: n + 1 }, (_, i) => fn(i / n));
+  // ---- the paths (local [x right, y up, f forward]); every one starts a little ahead of the aircraft
+  const PATH = {
+    // wingover: a climbing turn to near-vertical, the nose falls through the turn at low speed, a dive back the other way
+    wingover: k => arc(14, t => { const a = Math.PI * t; return [k.R * 0.9 * (1 - Math.cos(a)), 1.0 * k.R * Math.sin(a), 0.35 * k.R + k.R * 0.9 * Math.sin(a)]; }),
+    // pitchback: half a loop flown in a plane banked 45 degrees: the heading reverses, less height gained than an Immelmann
+    pitchback: k => { const r = k.R * 0.9, s = Math.SQRT1_2; return arc(14, t => { const a = Math.PI * t, w = r * (1 - Math.cos(a)); return [w * s, w * s, 0.35 * k.R + r * Math.sin(a)]; }).concat([[2 * r * s, 2 * r * s, 0.35 * k.R - 0.5 * k.R]]); },
+    // stall turn (hammerhead): straight up, pivot on the rudder at the top, straight down and pull out the other way
+    stallturn: k => { const r = k.R * 0.7, h = k.R * 0.5, f0 = 0.35 * k.R;
+      return arc(6, t => { const a = Math.PI / 2 * t; return [0, r * (1 - Math.cos(a)), f0 + r * Math.sin(a)]; }).concat([[0, r + h, f0 + r], [30, r + h * 0.5, f0 + r]],
+        arc(6, t => { const a = Math.PI / 2 * t; return [30, r - r * Math.sin(a), f0 + r * Math.cos(a)]; }), [[30, 0, f0 - 0.4 * k.R]]); },
+    // displacement (barrel) roll: a helix round the old flight path, ending displaced and on the same heading
+    barrel: k => { const rr = k.R * 0.35, L = k.R * 2.4; return arc(16, t => { const a = 2 * Math.PI * t; return [rr * (1 - Math.cos(a)), rr * Math.sin(a), 0.3 * k.R + L * t]; }); },
+    // high-g barrel roll: a tight, violent one at close range
+    hardBarrel: k => { const rr = k.R * 0.25, L = k.R * 1.3; return arc(12, t => { const a = 2 * Math.PI * t; return [-rr * (1 - Math.cos(a)), rr * Math.sin(a), 0.2 * k.R + L * t]; }); },
+    // unloaded extension: push into a straight 30 degree dive at full power, near zero G, and accelerate away
+    extension: k => [[0, 0, 0.3 * k.R]].concat(arc(6, t => { const d = 3 * k.R * t; return [0, -d * 0.5, 0.3 * k.R + d * 0.866]; }).slice(1)),
+    // defensive spiral: a steep descending spiral, power off and speedbrakes out
+    spiral: k => { const rs = k.R * 0.55, f0 = 0.3 * k.R; return arc(18, t => { const a = 3 * Math.PI * t; return [rs * (1 - Math.cos(a)), -k.R * 0.75 * a / Math.PI, f0 + rs * Math.sin(a)]; }); },
+    // break turn: a hard 90 degree turn into the attacker (to the left)
+    breakLeft: k => { const rb = k.R * 0.5; return arc(8, t => { const a = Math.PI / 2 * t; return [-rb * (1 - Math.cos(a)), 0, 0.15 * k.R + rb * Math.sin(a)]; }); },
+  };
+  // ---- scripted aircraft: kinematic motion (position, velocity and attitude set every frame)
+  function place(b, vel, bank) {
+    const f = vel.clone().normalize(), r = new V3().crossVectors(f, UP); if (r.lengthSq() < 1e-6) r.set(1, 0, 0); r.normalize();
+    const u = new V3().crossVectors(r, f).normalize(), cb = Math.cos(bank || 0), sb = Math.sin(bank || 0), u2 = u.clone().multiplyScalar(cb).addScaledVector(r, sb), r2 = new V3().crossVectors(f, u2).normalize();
+    b.quat.setFromRotationMatrix(new THREE.Matrix4().makeBasis(r2, u2, f.clone().negate())); b.vel.copy(vel); b.alive = true;
+  }
+  // mode: { straight: speed } | { circle: speed, radius, dir (+1 right, -1 left) } | { pursue: craft, speed, rate (rad/s), off: [x, y, f] in its frame }
+  //       | { weave: speed, period, rate } | { roll: speed, radius (barrel rolls round its path) }
+  function botMove(b, mode, dt, t) { const P = b.kp || (b.kp = b.pos.clone()); botStep(b, mode, dt, t, P); b.pos.copy(P); }
+  function botStep(b, mode, dt, t, P) {
+    const f = b.vel.lengthSq() > 1 ? b.vel.clone().normalize() : new V3(0, 0, -1).applyQuaternion(b.quat);
+    if (mode.straight) { P.addScaledVector(f, mode.straight * dt); place(b, f.multiplyScalar(mode.straight), 0); return; }
+    if (mode.circle) { const w = mode.circle / mode.radius * (mode.dir || -1); const nf = f.clone().applyAxisAngle(UP, -w * dt); nf.y = 0; nf.normalize(); P.addScaledVector(nf, mode.circle * dt); place(b, nf.multiplyScalar(mode.circle), Math.atan(mode.circle * mode.circle / (9.81 * mode.radius)) * (mode.dir || -1)); return; }
+    if (mode.weave) { const dir = Math.sin(t * Math.PI * 2 / mode.period) > 0 ? 1 : -1, nf = f.clone().applyAxisAngle(UP, -dir * mode.rate * dt); nf.y *= 0.9; nf.normalize(); P.addScaledVector(nf, mode.weave * dt); place(b, nf.multiplyScalar(mode.weave), dir * 1.1); return; }
+    if (mode.roll) { b.rollA = (b.rollA || 0) + dt * 0.9; const base = b.rollBase || (b.rollBase = { o: b.pos.clone(), f: f.clone().setY(0).normalize() }), r = new V3().crossVectors(base.f, UP).normalize();
+      base.o.addScaledVector(base.f, mode.roll * dt); const a = b.rollA, np = base.o.clone().addScaledVector(r, mode.radius * (1 - Math.cos(a))).addScaledVector(UP, mode.radius * Math.sin(a));
+      const v = np.clone().sub(P).divideScalar(Math.max(dt, 1e-3)); P.copy(np); place(b, v.lengthSq() > 1 ? v : base.f.clone().multiplyScalar(mode.roll), a); return; }
+    if (mode.pursue) { const tg = mode.pursue, F = frame(tg), aim = mode.off ? at(F, ...mode.off) : tg.pos.clone(), want = aim.sub(b.pos).normalize();
+      const ang = Math.acos(Math.max(-1, Math.min(1, f.dot(want)))), k = ang > 1e-4 ? Math.min(1, (mode.rate || 0.5) * dt / ang) : 1, nf = f.clone().lerp(want, k).normalize();
+      const side = Math.sign(new V3().crossVectors(f, nf).y) || 0; P.addScaledVector(nf, mode.speed * dt); place(b, nf.multiplyScalar(mode.speed), -side * Math.min(1.3, ang * 8)); }
+  }
+  const park = b => { b.pos.set(0, 9000, 60000); b.vel.set(0, 0, -1); b.kp = null; };
+  // tracers the attacker fires past the player (they never hit: a drill)
+  function spray(m, from, to) { const d = to.pos.clone().addScaledVector(to.vel, 0.4).sub(from.pos).normalize(); d.x += (Math.random() - 0.5) * 0.03; d.y += (Math.random() - 0.5) * 0.03; d.z += (Math.random() - 0.5) * 0.03;
+    m.combat.bullet(from.pos.clone().addScaledVector(d, 8), d.normalize().multiplyScalar(850).add(from.vel), from, { dmg: 0, pen: 0, fire: 0, he: 0, struct: 0, cal: 12.7 }, [1, 0.8, 0.4], 2, true); }
+  function bot(m, id) { return m.crafts.find(c => c.spec && c.spec.tid === id); }
+  // ---- the guide: rings and a line in the 3D scene
+  const RING = new THREE.TorusGeometry(1, 0.018, 6, 36), ringMat = () => new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
+  function clearGuide(m, T) { if (T.guide) { m.scene.remove(T.guide); T.guide.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry && o.geometry !== RING) o.geometry.dispose(); }); T.guide = null; } }
+  function buildGates(m, T, pts, R) {
+    clearGuide(m, T); const S = T.S; S.gates = pts; S.gi = 0; S.gR = R; S.far = 0;
+    const grp = new THREE.Group(); T.guide = grp; m.scene.add(grp);
+    S.rings = pts.map((q, i) => { const tg = (pts[i + 1] || q).clone().sub(pts[i - 1] || q).normalize(); const r = new THREE.Mesh(RING, ringMat()); r.position.copy(q); r.scale.setScalar(R * 0.7); r.lookAt(q.clone().add(tg)); grp.add(r); return r; });
+    const curve = new THREE.CatmullRomCurve3(pts), line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(pts.length * 8)), new THREE.LineBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.55, depthWrite: false, fog: false }));
+    grp.add(line); S.line = line;
+  }
+  function guideRel(m, T, q, r) { // one moving ring and a line to it
+    const S = T.S; if (!T.guide) { const grp = new THREE.Group(); T.guide = grp; m.scene.add(grp); S.relRing = new THREE.Mesh(RING, ringMat()); grp.add(S.relRing);
+      S.relLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new V3(), new V3()]), new THREE.LineBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.5, depthWrite: false, fog: false })); grp.add(S.relLine); }
+    S.relRing.position.copy(q); S.relRing.scale.setScalar(r); S.relRing.lookAt(m.player.pos); S.relLine.geometry.setFromPoints([m.player.pos.clone().add(new V3(0, -3, 0)), q]);
+  }
+  // per frame: scripted aircraft, gates passed, the moving ring reached
+  function guide(m, T, st, c, dt) {
+    const S = T.S, p = m.player;
+    if (!S.setup) { S.setup = true; S.F = frame(p); S.k = { R: turnR(p), v: p.speed }; S.bt = 0; clearGuide(m, T);
+      for (const b of m.crafts) if (b !== p && b.spec && b.spec.tid) { park(b); b.rollA = 0; b.rollBase = null; }
+      if (st.setup) st.setup(c, S.F, S.k);
+      if (st.gates) buildGates(m, T, st.gates(S.k).map(q => at(S.F, ...q)), Math.max(45, S.k.R * (st.gateR || 0.22))); }
+    S.bt += dt;
+    if (st.script) st.script(c, dt, S.bt);
+    for (const b of m.crafts) if (b !== p && b.spec && b.spec.tid && b.pos.z > 50000) { park(b); }
+    if (S.gates) {
+      while (S.gi < S.gates.length) { const g = S.gates[S.gi], tg = (S.gates[S.gi + 1] || g).clone().sub(S.gates[S.gi - 1] || g).normalize(), to = p.pos.clone().sub(g);
+        if (to.length() < S.gR || (to.dot(tg) > 0 && to.clone().addScaledVector(tg, -to.dot(tg)).length() < S.gR * 2.2)) { S.gi++; continue; }
+        // flying a tighter or wider line than drawn is fine: reaching one of the next rings counts for the ones before it
+        let skip = -1; for (let j = S.gi + 1; j < Math.min(S.gates.length, S.gi + 4); j++) if (p.pos.distanceTo(S.gates[j]) < S.gR * 1.3) skip = j;
+        if (skip >= 0) { S.gi = skip + 1; continue; } break; }
+      S.rings.forEach((r, i) => { r.visible = i >= S.gi && i < S.gi + 6; r.material.opacity = i === S.gi ? 0.95 : 0.35; r.material.color.setHex(i === S.gi ? 0xffd34d : 0xffffff); });
+      // strayed far from the next ring for a while: the path is laid out again from here
+      if (S.gi < S.gates.length) { const d = p.pos.distanceTo(S.gates[S.gi]); S.far = d > Math.max(1500, S.k.R * 4) ? S.far + dt : 0; if (S.far > 4) { S.setup = false; S.again = (S.again || 0) + 1; } }
+      else if (T.guide) clearGuide(m, T);
+    }
+    if (st.rel) { const who = bot(m, st.rel.who); if (!S.ri) S.ri = 0;
+      if (who && S.ri < st.rel.pts.length) { const q = at(frame(who), ...st.rel.pts[S.ri]), r = st.rel.r || 90; guideRel(m, T, q, r); if (p.pos.distanceTo(q) < r * 1.4) S.ri++; }
+      else if (T.guide) clearGuide(m, T); }
+  }
+  const gatesDone = c => c.S.gates && c.S.gi >= c.S.gates.length;
+  const relDone = (c, st) => c.S.ri >= st.rel.pts.length;
+  const prog = c => c.S.gates ? ` (ring ${Math.min(c.S.gi + 1, c.S.gates.length)} of ${c.S.gates.length})` : '';
+  // is aircraft a ahead of b (in b's direction of flight)?
+  const ahead = (a, b) => a.pos.clone().sub(b.pos).dot(b.vel.clone().normalize()) > 0;
+  // count turn reversals (the bank changes side past +-35 degrees)
+  function reversals(c) { const b = bankDeg(c.p), s = b > 35 ? 1 : b < -35 ? -1 : 0; if (s && s !== c.S.side) { if (c.S.side) c.S.rev = (c.S.rev || 0) + 1; c.S.side = s; } return c.S.rev || 0; }
+  // place / move a lesson's scripted aircraft by its id (it is brought back if it was shot down)
+  function put(c, id, pos, vel) { const b = bot(c.m, id); if (!b) return; if (!b.alive || b.dm.destroyed) c.m.spawnCraft(b); b.kp = pos.clone(); b.pos.copy(pos); place(b, vel, 0); }
+  function move(c, id, mode, dt, t) { const b = bot(c.m, id); if (b && b.alive) botMove(b, mode, dt, t || c.S.bt); }
+  // the wingman's gun pass: in range behind the attacker he fires, and after a second's burst the attacker goes down
+  function wingmanGuns(c, w, a, dt, range, cone) {
+    if (!w || !a || !a.alive) return; const to = a.pos.clone().sub(w.pos), d = to.length(), fw = w.vel.clone().normalize();
+    if (d < (range || 600) && to.dot(fw) / d > (cone == null ? 0.9 : cone)) { if ((c.S.wst = (c.S.wst || 0) - dt) < 0) { c.S.wst = 0.08; spray(c.m, w, a); } c.S.gunT = (c.S.gunT || 0) + dt;
+      if (c.S.gunT > 1.2) { FX.explosion(a.pos.clone(), 1.6, false); a.dm.destroyed = true; c.m.onCrash(a, false); a.alive = false; c.S.kill = true; } }
+  }
   const LIST = [
     { id: 'basics', cat: 'mech', name: 'Flight basics', icon: '🛩️', plane: 'spit9', desc: 'Mouse-aim flying, throttle and emergency power, rolling with the keys, the camera and zoom. Fly through three waypoints.',
       start: { alt: 1200 },
@@ -95,6 +211,94 @@ const Tutorial = (() => {
           done: c => c.phases([() => pitchDeg(c.p) > 60, () => upY(c.p) < -0.3 && pitchDeg(c.p) < 35, () => upY(c.p) > 0.7 && Math.abs(pitchDeg(c.p)) < 25]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) > 135 && c.climb() > 150 },
         { text: c => `Split-S: roll upside down with ${K('rollLeft')} / ${K('rollRight')}, then hold ${K('pitchUp')} to pull through half a loop downwards and level out the other way. Keep at least 1,000 m of height for it. ${['Roll inverted', 'Pull down', 'Pull through and level out'][Math.min(c.S.ph || 0, 2)]}`,
           done: c => c.phases([() => upY(c.p) < -0.5 && Math.abs(pitchDeg(c.p)) < 30, () => pitchDeg(c.p) < -45, () => upY(c.p) > 0.7 && Math.abs(pitchDeg(c.p)) < 25]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) > 135 && c.climb() < -150 },
+      ] },
+    // ---- basic fighter maneuvers (Wikipedia: "Basic fighter maneuvers"), each with rings to fly through or a moving
+    // ring to reach relative to the other aircraft, which fly scripted paths
+    { id: 'vertical', cat: 'man', name: 'Wingover, pitchback and stall turn', icon: '🎢', plane: 'p51d', desc: 'Three ways to turn round using the vertical: the wingover (a climbing turn that falls through at the top), the pitchback (half a loop banked 45°) and the stall turn or hammerhead (straight up, pivot, straight down). Fly through the rings.',
+      start: { alt: 2200 },
+      steps: [
+        { text: c => `Wingover: pull up into a climbing turn to the right, let the nose fall through the turn at the top as the speed bleeds off, and dive back the other way. Fly through the rings${prog(c)}.`, gates: k => PATH.wingover(k), done: gatesDone },
+        { text: c => `Pitchback: roll to 45° of bank and pull (mouse up, or hold ${K('pitchUp')}) through half a loop in that tilted plane. You come out heading back the way you came, higher${prog(c)}.`, gates: k => PATH.pitchback(k), done: gatesDone },
+        { text: c => `Stall turn: dive a little for speed, then pull straight up (hold ${K('pitchUp')}). As the speed runs out (under ~90 km/h) kick full rudder (${K('yawRight')}) with full power to pivot over, dive straight down and pull out the other way. ${['Pull up to the vertical', 'Hold it until the speed is gone', 'Full rudder: pivot the nose down', 'Pull out of the dive'][Math.min(c.S.ph || 0, 3)]}.`, gates: k => PATH.stallturn(k), gateR: 0.32, // the rings show the shape; the climb's height depends on the aircraft, so the phases decide
+          done: c => c.phases([() => pitchDeg(c.p) > 70, () => c.p.speed < 26 && pitchDeg(c.p) > 40, () => pitchDeg(c.p) < -55, () => Math.abs(pitchDeg(c.p)) < 20 && upY(c.p) > 0.7]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) > 120 },
+      ] },
+    { id: 'energy', cat: 'man', name: 'Extension and the defensive spiral', icon: '🌀', plane: 'p51d', desc: 'Energy as a weapon: the unloaded extension (push over to zero G and accelerate away from a fight) and the defensive spiral (a steep, slow spiral dive with the power off and the brakes out, to make a faster attacker overshoot).',
+      start: { alt: 3500 },
+      steps: [
+        { text: c => `Unloaded extension: full power (${K('throttleUp')}), push the nose into a 30° dive and hold it there with almost no G. Accelerate away through the rings and gain 15% speed${prog(c)}.`, gates: k => PATH.extension(k), done: c => gatesDone(c) && c.p.speed > c.S.k.v * 1.15 },
+        { text: c => `Defensive spiral: throttle back (${K('throttleDown')}), brakes out (${K('brakes')}), roll steeply right and spiral down through the rings. Pull out at the bottom${prog(c)}.`, gates: k => PATH.spiral(k), done: gatesDone },
+      ] },
+    { id: 'defence', cat: 'man', fits: pl => pl.guns.length > 0, name: 'Defensive maneuvers', icon: '🛡️', plane: 'p51d', desc: 'An enemy fighter gets behind you: the break (a hard turn across his path), guns defense (jinking), the high-g barrel roll that makes a fast attacker overshoot, and the answer to his high yo-yo.',
+      start: { alt: 3000 }, bots: () => [target('a1', 'bf109g', 0, 3000, 9000)],
+      steps: [
+        { text: c => `An attacker is closing from behind on your left (hold ${K('freeLook')} and move the mouse to look back). Break: roll hard left and pull, turning across his path into him. Fly the rings${prog(c)}.`, gates: k => PATH.breakLeft(k), gateR: 0.3,
+          setup: (c, F, k) => put(c, 'a1', at(F, -260, 60, -1200), F.f.clone().multiplyScalar(k.v * 1.15)), script: (c, dt) => move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.15, rate: 0.3 }, dt), done: gatesDone },
+        { text: c => `Guns defense: he is in firing range behind you. Jink: reverse your turn and change your pitch every second or two so his aim never settles. Reversals ${Math.min(4, reversals(c))} of 4.`,
+          setup: (c, F, k) => put(c, 'a1', at(F, 30, 20, -350), F.f.clone().multiplyScalar(k.v)), script: (c, dt, t) => { move(c, 'a1', { pursue: c.p, speed: c.p.speed, rate: 0.5, off: [0, 0, -300] }, dt); if ((c.S.st = (c.S.st || 0) - dt) < 0) { c.S.st = 0.1; spray(c.m, bot(c.m, 'a1'), c.p); } },
+          done: c => c.S.bt > 6 && reversals(c) >= 4 },
+        { text: c => `He is closing fast right behind you. High-g barrel roll: pull up hard and roll over the top through the rings. He overshoots and ends up in front of you${prog(c)}.`, gates: k => PATH.hardBarrel(k), gateR: 0.3,
+          setup: (c, F, k) => put(c, 'a1', at(F, 0, 10, -500), F.f.clone().multiplyScalar(k.v * 1.35)), script: (c, dt) => move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.35, rate: 0.12 }, dt), done: c => gatesDone(c) && ahead(bot(c.m, 'a1'), c.p) },
+        { text: c => `He pulls up into a high yo-yo above and behind you. ${!c.S.tf ? `Unload: ease off the pull (let the G drop below 1.5) for 2 seconds to win back speed. ${Math.min(2, c.S.ul || 0).toFixed(1)} s` : `Now turn hard into him again: 90° of turn. ${Math.round(Math.abs(c.turned() - c.S.tf))}°`}`,
+          setup: (c, F, k) => put(c, 'a1', at(F, 150, 250, -600), F.f.clone().multiplyScalar(k.v * 1.05)), script: (c, dt) => { move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.05, rate: 0.25, off: [0, 250, -400] }, dt); if ((c.p.gLoad || 1) < 1.5) c.S.ul = (c.S.ul || 0) + dt; },
+          done: c => { if (c.S.tf == null && (c.S.ul || 0) >= 2) c.S.tf = c.turned(); return c.S.tf != null && Math.abs(c.turned() - c.S.tf) >= 90; } },
+      ] },
+    { id: 'offence', cat: 'man', fits: pl => pl.guns.length > 0, name: 'Attacking maneuvers', icon: '⚔️', plane: 'p51d', desc: 'Getting a gun shot: the high-side guns pass (dive on a lower target, one fast pass, zoom back up), the barrel roll attack against a target that breaks, and the lag displacement roll that stops you overshooting.',
+      start: { alt: 3500 }, bots: () => [target('t1', 'b25j', 0, 2300, 0)],
+      steps: [
+        { text: c => `High-side guns pass: a bomber flies below you. Dive on its rear quarter from above and to the side (first ring), sweep through the firing position close behind it, then zoom back up with your speed. Ring ${Math.min((c.S.ri || 0) + 1, 3)} of 3.`,
+          setup: (c, F, k) => put(c, 't1', at(F, 300, -1200, 2500), F.f.clone().multiplyScalar(k.v * 0.7)), script: (c, dt) => move(c, 't1', { straight: c.S.k.v * 0.7 }, dt),
+          rel: { who: 't1', pts: [[600, 700, -900], [60, 25, -130], [-300, 600, -500]], r: 110 }, done: (c, st) => relDone(c, st) },
+        { text: c => `Barrel roll attack: the target breaks hard left in front of you. Don't try to out-turn it: pull up and roll over the outside of its turn through the rings, and come down behind it. Ring ${Math.min((c.S.ri || 0) + 1, 4)} of 4.`,
+          setup: (c, F, k) => { put(c, 't1', at(F, 0, 0, 700), F.f.clone().multiplyScalar(k.v * 0.8)); }, script: (c, dt) => move(c, 't1', { circle: c.S.k.v * 0.8, radius: c.S.k.R * 0.7, dir: -1 }, dt),
+          rel: { who: 't1', pts: [[220, 250, -350], [260, 380, -150], [120, 200, -220], [0, 30, -300]], r: 110 }, done: (c, st) => relDone(c, st) },
+        { text: c => `Lag roll: you are cutting inside its turn and about to overshoot. Roll up and away to the outside of its turn (the ring), let your nose fall back behind it and settle into lag pursuit behind it. Ring ${Math.min((c.S.ri || 0) + 1, 2)} of 2.`,
+          setup: (c, F, k) => put(c, 't1', at(F, -350, 0, 500), F.f.clone().multiplyScalar(k.v * 0.85)), script: (c, dt) => move(c, 't1', { circle: c.S.k.v * 0.85, radius: c.S.k.R * 0.75, dir: -1 }, dt),
+          rel: { who: 't1', pts: [[260, 180, -200], [0, 0, -400]], r: 110 }, done: (c, st) => relDone(c, st) },
+      ] },
+    { id: 'yoyo', cat: 'man', fits: pl => pl.guns.length > 0, name: 'High and low yo-yo', icon: '🪀', plane: 'p51d', desc: 'Using the vertical to stay behind a turning target: the low yo-yo (drop inside its turn to gain speed and cut the corner) and the high yo-yo (climb out of its turn so you do not overshoot).',
+      start: { alt: 3000 }, bots: () => [target('t1', 'bf109g', 0, 3000, 0)],
+      steps: [
+        { text: c => `Low yo-yo: the target turns left and you are too far behind to catch it in a level turn. Drop your nose inside its turn (below and inside), let gravity add speed as you cut the corner, then pull back up behind it. Ring ${Math.min((c.S.ri || 0) + 1, 3)} of 3.`,
+          setup: (c, F, k) => put(c, 't1', at(F, -400, 0, 1300), F.f.clone().multiplyScalar(k.v)), script: (c, dt) => move(c, 't1', { circle: c.S.k.v, radius: c.S.k.R * 0.75, dir: -1 }, dt),
+          rel: { who: 't1', pts: [[-150, -250, -700], [-120, -120, -450], [0, 0, -280]], r: 120 }, done: (c, st) => relDone(c, st) },
+        { text: c => `High yo-yo: you are faster and closing so quickly you would overshoot. Ease off and pull up out of its turn (above and outside), let gravity slow you, then roll back in and drop in behind it. Ring ${Math.min((c.S.ri || 0) + 1, 3)} of 3.`,
+          setup: (c, F, k) => put(c, 't1', at(F, -200, 0, 500), F.f.clone().multiplyScalar(k.v * 0.75)), script: (c, dt) => move(c, 't1', { circle: c.S.k.v * 0.75, radius: c.S.k.R * 0.6, dir: -1 }, dt),
+          rel: { who: 't1', pts: [[160, 300, -350], [80, 160, -280], [0, 0, -280]], r: 120 }, done: (c, st) => relDone(c, st) },
+      ] },
+    { id: 'scissors', cat: 'man', fits: pl => pl.guns.length > 0, name: 'Flat and rolling scissors', icon: '✂️', plane: 'p51d', desc: 'When both fighters end up side by side: the flat scissors (repeated turn reversals into each other, each trying to fall in behind) and the rolling scissors (the same in the vertical, rolling over the top of each other).',
+      start: { alt: 3000 }, bots: () => [target('t1', 'bf109g', 0, 3000, 0)],
+      steps: [
+        { text: c => `Flat scissors: you are side by side, both slowing down. Each time it turns into you, reverse your turn into it as well, staying within 1 km. Reversals ${Math.min(4, reversals(c))} of 4.`,
+          setup: (c, F, k) => put(c, 't1', at(F, 150, 0, 80), F.f.clone().multiplyScalar(k.v * 0.85)), script: (c, dt, t) => move(c, 't1', { weave: c.S.k.v * 0.85, period: 7, rate: 0.35 }, dt, t),
+          done: c => reversals(c) >= 4 && bot(c.m, 't1').pos.distanceTo(c.p.pos) < 1200 },
+        { text: c => `Rolling scissors: it climbs and rolls over the top of you. Roll over the top as well, the other way round, each time it does: go over the top inverted twice, staying within 1.5 km. ${c.S.inv || 0} of 2.`,
+          setup: (c, F, k) => put(c, 't1', at(F, 100, 60, 200), F.f.clone().multiplyScalar(k.v * 0.8)), script: (c, dt) => { move(c, 't1', { roll: c.S.k.v * 0.8, radius: 160 }, dt); const inv = upY(c.p) < -0.3; if (inv && !c.S.wasInv) c.S.inv = (c.S.inv || 0) + 1; c.S.wasInv = inv; },
+          done: c => (c.S.inv || 0) >= 2 && bot(c.m, 't1').pos.distanceTo(c.p.pos) < 1500 },
+      ] },
+    { id: 'twoship', cat: 'man', fits: pl => pl.guns.length > 0, name: 'Two-ship tactics', icon: '👥', plane: 'p51d', desc: 'Flying with a wingman: combat spread, the defensive split, the sandwich and the Thach weave, against attackers that try to get behind you.',
+      start: { alt: 3000 }, bots: () => [target('w1', 'p51d', 0, 3000, 3000, { team: 0, name: 'Wingman' }), target('a1', 'bf109g', 0, 3000, 9000), target('a2', 'bf109g', 300, 3000, 9000)],
+      steps: [
+        { text: c => `Combat spread: you are the high wingman. Fly about 1.6 km (a mile) to the right of your leader and 450 m (1,500 ft) above him, and hold that position (the ring) for 6 seconds. ${(c.S.hold || 0).toFixed(1)} s`,
+          setup: (c, F, k) => put(c, 'w1', at(F, -1200, -350, 300), F.f.clone().multiplyScalar(k.v * 0.92)),
+          script: (c, dt) => { move(c, 'w1', { straight: c.S.k.v * 0.92 }, dt); const q = at(frame(bot(c.m, 'w1')), 1600, 450, 0); guideRel(c.m, c.T, q, 250); c.S.hold = c.p.pos.distanceTo(q) < 320 ? (c.S.hold || 0) + dt : 0; },
+          done: c => (c.S.hold || 0) >= 6 },
+        { text: c => `Defensive split: two attackers are coming in behind you both. Your wingman breaks left; you break hard right, so they must split up or let one of you go free. Turn 90°: ${Math.round(Math.min(90, Math.abs(c.turned())))}°`,
+          setup: (c, F, k) => { put(c, 'w1', at(F, -600, 0, 0), F.f.clone().multiplyScalar(k.v)); put(c, 'a1', at(F, -400, 50, -1500), F.f.clone().multiplyScalar(k.v * 1.1)); put(c, 'a2', at(F, -200, 50, -1600), F.f.clone().multiplyScalar(k.v * 1.1)); },
+          script: (c, dt, t) => { move(c, 'w1', t < 1 ? { straight: c.S.k.v } : { circle: c.S.k.v, radius: c.S.k.R * 0.5, dir: -1 }, dt); move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.1, rate: 0.3 }, dt); move(c, 'a2', { pursue: bot(c.m, 'w1'), speed: c.S.k.v * 1.1, rate: 0.3 }, dt); },
+          done: c => Math.abs(c.turned()) >= 85 },
+        { text: c => `Sandwich: the attacker is on your tail and your wingman is out to your left. Turn hard right, away from him, and keep turning: the attacker follows you across your wingman's nose and your wingman turns in behind him.${c.S.kill ? ' Splash one!' : ''}`,
+          setup: (c, F, k) => { put(c, 'w1', at(F, -900, 0, 0), F.f.clone().multiplyScalar(k.v)); put(c, 'a1', at(F, 0, 30, -900), F.f.clone().multiplyScalar(k.v * 1.05)); },
+          script: (c, dt) => { const w = bot(c.m, 'w1'), a = bot(c.m, 'a1'); move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.05, rate: 0.3 }, dt);
+            move(c, 'w1', Math.abs(c.turned()) > 40 ? { pursue: a, speed: c.S.k.v * 1.35, rate: 0.5, off: [0, 0, -250] } : { straight: c.S.k.v }, dt);
+            wingmanGuns(c, w, a, dt, 800, 0.8); },
+          done: c => !bot(c.m, 'a1').alive },
+        { text: c => `Thach weave: the attacker is behind you; your wingman flies 600 m to your left. Turn toward your wingman and cross his path; he turns toward you, and the attacker following you is drawn into his guns. Crossings ${Math.min(2, c.S.cross || 0)} of 2.${c.S.kill ? ' Splash one!' : ''}`,
+          setup: (c, F, k) => { put(c, 'w1', at(F, -600, 0, 0), F.f.clone().multiplyScalar(k.v)); put(c, 'a1', at(F, 0, 30, -900), F.f.clone().multiplyScalar(k.v * 1.03)); },
+          script: (c, dt, t) => { const w = bot(c.m, 'w1'), a = bot(c.m, 'a1'); move(c, 'a1', { pursue: c.p, speed: c.S.k.v * 1.03, rate: 0.3 }, dt);
+            const side = Math.sign(c.p.pos.clone().sub(w.pos).dot(frame(w).r)); if (c.S.side0 && side && side !== c.S.side0) c.S.cross = (c.S.cross || 0) + 1; if (side) c.S.side0 = side;
+            move(c, 'w1', (c.S.cross || 0) >= 2 ? { pursue: a, speed: c.S.k.v * 1.15, rate: 0.45, off: [0, 0, -250] } : { pursue: c.p, speed: c.S.k.v, rate: 0.25, off: [0, 0, 300] }, dt);
+            if ((c.S.cross || 0) >= 2) wingmanGuns(c, w, a, dt, 1500, -1); }, // the attacker crossing his nose: a deflection shot
+          done: c => (c.S.cross || 0) >= 2 && !bot(c.m, 'a1').alive },
       ] },
     { id: 'gunnery', cat: 'mech', fits: pl => pl.guns.length > 0, name: 'Air gunnery', icon: '🎯', plane: 'bf109g', desc: 'Lead the target with the lead indicator and shoot down three unarmed target aircraft. Fire when the indicator turns white and says FIRE.',
       start: { alt: 1500 },
@@ -224,10 +428,10 @@ const Tutorial = (() => {
     T.stepT += dt;
     const st = T.t.steps[T.step];
     if (st.launch) missileDrill(m, T, dt, st.launch);
-    track(m); const c = ctx(m), ok = st.done(c);
+    track(m); const c = ctx(m); if (st.gates || st.rel || st.setup || st.script) guide(m, T, st, c, dt); const ok = st.done(c, st);
     if (T.stepT > 0.6 && ok) {
-      Sound.clunk && Sound.clunk(); T.step++; T.stepT = 0; T.S = {};
-      if (T.step >= T.t.steps.length) { T.done = true; Profile.tutorialDone(T.t.id); m.end(0, 'Tutorial complete: ' + T.t.name); }
+      Sound.clunk && Sound.clunk(); T.step++; T.stepT = 0; T.S = {}; clearGuide(m, T);
+      if (T.step >= T.t.steps.length) { T.done = true; clearGuide(m, T); Profile.tutorialDone(T.t.id); m.end(0, 'Tutorial complete: ' + T.t.name); }
     }
   }
   // missile defence drill: the enemy closes in behind the player and fires a heat seeker; surviving it counts
@@ -260,5 +464,5 @@ const Tutorial = (() => {
     if (st.wp && !T.done) { const s = proj(st.wp, cam); if (s) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(s.x, s.y - 16); g.lineTo(s.x + 16, s.y); g.lineTo(s.x, s.y + 16); g.lineTo(s.x - 16, s.y); g.closePath(); g.stroke();
       text(Math.round(st.wp.distanceTo(m.player.pos)) + ' m', s.x, s.y + 32, '#ffd34d', 12, 'center', true); } }
   }
-  return { LIST, CATS, byId, fits, plan, spawn, start, update, draw, ctx };
+  return { LIST, CATS, byId, fits, plan, spawn, start, update, draw, ctx, _dbg: { at, frame, bot, PATH } };
 })();

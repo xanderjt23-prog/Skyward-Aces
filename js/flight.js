@@ -104,7 +104,10 @@ const Flight = (() => {
     // post-stall pitch authority only below corner speed: a cobra is flown at ~400 km/h, not at high speed
     if (ctl.manual && P.superman && pc > 0.6 && v < P.vc) tp = Math.max(tp, pc * P.wPost * (P.tvc ? Math.max(0.4, Math.min(1, ctl.throttle)) : Math.min(1, v / (P.vs * 2.2))));
     const tr = rc * P.roll * lowSpeed * compress * Math.min(fx.ailL, fx.ailR) / Math.max(0.35, (fx.ailL + fx.ailR) / 2);
-    const ty = yc * P.wInst * 0.22 * lowSpeed;
+    // rudder: the airflow over it, plus on propeller aircraft the slipstream from the propeller, which keeps the rudder
+    // working at almost no airspeed under power (how a stall turn pivots at the top)
+    const wash = !P.jet && v < P.vs ? Math.max(0, Math.min(1, ctl.throttle)) * (1 - v / P.vs) * 1.1 : 0;
+    const ty = yc * (P.wInst * 0.22 * lowSpeed + wash);
     const k = 1 - Math.exp(-dt * 6);
     c.rates.x += (tp - c.rates.x) * k; c.rates.z += (tr - c.rates.z) * k; c.rates.y += (ty - c.rates.y) * k;
     // stability: the nose weathervanes into the airflow, a stalled wing drops the nose, asymmetric lift rolls
