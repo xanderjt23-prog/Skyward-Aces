@@ -209,7 +209,7 @@ class BotBrain {
     // missiles
     const st = c.missileStation();
     if (st && this.missileCd <= 0 && d < st.s.range * 0.75 && d > 400) {
-      const seen = c.seekerTarget(st);
+      const seen = c.seekerTarget(st); if (seen && st.s.seek !== 'ir') seen.wLock = m.time; // our radar on it
       if (seen === t) { this.lockT += dt * 3; if (this.lockT > 1.2) { c.fireMissile(t); this.missileCd = 6 + Math.random() * 6; this.lockT = 0; } } else this.lockT = 0;
     }
     // rockets at bombers (R4M-style)

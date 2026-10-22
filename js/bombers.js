@@ -77,6 +77,9 @@ const BOMBSIGHT_OF = { b17g: 'norden', b29: 'norden', b25j: 'norden', b10: 'nord
 const VOICE_OF = { f16c: 'en-US', fa18e: 'en-US', f22a: 'en-US', ef2000g: 'en-GB', ef2000uk: 'en-GB', rafalec: 'fr-FR', m2000c: 'fr-FR', m2000d: 'fr-FR',
   mig29: 'ru-RU', mig29g: 'ru-RU', su27: 'ru-RU', su35s: 'ru-RU', su34: 'ru-RU', su57: 'ru-RU' };
 const DIVE_BRAKES = ['ju87', 'sbd', 'd3a', 'pe2', 'a1h'];
+// aircraft with a missile approach warning system as standard: F-22A (AN/AAR-56), F-35A (AN/AAQ-37 DAS), Eurofighter
+// Typhoon (Praetorian DASS), Rafale (SPECTRA DDM), Su-35S and Su-57 (ultraviolet / infrared MAWS)
+const MAWS = ['f22a', 'f35a', 'ef2000g', 'ef2000uk', 'rafalec', 'su35s', 'su57'];
 for (const p of PLANE_LIST) {
   // flaps: none on WW1 / biplanes; automatic manoeuvre flaps on 4th/5th-generation jets; otherwise selectable
   // (fighters get a "combat" notch, bombers and jets only take-off / landing)
@@ -86,6 +89,11 @@ for (const p of PLANE_LIST) {
   if (TYPES[p.id]) p.type = TYPES[p.id];
   p.bombsight = BOMBSIGHT_OF[p.id] ? SIGHTS[BOMBSIGHT_OF[p.id]] : null;
   p.voice = VOICE_OF[p.id] || null; p.rwr = p.kind === 'jet' && p.era >= 5; // radar-warning / ground-proximity tones from the Cold War on
+  // missile approach warning (sees the rocket motor's plume, so it also warns of heat seekers, which a radar warner
+  // never hears): only the types fitted with one as standard
+  p.maws = MAWS.includes(p.id);
+  // the dispensers of Cold War and later jets fire chaff as well as flares (one countermeasures load)
+  p.chaff = p.kind === 'jet' && p.era >= 5 && p.flares > 0;
   if (!p.type) p.type = p.role === 'bomber' ? 'Bomber' : p.role === 'attack' ? 'Attack aircraft' : p.kind === 'jet' ? (p.era >= 6 ? 'Multirole fighter' : 'Jet fighter') : p.shape === 'bi' || p.shape === 'tri' ? 'Biplane fighter' : 'Fighter';
   // short name (without the maker) for markers and cards
   if (!p.short) { let n = p.name; for (const mk of MAKERS.concat(['Airco', 'Martin', 'Douglas', 'Fairchild Republic', 'General Dynamics', 'Hannover', 'Dornier', 'Arado', 'Fiat', 'Panavia', 'Bristol', 'de Havilland', 'Avro', 'English Electric', 'Blackburn', 'Sikorsky', 'Aichi', 'Breguet', 'Lioré et Olivier', 'Sud Aviation', 'SEPECAT'])) if (n.startsWith(mk + ' ')) { n = n.slice(mk.length + 1); break; } p.short = n; }

@@ -330,7 +330,7 @@ const Models = (() => {
   function storeMesh(s, id) {
     let m, r, len;
     if (s.kind === 'b') { m = bomb(s.mass); r = 0.12 * Math.cbrt(s.mass / 20) * 0.6; len = r * 9; if (s.guided) { const b2 = new Builder(); b2.add(box(r * 3, 0.02, r * 1.2), 0x555555, [0, 0, -len * 0.45]); m.add(new THREE.Mesh(b2.build(), mat('vc'))); } }
-    else if (s.kind === 'm') { len = Math.min(4.2, 1.6 + s.mass / 90); r = 0.06 + s.mass / 2600; m = missile(len, r); }
+    else if (s.kind === 'm') { len = s.len; r = s.dia / 2; m = missile(len, r); }
     else if (s.kind === 'g') { len = 2.4 + s.mass / 600; r = 0.22 + s.mass / 4000; const b2 = new Builder(); b2.add(zcyl(r * 0.6, r, len, 12), 0x5c6268, [0, 0, 0]); b2.add(zcyl(0.03, 0.03, 0.6, 6), 0x222222, [0, -r * 0.3, -len / 2 - 0.3]); m = new THREE.Mesh(b2.build(), mat('vc')); }
     else { // rockets: a pod for many small rockets, rails for a few big ones
       const pod = s.count >= 6 || /pod/i.test(s.name), b2 = new Builder();

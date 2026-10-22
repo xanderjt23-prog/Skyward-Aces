@@ -256,7 +256,12 @@ const HUD = (() => {
   // (the tutorials teach take-off and landing)
   function warnings(game, p) {
     const m = game.match, w = [], real = m.cfg.realistic, cues = [];
-    if (p.missileWarn > 0.3) { w.push(['MISSILE', '#ff3b30', true]); cues.push('missile'); }
+    // radar warning receiver: a radar tracking us, a radar missile guiding on us; missile approach warner: a motor plume
+    // coming at us. An aircraft without them gets no warning: look out for the smoke trail
+    const recent = t => t != null && m.time - t < 0.3;
+    const rLaunch = p.def.rwr && recent(p.wLaunch), rLock = p.def.rwr && recent(p.wLock), maws = p.def.maws && recent(p.wMaws);
+    if (rLaunch || maws) { w.push([maws && !rLaunch ? 'MISSILE APPROACH' : 'MISSILE LAUNCH', '#ff3b30', true]); cues.push('missile'); }
+    else if (rLock) { w.push(['RADAR LOCK', '#ffc04d']); if (Math.floor(m.time * 2) % 2 === 0) cues.push('lock'); }
     const ahead = p.pos.clone().addScaledVector(p.vel, 4), agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
     if (ahead.y < m.world.groundAt(ahead.x, ahead.z) + 20 && p.vel.y < -5) { w.push(['PULL UP', '#ff3b30', true]); cues.push('pullup'); }
     if (p.stalled) { w.push(['STALL', '#ffc04d']); cues.push('stall'); }
@@ -269,7 +274,7 @@ const HUD = (() => {
     const shown = real ? w.filter(x => /G-LOC|OUT OF BOUNDS|KNOCKED/.test(x[0])) : w;
     shown.forEach(([t, c, blink], i) => { if (blink && Math.floor(m.time * 4) % 2) return; text(t, W / 2, H * 0.3 + i * 26, c, 20, 'center', true); });
     if (p.def.voice) for (const k of cues) Sound.voice(p.def.voice, k, m.time);                    // the aircraft's voice warning system
-    if ((cues.includes('missile') || cues.includes('pullup')) && (p.def.rwr || !real)) Sound.warn(m.time); // RWR / GPWS tones
+    if (cues.includes('missile') || cues.includes('lock') || (cues.includes('pullup') && (p.def.rwr || !real))) Sound.warn(m.time); // RWR / MAWS / GPWS tones
   }
   // ---- match status (top centre)
   function topBar(game) {

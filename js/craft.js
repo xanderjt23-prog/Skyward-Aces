@@ -344,6 +344,7 @@ class Craft {
   cycleMissile() { const t = this.missileTypes(); if (t.length < 2) return false; this.missileStation(); this.missileSel = t[(t.indexOf(this.missileSel) + 1) % t.length]; return true; }
   seekerTarget(st, aimDir) {
     const s = st.s, m = this.match; let best = null, bs = 1e9; const fwd = aimDir || new V3(0, 0, -1).applyQuaternion(this.quat);
+    if (s.seek !== 'ir' && !this.def.radar) return null; // a radar missile needs the aircraft's radar to find its target
     const range = s.range * (this.lo.mods.radar && s.radar ? 1.25 : 1);
     for (const c of m.crafts) {
       if (!c.alive || c.team === this.team || c.dm.destroyed) continue;

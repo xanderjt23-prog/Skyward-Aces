@@ -164,6 +164,25 @@ const STORES = {
   gp_suu23:{ kind: 'g', name: 'SUU-23/A gun pod (M61)', mass: 780, eras: [5, 6], gun: 'm61', guns: 1, price: 4000, bloc: 'west' },
   gp_gpu5: { kind: 'g', name: 'GPU-5/A gun pod (30 mm)', mass: 860, eras: [6, 7], gun: 'gau13', guns: 1, price: 6000, bloc: 'west' },
 };
+
+// ---- missile airframes and motors (published figures): length and body diameter in metres, boost burn time in seconds,
+// `sus` the sustainer (or ramjet) time after it, `seekR` where an active radar missile switches its own seeker on.
+// The flight model (combat.js) takes its drag from the diameter and mass, its thrust from the burn time, and its turn
+// limit from the airspeed and air density: range and agility come out of the physics, `range` is the launch envelope.
+const MISSILE_PHYS = {
+  aim9b: [2.83, 0.127, 2.2], r3s: [2.84, 0.127, 2.2], firestreak: [3.19, 0.223, 1.9], redtop: [3.27, 0.222, 2.3], aim9d: [2.87, 0.127, 5.0],
+  aim7e: [3.66, 0.203, 2.8], r530: [3.28, 0.263, 2.7, 4], r60: [2.09, 0.12, 3.0], aim9l: [2.85, 0.127, 5.2], magic2: [2.75, 0.157, 1.9],
+  r73: [2.90, 0.17, 5.0], aim7m: [3.66, 0.203, 4.5, 11], skyflash: [3.68, 0.203, 4.5, 11], s530d: [3.80, 0.263, 2.0, 4.5], r27r: [4.08, 0.23, 6.0],
+  aam3: [3.00, 0.127, 4.0], aim120: [3.66, 0.178, 8.0, 0, 12000], r77: [3.60, 0.20, 6.0, 0, 15000], aim9x: [3.02, 0.127, 5.2], irist: [2.94, 0.127, 6.0],
+  micair: [3.10, 0.16, 5.0], r74: [2.90, 0.17, 5.0], aam4: [3.67, 0.203, 8.0, 0, 15000], meteor: [3.65, 0.178, 3.0, 40, 15000],
+  aim54: [3.96, 0.38, 27, 0, 18000], aim4d: [2.02, 0.163, 1.8], aim9p: [3.07, 0.127, 2.5], aim7f: [3.66, 0.203, 4.5, 11], r13m: [2.87, 0.127, 3.0],
+  r40t: [6.22, 0.31, 6.0], r40r: [5.90, 0.31, 6.0], r27et: [4.50, 0.26, 6.0], r27er: [4.78, 0.26, 6.0], r771: [3.71, 0.20, 6.0, 0, 15000],
+  magic1: [2.72, 0.157, 1.9], s530f: [3.54, 0.263, 2.0, 4.5], micaem: [3.10, 0.16, 5.0, 0, 10000], asraam: [2.90, 0.166, 3.0], aim120d: [3.66, 0.178, 9.0, 0, 15000],
+};
+for (const id in MISSILE_PHYS) { const [len, dia, burn, sus, seekR] = MISSILE_PHYS[id]; Object.assign(STORES[id], { len, dia, burn, sus: sus || 0, seekR: seekR || 0 }); }
+// the surface-to-air missile of the SAM sites (2K12 Kub / SA-6 class: semi-active radar, the site's radar illuminates)
+const SAM_STORE = { kind: 'm', name: 'SAM', seek: 'sarh', range: 9000, speed: 900, g: 18, fov: 40, ccm: 0.7, life: 25, mass: 599, len: 5.8, dia: 0.335, burn: 4, sus: 15, seekR: 0, radar: true };
+for (const id in STORES) if (STORES[id].kind === 'm' && !STORES[id].len) throw new Error('missile without airframe data: ' + id);
 // ---- Bombs by their real designations. [id, name, kg, [first era, last era], who carries it, type]
 // who: a nation list, or 'west' / 'east'. type: gp general purpose | hc high capacity (thin case, big blast) | ap armour
 // piercing / semi-armour piercing (smaller blast) | cl cluster (wide spread of small bomblets) | rt retarded (parachute /

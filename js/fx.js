@@ -62,6 +62,7 @@ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vc, t.a * va); if (g
       case 'splash': for (let i = 0; i < 3; i++) spawn(smoke, pos.x, pos.y + 1, pos.z, R() * 5, 10 + Math.random() * 10, R() * 5, 1.2, 1.5, 5 * k, 0.9, 0.95, 1, 0.7, 1, -8); break;
       case 'flak': spawn(glow, pos.x, pos.y, pos.z, 0, 0, 0, 0.15, 14, 6, 1, 0.7, 0.3, 1, 0, 0); for (let i = 0; i < 4; i++) spawn(smoke, pos.x + R() * 4, pos.y + R() * 4, pos.z + R() * 4, R() * 2, R() * 2, R() * 2, 7, 8, 20, 0.08, 0.08, 0.08, 0.8, 1, 0); break;
       case 'flare': spawn(glow, pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, 0.12, 6, 4, 1, 0.95, 0.75, 1, 0, 0); spawn(smoke, pos.x, pos.y, pos.z, 0, 0, 0, 2, 1.5, 5, 0.85, 0.85, 0.85, 0.5, 0.5, 0); break;
+      case 'chaff': spawn(smoke, pos.x + R() * 6, pos.y + R() * 6, pos.z + R() * 6, R(), R() - 1, R(), 1.4, 1.2, 4, 0.78, 0.8, 0.84, 0.35, 0.6, 0); break;
       case 'missile': spawn(glow, pos.x, pos.y, pos.z, 0, 0, 0, 0.08, 2.2, 1, 1, 0.8, 0.5, 1, 0, 0); spawn(smoke, pos.x, pos.y, pos.z, R(), R(), R(), 3, 1, 6, 0.85, 0.85, 0.85, 0.55, 0.5, 0.5); break;
       case 'rocket': spawn(glow, pos.x, pos.y, pos.z, 0, 0, 0, 0.06, 1.6, 1, 1, 0.7, 0.4, 1, 0, 0); spawn(smoke, pos.x, pos.y, pos.z, R(), R(), R(), 1.6, 0.8, 4, 0.75, 0.75, 0.75, 0.5, 0.5, 0.3); break;
     }

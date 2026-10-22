@@ -197,7 +197,8 @@ const Game = (() => {
     for (const id of Object.keys(G.locks)) if (!types.includes(id)) delete G.locks[id];
     for (const id of types) { const st = p.missileStation(id), L = G.locks[id] || (G.locks[id] = { sk: null, t: 0 }); if (!st) continue;
       const hobs = st.s.fov >= 45, sk = p.seekerTarget(st, hobs ? G.aimDir : null);
-      if (sk && sk === L.sk) L.t += dt; else L.t = 0; L.sk = sk; L.locked = !!sk && L.t > (st.s.seek === 'ir' ? 0.7 : 1.2); }
+      if (sk && sk === L.sk) L.t += dt; else L.t = 0; L.sk = sk; L.locked = !!sk && L.t > (st.s.seek === 'ir' ? 0.7 : 1.2);
+      if (sk && st.s.seek !== 'ir') sk.wLock = m.time; } // our radar tracking it: its radar warner hears that
     const A = G.armed && G.locks[G.armed];
     G.seeker = A ? A.sk : null; G.locked = !!(A && A.locked); G.lockT = A ? A.t : 0;
     Sound.lockTone(A && A.sk ? (A.locked ? 2 : 1) : 0, G.armed && STORES[G.armed].seek !== 'ir');

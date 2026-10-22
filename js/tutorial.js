@@ -137,11 +137,12 @@ const Tutorial = (() => {
         { text: () => `Wait for the hit. If it missed, lock and fire again.`, done: c => c.kills() >= 1 },
         { text: () => `The second target is 10 km out: too far for a heat seeker. Each weapon has its own key: the radar-guided ${WN(isRadar)} is on ${WK(isRadar)}. Point at the target, wait for the lock and press it.`, done: c => c.kills() >= 2 },
       ] },
-    { id: 'flares', cat: 'mech', fits: pl => pl.flares > 0, name: 'Missile defence', icon: '🎆', plane: 'f16c', desc: 'Heat-seeking missiles are fired at you: release flares and turn hard to make them miss.',
+    { id: 'flares', cat: 'mech', fits: pl => !!pl.chaff, name: 'Missile defence', icon: '🎆', plane: 'ef2000uk', desc: 'The Typhoon against heat seekers (flares and a hard turn) and a radar-guided missile (turn it onto your beam to notch it, get below the launcher and drop chaff). Which warnings you get depends on what your aircraft has fitted.',
       start: { alt: 4000 }, bots: () => [target('e1', 'mig29', 0, 4000, 4000, { team: 1 })],
       steps: [
-        { text: () => `An enemy is behind you and will fire heat-seeking missiles. When you hear the warning, release flares with ${K('flares')} and turn hard.`, launch: true, done: c => c.survived >= 1 },
-        { text: () => `Again: flares and a hard turn the moment the missile warning sounds.`, launch: true, done: c => c.survived >= 2 },
+        { text: c => `${c.T.inFlight ? 'MISSILE LAUNCHED behind you! ' : ''}An enemy behind you fires heat seekers. ${c.p.def.maws ? 'Your missile approach warner calls the launch.' : 'Your aircraft has no missile approach warner (heat seekers send no radar signal), so the instructor calls it.'} Release flares with ${K('flares')} and turn hard.`, launch: 'ir', done: c => c.survived >= 1 },
+        { text: c => `${c.T.inFlight ? 'MISSILE LAUNCHED! ' : ''}Again: flares and a hard turn the moment the missile comes.`, launch: 'ir', done: c => c.survived >= 2 },
+        { text: c => `${c.T.inFlight ? 'RADAR MISSILE INBOUND from ahead! ' : ''}A fighter 12 km ahead fires a radar-guided missile${c.p.def.rwr ? ': your radar warner sounds while its radar tracks you' : ''}. Turn 90° so it is off your wing (the notch), descend below it and release chaff with ${K('flares')}.`, launch: 'radar', done: c => c.survived >= 3 },
       ] },
   ];
   const byId = id => LIST.find(t => t.id === id);
@@ -214,7 +215,7 @@ const Tutorial = (() => {
     if (T.stepT === 0) T.full = p.count('b') + p.count('r'); // ordnance at the start of the step
     T.stepT += dt;
     const st = T.t.steps[T.step];
-    if (st.launch) missileDrill(m, T, dt);
+    if (st.launch) missileDrill(m, T, dt, st.launch);
     track(m); const c = ctx(m), ok = st.done(c);
     if (T.stepT > 0.6 && ok) {
       Sound.clunk && Sound.clunk(); T.step++; T.stepT = 0; T.S = {};
@@ -222,15 +223,22 @@ const Tutorial = (() => {
     }
   }
   // missile defence drill: the enemy closes in behind the player and fires a heat seeker; surviving it counts
-  function missileDrill(m, T, dt) {
+  function missileDrill(m, T, dt, kind) {
     const p = m.player, e = m.crafts.find(c => c.team === 1 && c.alive);
     if (!e) { const d = m.crafts.find(c => c.team === 1); if (d) m.spawnCraft(d); return; } // shot the launcher down? it comes back
     const live = m.combat.missiles.filter(x => x.target === p);
-    if (T.inFlight && !live.length) { T.inFlight = false; if (p.alive) T.survived++; T.launchT = 6; }
+    // it only counts if the missile missed: hit (even if the aircraft lives) and it is fired again
+    if (T.inFlight && !live.length) { T.inFlight = false; T.launchT = 6;
+      if (p.alive && p.lastHitT < T.firedT) T.survived++; else m.events.push({ t: m.time, e: 'msg', text: 'Hit! It will be fired again' }); }
     if (live.length) return;
     T.launchT -= dt; if (T.launchT > 0) return;
+    if (kind === 'radar') { // head-on from 12 km and 1,500 m above: a semi-active missile, guided while the launcher's radar holds the player
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat).setY(0).normalize(); e.pos.copy(p.pos).addScaledVector(f, 12000); e.pos.y += 1500;
+      e.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(e.pos, p.pos, new THREE.Vector3(0, 1, 0))); e.vel.copy(p.pos).sub(e.pos).setLength(220);
+      m.combat.missile(e.pos.clone(), e.vel.clone(), e, Object.assign({}, STORES.r27er, { ccm: 0.5 }), p, 'r27er'); T.inFlight = true; T.firedT = m.time; T.launchT = 99; return;
+    }
     const back = new THREE.Vector3(0, 0, 1).applyQuaternion(p.quat).multiplyScalar(2600); e.pos.copy(p.pos).add(back); e.vel.copy(p.vel); e.quat.copy(p.quat);
-    m.combat.missile(e.pos.clone(), p.vel.clone(), e, Object.assign({}, STORES.r73, { ccm: 0.35 }), p, 'r73'); T.inFlight = true; T.launchT = 99;
+    m.combat.missile(e.pos.clone(), p.vel.clone(), e, Object.assign({}, STORES.r73, { ccm: 0.35 }), p, 'r73'); T.inFlight = true; T.firedT = m.time; T.launchT = 99;
   }
   // ---- HUD: the instruction panel and the waypoint marker
   function draw(g, W, H, m, cam, text, proj) {

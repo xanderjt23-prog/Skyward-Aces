@@ -452,7 +452,7 @@ class Match {
         const t = a.target; if (!t || !t.alive || t.wreck) { a.target = null; continue; }
         const d = t.pos.distanceTo(a.pos); if (d > R) continue;
         if (a.type === 'sam') {
-          if (a.cd <= 0 && this.isHost && d > 1200) { a.cd = 14 + Math.random() * 6; this.combat.missile(a.pos.clone().add(new V3(0, 3, 0)), new V3(0, 40, 0), a, { name: 'SAM', seek: 'arh', range: R, speed: 900, g: 18, fov: 40, ccm: 0.95, life: 25, mass: 200 }, t, 'sam'); }
+          if (a.cd <= 0 && this.isHost && d > 1200) { a.cd = 14 + Math.random() * 6; this.combat.missile(a.pos.clone().add(new V3(0, 3, 0)), new V3(0, 40, 0), a, Object.assign({}, SAM_STORE, { range: R }), t, 'sam'); }
           continue;
         }
         if (a.type === 'heavy' || a.type === 'archie') {
@@ -621,11 +621,10 @@ class Match {
     if (m.k === 'm') {
       const tg = this.byId[m.tg]; if (!tg) return;
       const owner = m.id === -1 ? (this.bases[m.aa] && this.bases[m.aa].aa[0]) : c; if (!owner) return;
-      const s = m.s === 'sam' ? { name: 'SAM', seek: 'arh', range: 9000, speed: 900, g: 18, fov: 40, ccm: 0.95, life: 25, mass: 200 } : STORES[m.s];
-      const mesh = Models.missile(2.8, 0.09); this.scene.add(mesh);
+      const s = m.s === 'sam' ? SAM_STORE : STORES[m.s];
+      const mesh = Models.missile(s.len, s.dia / 2); this.scene.add(mesh);
       const dir = V(m.v).lengthSq() > 1 ? V(m.v).normalize() : new V3(0, 1, 0);
       this.combat.missiles.push({ p: V(m.p), prev: V(m.p), v: V(m.v).addScaledVector(dir, 30), dir, owner, team: owner.team, s, target: tg, life: s.life, t: 0, mesh, real: false });
-      if (tg.local) tg.missileWarn = 1;
     }
   }
   dispose() {

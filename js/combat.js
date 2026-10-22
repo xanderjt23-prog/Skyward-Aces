@@ -4,9 +4,10 @@
 // fired by aircraft simulated on this machine ("real") deal damage; the rest
 // are cosmetic copies of what remote players fire.
 // ============================================================================
+const s_ccm = ms => ms.s.ccm || 0.5;
 class Combat {
   constructor(match) {
-    this.m = match; this.bullets = []; this.free = []; this.rockets = []; this.bombs = []; this.missiles = []; this.flares = []; this.shells = [];
+    this.m = match; this.bullets = []; this.free = []; this.rockets = []; this.bombs = []; this.missiles = []; this.flares = []; this.chaff = []; this.shells = [];
     this.grid = new Map(); this.CELL = 250; this._o = new V3(); this._d = new V3(); this._iq = new THREE.Quaternion();
   }
   bullet(p, v, owner, shell, col, life, cosmetic) {
@@ -97,8 +98,11 @@ class Combat {
     });
     // ---- flares
     this.flares = this.flares.filter(f => { f.life -= dt; f.v.y -= 9.81 * 0.3 * dt; f.v.multiplyScalar(1 - 1.2 * dt); f.p.addScaledVector(f.v, dt); FX.puff('flare', f.p, f.v); return f.life > 0; });
+    // ---- chaff: a cloud of foil that stops almost at once and drifts down
+    this.chaff = this.chaff.filter(c => { c.life -= dt; c.v.multiplyScalar(1 - 3 * dt); c.v.y -= 2 * dt; c.p.addScaledVector(c.v, dt); if (Math.random() < dt * 8) FX.puff('chaff', c.p); return c.life > 0; });
     // ---- missiles
     this.missiles = this.missiles.filter(ms => this.updateMissile(ms, dt));
+    this.sensors();
     // ---- flak shells: burst at the fuse time
     this.shells = this.shells.filter(s => {
       s.t -= dt; s.v.y -= 9.81 * dt; s.p.addScaledVector(s.v, dt);
@@ -108,49 +112,133 @@ class Combat {
     });
     FX.drawTracers(this.bullets);
   }
+  // ---- missile flight: a rocket motor (boost, then sustainer or ramjet if it has one), drag from the airframe's real
+  // diameter and mass and the air density, gravity, and proportional navigation limited by the lift the fins can make
+  // at this speed and height (a missile coasting slowly in thin air can hardly turn), with the drag of turning on top
   updateMissile(ms, dt) {
     const m = this.m, s = ms.s;
     ms.t += dt; ms.life -= dt;
-    const burn = ms.t < 2.5;
-    const sp = ms.v.length();
-    if (burn) ms.v.addScaledVector(ms.dir, (s.speed * 1.3 - sp) * dt * 0.9 + 60 * dt);
-    else ms.v.multiplyScalar(1 - 0.05 * dt);
-    // seeker
-    let tgt = ms.decoy ? ms.decoy.p : ms.target && ms.target.alive ? ms.target.pos : null;
-    if (ms.decoy && ms.decoy.life <= 0) { ms.decoy = null; tgt = null; ms.lost = true; }
-    if (!ms.decoy && ms.target && !ms.lost) {
-      // flares within the seeker view may seduce an IR missile
-      if (s.seek === 'ir') for (const f of this.flares) {
-        if (f.owner !== ms.target || f.tried.has(ms)) continue; f.tried.add(ms);
-        if (Math.random() > s.ccm * 0.9 + 0.05) { ms.decoy = f; break; }
-      }
-      // semi-active missiles need the launcher's radar to keep the target in front of it
-      if (s.seek === 'sarh' && ms.owner && ms.owner.alive) { const to = ms.target.pos.clone().sub(ms.owner.pos).normalize(), f = new V3(0, 0, -1).applyQuaternion(ms.owner.quat); if (to.dot(f) < 0.5) ms.lost = true; }
-      // past the seeker gimbal limit: lost
-      if (ms.target && ms.t > 0.4) { const to = ms.target.pos.clone().sub(ms.p).normalize(); if (to.dot(ms.v.clone().normalize()) < Math.cos(Math.min(80, s.fov * 2.2) * Math.PI / 180)) ms.lost = true; }
-      if (ms.target && ms.target.missileWarn !== undefined && ms.target.alive) ms.target.missileWarn = Math.max(ms.target.missileWarn, 1);
+    const v = Math.max(1, ms.v.length()), rho = Math.exp(-Math.max(0, ms.p.y) / 9000), dir = this._d.copy(ms.v).divideScalar(v);
+    const P = Combat.phys(s);
+    ms.motor = ms.t < P.burn ? 2 : ms.t < P.burn + P.sus ? 1 : 0;
+    let ax = -P.k * rho * v * v;
+    if (ms.motor === 2) ax += P.thrust; else if (ms.motor === 1) ax += P.k * rho * P.cruise * P.cruise;
+    // seeker and guidance
+    const tgt = ms.t > 0.25 ? this.track(ms, dt) : null;
+    ms.nG = 0;
+    if (tgt && v > 150) {
+      const R = tgt.p.clone().sub(ms.p), Vr = tgt.v.clone().sub(ms.v), R2 = Math.max(1, R.lengthSq());
+      const om = new V3().crossVectors(R, Vr).divideScalar(R2);                       // line-of-sight rotation rate
+      const a = new V3().crossVectors(om, ms.v).multiplyScalar(4);                     // proportional navigation, N = 4
+      a.y += 9.81; a.addScaledVector(dir, -a.dot(dir));                                 // hold the trajectory against gravity
+      const nMax = Math.min(s.g, s.g * rho * v * v / (P.cruise * P.cruise)) * 9.81;
+      if (a.length() > nMax) a.setLength(nMax);
+      ms.nG = a.length() / 9.81; ms.v.addScaledVector(a, dt);
     }
-    if (ms.lost && !ms.decoy) tgt = null;
-    if (tgt && ms.t > 0.25) {
-      // proportional navigation, limited to the missile's G
-      const tv = ms.decoy ? ms.decoy.v : ms.target.vel, rel = tgt.clone().sub(ms.p), d = rel.length();
-      const tof = d / Math.max(200, ms.v.length()), aim = tgt.clone().addScaledVector(tv, tof * 0.9).sub(ms.p).normalize();
-      const cur = ms.v.clone().normalize(), maxTurn = s.g * 9.81 / Math.max(100, ms.v.length()) * dt;
-      const ang = Math.acos(Math.max(-1, Math.min(1, cur.dot(aim))));
-      if (ang > 1e-4) { const k = Math.min(1, maxTurn / ang); cur.lerp(aim, k).normalize(); }
-      ms.dir.copy(cur); ms.v.copy(cur.multiplyScalar(ms.v.length()));
-    }
+    ax -= ms.nG * 9.81 / 6;                                                             // drag of pulling G (lift / drag ~6)
+    ms.v.addScaledVector(dir, ax * dt); ms.v.y -= 9.81 * dt;
+    if (!ms.motor && ms.v.length() < 200) ms.lost = true;                               // too slow to steer: falls away
+    ms.dir.copy(ms.v).normalize();
     ms.prev.copy(ms.p); ms.p.addScaledVector(ms.v, dt);
-    FX.puff('missile', ms.p);
+    if (ms.motor) FX.puff('missile', ms.p);
     if (ms.mesh) { ms.mesh.position.copy(ms.p); ms.mesh.lookAt(ms.p.clone().add(ms.v)); ms.mesh.rotateY(Math.PI); }
     let boom = ms.life <= 0 || ms.p.y < m.world.groundAt(ms.p.x, ms.p.z);
     // proximity fuse against any enemy (not only the target)
+    // (it detonates at the point of closest approach along this frame's path, not where the frame ends)
+    let at = ms.p;
     if (!boom && ms.t > 0.5) for (const c of this.near(ms.p)) { if (c.team === ms.team || !c.alive || c === ms.owner) continue;
-      const d = this.segDist(ms.prev, ms.p, c.pos); if (d < 9 + c.dm.radius * 0.3) { boom = true; ms.hitCraft = c; break; } }
-    if (ms.decoy && ms.p.distanceTo(ms.decoy.p) < 8) boom = true;
-    if (boom) { const big = s.mass > 150; this.explode(ms.p, 200, 8, big ? 520 : 380, big ? 16 : 12, ms.owner, ms.team, ms.real, 'missile', false); this.removeMesh(ms); return false; }
+      const d = this.segDist(ms.prev, ms.p, c.pos); if (d < 12 + c.dm.radius * 0.3) { boom = true; ms.hitCraft = c; at = this.segPoint(ms.prev, ms.p, c.pos); break; } }
+    if (ms.decoy && ms.decoy.flare && ms.p.distanceTo(ms.decoy.p) < 8) boom = true;
+    if (boom) { const big = s.mass > 150; this.explode(at.clone(), 200, 8, big ? 520 : 380, big ? 16 : 12, ms.owner, ms.team, ms.real, 'missile', false); this.removeMesh(ms); return false; }
     return true;
   }
+  // the seeker: where the missile is steering (point and velocity), or null when it has nothing. Also raises the
+  // target's warnings: a radar warning receiver hears the illuminating or active radar, a missile approach warner sees
+  // the plume (both only on aircraft fitted with them, see bombers.js)
+  track(ms, dt) {
+    const m = this.m, s = ms.s, T = ms.target, now = m.time;
+    if (ms.decoy) { if (ms.decoy.life <= 0) { ms.decoy = null; ms.lost = true; return null; } return { p: ms.decoy.p, v: ms.decoy.v }; }
+    if (ms.lost || !T || !T.alive) return null;
+    const toT = T.pos.clone().sub(ms.p), d = toT.length(), fwd = ms.v.clone().normalize();
+    const inGimbal = () => ms.t < 0.4 || toT.dot(fwd) / d > Math.cos(Math.min(80, s.fov * 2.2) * Math.PI / 180);
+    if (s.seek === 'ir') {
+      if (!inGimbal()) { ms.lost = true; return null; }
+      // flares near the target and in the seeker's view may seduce it; better seekers reject more of them
+      for (const f of this.flares) {
+        if (f.owner !== T || f.tried.has(ms) || f.p.distanceTo(T.pos) > 300) continue; f.tried.add(ms);
+        if (Math.random() < (1 - s.ccm) * 0.6) { ms.decoy = f; return { p: f.p, v: f.v }; }
+      }
+      return { p: T.pos, v: T.vel };
+    }
+    // radar guided. The launcher's radar (an aircraft's, within its +-60 deg scan, or a SAM site's) tracks the target
+    // unless the target hides in the ground clutter by flying across the beam (a notch) long enough
+    const L = ms.owner, radarOk = L && (L.isAA ? L.hp > 0 : L.alive && L.def && L.def.radar && T.pos.clone().sub(L.pos).normalize().dot(new V3(0, 0, -1).applyQuaternion(L.quat)) > 0.5);
+    const illum = radarOk && !this.notched(ms, 'l', L.pos, T, dt);
+    if (illum) T.wLock = now;
+    if (s.seek === 'sarh') {
+      if (!inGimbal()) { ms.lost = true; return null; }
+      if (!illum) { ms.dark = (ms.dark || 0) + dt; if (ms.dark > 1.5) ms.lost = true; return ms.last ? this.predict(ms) : null; }
+      ms.dark = 0; T.wLaunch = now;
+      const c = this.chaffed(ms, T, 'l'); if (c) return c;
+      ms.last = { p: T.pos.clone(), v: T.vel.clone(), t: now }; return { p: T.pos, v: T.vel };
+    }
+    // active radar: datalink updates from the launcher while it tracks, inertial otherwise; near the predicted position
+    // the missile's own radar switches on ("pitbull") and from then on it guides itself
+    if (!ms.active) {
+      if (illum || !ms.last) ms.last = { p: T.pos.clone(), v: T.vel.clone(), t: now };
+      const pr = this.predict(ms);
+      if (pr.p.distanceTo(ms.p) > (s.seekR || 12000)) return pr;
+      ms.active = true;
+      if (!inGimbal() || d > (s.seekR || 12000) * 1.3 || (T.def.stealth && d > (s.seekR || 12000) * T.def.stealth)) { ms.lost = true; return pr; }
+    }
+    if (!inGimbal() || this.notched(ms, 'a', ms.p, T, dt)) { ms.lost = true; return null; }
+    T.wLaunch = now;
+    const c = this.chaffed(ms, T, 'a'); if (c) return c;
+    return { p: T.pos, v: T.vel };
+  }
+  predict(ms) { const k = this.m.time - ms.last.t; return { p: ms.last.p.clone().addScaledVector(ms.last.v, k), v: ms.last.v }; }
+  // a notch: the target's own velocity nearly square to the radar beam (its Doppler falls into the ground clutter the
+  // radar filters out) while the radar looks down at it or it is low. Held long enough, the radar drops it; chaff in
+  // the air shortens that a lot. Better radars (ccm) hold on longer.
+  notched(ms, key, rp, T, dt) {
+    const los = T.pos.clone().sub(rp), d = los.length(); los.divideScalar(Math.max(1, d));
+    const radial = Math.abs(T.vel.dot(los)), agl = T.pos.y - this.m.world.groundAt(T.pos.x, T.pos.z);
+    const lookDown = rp.y - T.pos.y > d * 0.03 || agl < 600;
+    const k = 'notch' + key;
+    if (radial < 35 && lookDown) ms[k] = (ms[k] || 0) + dt; else ms[k] = Math.max(0, (ms[k] || 0) - dt * 2);
+    const chaff = this.chaff.some(c => c.owner === T && c.life > 2);
+    return ms[k] > (chaff ? 0.25 : 0.6 + s_ccm(ms) * 1.8);
+  }
+  // fresh chaff near the target: each bundle gets one chance to pull the radar off it (much better in a notch)
+  chaffed(ms, T, key) {
+    for (const c of this.chaff) {
+      if (c.owner !== T || c.tried.has(ms) || c.p.distanceTo(T.pos) > 200) continue; c.tried.add(ms);
+      const notch = (ms['notch' + key] || 0) > 0.15;
+      if (Math.random() < (1 - s_ccm(ms)) * (notch ? 0.95 : 0.1) + (notch ? 0.1 : 0)) { ms.decoy = c; return { p: c.p, v: c.v }; }
+    }
+    return null;
+  }
+  // what the target's sensors report each frame (timestamps: a warning holds while it is renewed)
+  sensors() {
+    const now = this.m.time;
+    for (const ms of this.missiles) {
+      const T = ms.target; if (!T || !T.alive || ms.lost && !ms.decoy) continue; const d = ms.p.distanceTo(T.pos);
+      if ((ms.motor && d < 10000) || d < 2000) T.wMaws = now;                         // the plume, or the missile itself close by
+      if (d < 2500 && ms.p.clone().sub(T.pos).dot(T.vel) > -d * T.vel.length() * 0.5) T.wSeen = now; // the pilot sees it coming
+    }
+    for (const c of this.m.crafts) { if (!c.def) continue; const r = t => t != null && now - t < 0.3;
+      const sensed = (c.def.rwr && r(c.wLaunch)) || (c.def.maws && r(c.wMaws));
+      if (sensed || r(c.wSeen)) c.missileWarn = Math.max(c.missileWarn || 0, 1); }
+  }
+  // drag factor k (deceleration = k * density ratio * v^2, from Cd 0.35 on the body cross-section), boost thrust (reaches
+  // the rated speed from a typical launch speed by burn-out), the cruise speed a sustainer / ramjet holds and the speed
+  // the fins reach full G at sea level
+  static phys(s) {
+    if (s._ph) return s._ph;
+    const A = Math.PI * (s.dia || 0.2) * (s.dia || 0.2) / 4, k = 0.5 * 0.35 * A * 1.225 / Math.max(20, s.mass), burn = s.burn || 3, cruise = s.speed * 0.75;
+    return (s._ph = { k, burn, sus: s.sus || 0, thrust: (s.speed - 250) / burn + k * 0.5 * cruise * cruise, cruise });
+  }
+  segPoint(a, b, p) { const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-6))); return a.clone().addScaledVector(ab, t); }
   segDist(a, b, p) { const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-6))); return a.clone().addScaledVector(ab, t).distanceTo(p); }
   // explosion: ground damage (bases) and air blast (aircraft hit boxes)
   explode(p, groundDmg, groundRad, airDmg, airRad, owner, team, real, kind, onGround, aaOwner) {
@@ -180,7 +268,7 @@ class Combat {
     if (owner.local && this.m.net) this.m.sendFx({ k: 'r', id: owner.id, s: Object.keys(STORES).find(k => STORES[k] === s), p: [p.x, p.y, p.z], d: [dir.x, dir.y, dir.z], v: [v.x, v.y, v.z] });
   }
   missile(p, v, owner, s, target, sid) {
-    const mesh = Models.missile(2.8, 0.09); this.m.scene.add(mesh); Sound.launch(p, 'missile');
+    const mesh = Models.missile(s.len || 2.8, (s.dia || 0.18) / 2); this.m.scene.add(mesh); Sound.launch(p, 'missile');
     const dir = new V3(0, 0, -1).applyQuaternion(owner.quat || new THREE.Quaternion());
     if (owner.isAA) dir.copy(target.pos).sub(p).normalize().add(new V3(0, 0.3, 0)).normalize();
     const ms = { p: p.clone(), prev: p.clone(), v: v.clone().addScaledVector(dir, 30), dir, owner, team: owner.team, s, target, life: s.life, t: 0, mesh, real: owner.isAA ? this.m.isHost : owner.local };
@@ -190,11 +278,11 @@ class Combat {
   }
   flare(owner, cosmetic) {
     const right = new V3(1, 0, 0).applyQuaternion(owner.quat);
-    for (const s of [-1, 1]) this.flares.push({ p: owner.pos.clone(), v: owner.vel.clone().multiplyScalar(0.6).addScaledVector(right, s * 25).add(new V3(0, -10, 0)), life: 3.2, owner, tried: new Set() });
-    for (const ms of this.missiles) if (ms.target === owner) ms.target.missileWarn = 1;
+    for (const s of [-1, 1]) this.flares.push({ p: owner.pos.clone(), v: owner.vel.clone().multiplyScalar(0.6).addScaledVector(right, s * 25).add(new V3(0, -10, 0)), life: 3.2, owner, tried: new Set(), flare: true });
+    if (owner.def && owner.def.chaff) this.chaff.push({ p: owner.pos.clone(), v: owner.vel.clone().multiplyScalar(0.3), life: 4, owner, tried: new Set() });
     if (!cosmetic && owner.local && this.m.net) this.m.sendFx({ k: 'f', id: owner.id });
   }
   flak(p, v, fuse, dmg, rad, team, owner) { this.shells.push({ p: p.clone(), v: v.clone(), t: fuse, dmg, rad, team, real: this.m.isHost, owner }); }
   removeMesh(o) { if (o.mesh) { this.m.scene.remove(o.mesh); o.mesh = null; } }
-  clear() { for (const l of [this.rockets, this.bombs, this.missiles]) for (const o of l) this.removeMesh(o); this.bullets = []; this.rockets = []; this.bombs = []; this.missiles = []; this.flares = []; this.shells = []; }
+  clear() { for (const l of [this.rockets, this.bombs, this.missiles]) for (const o of l) this.removeMesh(o); this.bullets = []; this.rockets = []; this.bombs = []; this.missiles = []; this.flares = []; this.chaff = []; this.shells = []; }
 }

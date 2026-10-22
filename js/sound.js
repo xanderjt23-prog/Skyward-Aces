@@ -157,9 +157,10 @@ const Sound = (() => {
   function clunk() { if (ctx) play(B.clunk, 0.6, now(), 0.9 + Math.random() * 0.2); }
   // ---- cockpit tones --------------------------------------------------------
   let tone = null;
-  // IR seeker: a warbling growl while searching, a steady high tone when locked
-  function lockTone(state) {
-    if (!ctx) return;
+  // IR seeker: a warbling growl while searching, a steady high tone when locked. A radar missile has no seeker tone of
+  // its own: only a short steady tone once the radar has locked
+  function lockTone(state, radar) {
+    if (!ctx) return; if (radar && state === 1) state = 0;
     if (!tone) { const o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain(); o.type = 'triangle'; lfo.frequency.value = 22; lg.gain.value = 0; lfo.connect(lg); lg.connect(o.frequency); g.gain.value = 0; o.connect(g); g.connect(master); o.start(); lfo.start(); tone = { o, lg, g }; }
     const t = now();
     tone.o.frequency.setTargetAtTime(state === 2 ? 1400 : 760, t, 0.03); tone.lg.gain.setTargetAtTime(state === 1 ? 90 : 0, t, 0.03); tone.g.gain.setTargetAtTime(state ? 0.05 : 0, t, 0.02);
