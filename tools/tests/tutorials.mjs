@@ -26,13 +26,28 @@ export default async function (t) {
     if (id === 'rockets') { const v = m.vehicles.list.find(v => !v.dead); if (i === 0) { p.pos.copy(v.pos).add(new V(0, 400, 900)); p.vel.set(0, -40, -120); } if (i === 1) p.fireRockets(); if (i === 2) m.vehicles.list.slice(0, 2).forEach(v => { v.hp = 0; v.dead = true; }); }
     if (id === 'missiles') { if (i === 0) { Game.locked = true; } if (i === 1 || i === 2) kill(m.crafts.find(c => c.team === 1 && c.alive)); if (i === 3) kill(m.crafts.find(c => c.team === 1 && c.alive)); }
     if (id === 'flares') { T.survived = i + 1; }
+    // maneuvers: fly the figure by setting the attitude stage by stage (two frames each), so the lesson's own measurement runs
+    const Q = (ax, deg) => new THREE.Quaternion().setFromAxisAngle(ax, deg * Math.PI / 180), X = new V(1, 0, 0), Y = new V(0, 1, 0), Z = new V(0, 0, 1);
+    const f0 = new V(0, 0, -1).applyQuaternion(p.quat), q0 = Q(Y, Math.atan2(-f0.x, -f0.z) * 180 / Math.PI), y0 = Math.max(p.pos.y, gy(p.pos.x, p.pos.z) + 2500);
+    const fly = list => { for (const [q, dy] of list) { for (let k = 0; k < 2; k++) { p.quat.copy(q); p.pos.y = y0 + dy; p.vel.set(0, 0, -150).applyQuaternion(q); Game.update(1/30); } } };
+    const range = (a, b, s) => { const r = []; for (let x = a; s > 0 ? x <= b : x >= b; x += s) r.push(x); return r; };
+    if (id === 'turns') { fly([[q0, 0]]);
+      if (i === 0) fly(range(0, 380, 15).map(h => [q0.clone().multiply(Q(Y, h)).multiply(Q(Z, 65)), 0]));
+      if (i === 1) fly(range(0, 110, 10).map(h => [q0.clone().multiply(Q(Y, h)).multiply(Q(Z, 85)), 0]));
+      if (i === 2) fly(range(0, 180, 10).map(h => [q0.clone().multiply(Q(Y, h)).multiply(Q(Z, h < 180 ? 30 : 0)), 300 * h / 180])); }
+    if (id === 'rolls') { fly([[q0, 0]]);
+      if (i === 0) fly(range(0, 360, 20).map(r => [q0.clone().multiply(Q(Z, r)), 0]));
+      if (i === 1) fly(range(0, 360, 15).map(a => [q0.clone().multiply(Q(X, a)), 300 * Math.sin(a * Math.PI / 180)])); }
+    if (id === 'reversals') { fly([[q0, 0]]);
+      if (i === 0) fly([...range(0, 180, 15).map(a => [q0.clone().multiply(Q(X, a)), 300 * (1 - Math.cos(a * Math.PI / 180))]), ...range(0, 180, 20).map(r => [q0.clone().multiply(Q(X, 180)).multiply(Q(Z, r)), 600])]);
+      if (i === 1) fly([...range(0, 180, 20).map(r => [q0.clone().multiply(Q(Z, r)), 0]), ...range(0, 180, 15).map(a => [q0.clone().multiply(Q(Z, 180)).multiply(Q(X, a)), -300 * (1 - Math.cos(a * Math.PI / 180))])]); }
     return T.step; })()`;
   for (const id of ids) {
     const r = await t.eval(`(() => { const cfg = Plan.build({ mode: 'tutorial', tutorial: '${id}' }, [{ name: 'T', plane: Tutorial.byId('${id}').plane, owner: 'H', team: 0 }]);
       Game.startMatch(cfg, { playerId: cfg.roster.find(r => !r.bot).id, isHost: true }); return 1; })()`);
     for (let k = 0; k < 4; k++) await t.eval("for (let k = 0; k < 15; k++) Game.update(1/30); Game.render(); 1");
     const raw = await t.eval(`(() => { const m = Game.match, p = m.player; return JSON.stringify({ plane: p.def.id, alive: p.alive, onGround: p.onGround, agl: Math.round(p.pos.y - m.world.groundAt(p.pos.x, p.pos.z)), kmh: Math.round(p.speed * 3.6), gear: p.gearDown,
-      stores: p.stations.map(s => s.id + 'x' + s.n).join(' '), bots: m.crafts.length - 1, bases: m.bases.map(b => b.kind + (b.home ? '(home)' : '')).join(','), tanks: m.vehicles.list.length, step: m.tut && m.tut.step, text: m.tut && m.tut.t.steps[m.tut.step].text({ m, p, T: m.tut }) }); })()`); if (raw.startsWith("ERR")) { console.log(id, raw.slice(0, 600)); continue; } const s0 = JSON.parse(raw);
+      stores: p.stations.map(s => s.id + 'x' + s.n).join(' '), bots: m.crafts.length - 1, bases: m.bases.map(b => b.kind + (b.home ? '(home)' : '')).join(','), tanks: m.vehicles.list.length, step: m.tut && m.tut.step, text: m.tut && m.tut.t.steps[m.tut.step].text(Tutorial.ctx(m)) }); })()`); if (raw.startsWith("ERR")) { console.log(id, raw.slice(0, 600)); continue; } const s0 = JSON.parse(raw);
     await t.shot('tut-' + id);
     let steps = [], guard = 0;
     while (guard++ < 20) {
@@ -41,7 +56,7 @@ export default async function (t) {
       await t.eval(SOLVE);
       for (let k = 0; k < 3; k++) await t.eval("for (let k = 0; k < 10; k++) Game.update(1/30); 1");
       const after = await t.eval("Game.match.over ? 'done' : Game.match.tut.step"); steps.push(before + '>' + after);
-      if (after === before) { steps.push('STUCK at ' + before + ': ' + await t.eval("Game.match.tut.t.steps[Game.match.tut.step].text({ m: Game.match, p: Game.match.player, T: Game.match.tut })")); break; }
+      if (after === before) { steps.push('STUCK at ' + before + ': ' + await t.eval("Game.match.tut.t.steps[Game.match.tut.step].text(Tutorial.ctx(Game.match))")); break; }
     }
     const res = await t.eval("Game.match.result ? Game.match.result.reason : 'not finished'");
     console.log(id.padEnd(9), JSON.stringify(s0).slice(0, 330));

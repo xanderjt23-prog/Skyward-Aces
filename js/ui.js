@@ -328,18 +328,25 @@ const UI = (() => {
     if (play.step === 'type') {
       h += `<div class="grid c2"><div class="card click mode-card" id="p-sp"><div class="ic">🎯</div><h3>Singleplayer</h3><div class="small muted">Fight alongside and against bots flying aircraft of your era.</div></div>
         <div class="card click mode-card" id="p-mp"><div class="ic">🌐</div><h3>Multiplayer</h3><div class="small muted">Host a game and share its join code, or join a friend's game with theirs. Empty slots can be filled with bots flying the average era of the human players.</div></div></div>
-        <div class="card click mode-card" id="p-tut" style="margin-top:12px"><div class="ic">🎓</div><h3>Tutorials</h3><div class="small muted">Learn to take off, land, shoot, bomb with a bombsight, fire rockets and missiles and beat incoming missiles, each in a suitable aircraft.</div></div>`;
+        <div class="card click mode-card" id="p-tut" style="margin-top:12px"><div class="ic">🎓</div><h3>Tutorials</h3><div class="small muted">Basic game mechanics (controls, guns, bombs, rockets, missiles, countermeasures) and basic flight maneuvers (take-off, landing, turns, rolls, the loop, the Immelmann and the split-S).</div></div>`;
       body(h); $('#p-sp').onclick = () => { play.sp = true; play.step = 'modes'; renderPlay(); }; $('#p-mp').onclick = () => { play.sp = false; play.step = 'mp'; renderPlay(); };
       $('#p-tut').onclick = () => { play.step = 'tutorials'; renderPlay(); }; return;
     }
     if (play.step === 'tutorials') {
-      h = `<h2>Tutorials</h2><p class="muted">Each tutorial gives you an aircraft suited to the lesson (you do not need to own it) and talks you through it step by step. Nothing is lost or earned.</p><div class="grid c2">`;
-      for (const t of Tutorial.LIST) { const pl = PLANES[t.plane];
-        h += `<div class="card click mode-card" data-tut="${t.id}"><div class="ic">${t.icon}</div><h3>${esc(t.name)}</h3><div class="small muted">${esc(t.desc)}</div>
-          <div class="small" style="margin-top:6px">✈ ${esc(pl.name)}${t.realistic ? ' · <span class="pill">Realistic</span>' : ''} · ${t.steps.length} steps</div></div>`; }
-      h += `</div><div class="row" style="margin-top:14px"><button id="p-back">← Back</button></div>`;
+      h = `<h2>Tutorials</h2><p class="muted">Each tutorial gives you an aircraft suited to the lesson (you do not need to own it) and talks you through it step by step. Nothing is lost or earned. Once you have completed one, you can fly it again with any aircraft you own that can do it.</p>`;
+      const done = P().tut || {};
+      for (const [cat, title, sub] of Tutorial.CATS) {
+        h += `<h3 style="margin-top:16px">${esc(title)}</h3><p class="small muted">${esc(sub)}</p><div class="grid c2">`;
+        for (const t of Tutorial.LIST.filter(x => x.cat === cat)) { const pl = PLANES[t.plane], own = done[t.id] ? Object.keys(P().owned).filter(id => id !== t.plane && Tutorial.fits(t, PLANES[id])) : [];
+          h += `<div class="card mode-card"><div class="click" data-tut="${t.id}"><div class="ic">${t.icon}</div><h3>${esc(t.name)}${done[t.id] ? ' <span class="pill ok">✓ Completed</span>' : ''}</h3><div class="small muted">${esc(t.desc)}</div>
+            <div class="small" style="margin-top:6px">✈ ${esc(pl.name)}${t.realistic ? ' · <span class="pill">Realistic</span>' : ''} · ${t.steps.length} steps</div></div>
+            ${own.length ? `<div class="row small" style="margin-top:8px">Fly again with <select data-tut-plane="${t.id}">${own.map(id => `<option value="${id}">${esc(PLANES[id].name)}</option>`).join('')}</select><button data-tut-go="${t.id}">Fly</button></div>` : ''}</div>`; }
+        h += `</div>`;
+      }
+      h += `<div class="row" style="margin-top:14px"><button id="p-back">← Back</button></div>`;
       body(h); $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
-      $$('[data-tut]').forEach(c => c.onclick = () => startTutorial(c.dataset.tut)); return;
+      $$('[data-tut]').forEach(c => c.onclick = () => startTutorial(c.dataset.tut));
+      $$('[data-tut-go]').forEach(b => b.onclick = () => startTutorial(b.dataset.tutGo, $(`[data-tut-plane="${b.dataset.tutGo}"]`).value)); return;
     }
     if (play.step === 'mp') {
       h += `<div class="grid c2"><div class="card"><h3>Host a game</h3><p class="small muted">You choose the mode and settings, and get a join code to give to the other players.</p><button class="primary" id="mp-host">Generate join code</button></div>
@@ -366,8 +373,8 @@ const UI = (() => {
     const pid = cfg.roster.find(r => r.owner === 'H' && !r.bot).id;
     launch(cfg, { playerId: pid, isHost: true, net: false });
   }
-  function startTutorial(id) {
-    const t = Tutorial.byId(id), cfg = Plan.build({ mode: 'tutorial', tutorial: id }, [{ name: P().name, plane: t.plane, owner: 'H', team: 0 }]);
+  function startTutorial(id, plane) {
+    const t = Tutorial.byId(id), cfg = Plan.build({ mode: 'tutorial', tutorial: id }, [{ name: P().name, plane: plane || t.plane, owner: 'H', team: 0 }]);
     launch(cfg, { playerId: cfg.roster.find(r => !r.bot).id, isHost: true, net: false });
   }
   function launch(cfg, opt) { close(); Game.startMatch(cfg, opt); }

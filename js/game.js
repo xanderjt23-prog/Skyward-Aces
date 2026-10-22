@@ -69,7 +69,8 @@ const Game = (() => {
     requestLock();
   }
   function setAim(y, p) { yaw = y; pitch = p; }
-  function aimReset() { const p = G.match && G.match.player; if (!p) return; const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); G.aimDir.copy(f); }
+  function aimReset() { const p = G.match && G.match.player; if (!p) return; const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); yaw = Math.atan2(-f.x, -f.z); pitch = Math.asin(Math.max(-1, Math.min(1, f.y))); G.aimDir.copy(f);
+    G.bankHold = null; G.byHand = false; G.kr = G.kp = G.ky = 0; } // no bank hold or stick input carried over from the last flight
   function stopMatch() {
     if (G.match) { G.match.dispose(); G.match = null; }
     G.running = false; Sound.stopAll();
@@ -162,9 +163,11 @@ const Game = (() => {
     // the aim point glides along with the nose while flying by hand, so the view follows smoothly
     const followNose = r => { const f = ax.fwd; const ty = Math.atan2(-f.x, -f.z), tp = Math.asin(Math.max(-1, Math.min(1, f.y))); let d = ty - yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; yaw += d * Math.min(1, r); pitch += (tp - pitch) * Math.min(1, r); };
     if (kr || kp || ky) {
-      if (kr || Math.abs(G.kr) > 0.02) p.ctl.roll = G.kr;
+      // flying by hand: the keys own the stick, so the mouse-aim autopilot does not roll the aircraft back upright in the
+      // middle of a loop or a split-S (no roll key: the bank stays where it is)
+      p.ctl.roll = G.kr;
       if (kp || Math.abs(G.kp) > 0.02) { p.ctl.pitch = G.kp; p.ctl.manual = G.kp > 0.6; } else p.ctl.pitch = levelPull();
-      if (ky) p.ctl.yaw = G.ky;
+      p.ctl.yaw = G.ky;
       followNose(dt * 5); G.byHand = true; G.bankHold = null;
     } else if (G.byHand) {
       // keys released: hold the bank you rolled to in a level turn, until the mouse moves again

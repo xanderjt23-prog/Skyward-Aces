@@ -8,7 +8,7 @@ const Profile = (() => {
   let p = null;
   function fresh() {
     const owned = {}; for (const pl of PLANE_LIST) if (pl.starter) owned[pl.id] = true;
-    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
+    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, tut: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
   }
   function load() {
     try { const s = localStorage.getItem(KEY); if (s) p = JSON.parse(s); } catch (e) { p = null; }
@@ -20,6 +20,7 @@ const Profile = (() => {
     return p;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
+  function tutorialDone(id) { if (!p.tut[id]) { p.tut[id] = Date.now(); save(); } }
 
   // ---- levels: each level needs 1.1x the XP of the one before
   const need = lvl => Math.round(1000 * Math.pow(1.1, lvl - 1));
@@ -153,6 +154,6 @@ const Profile = (() => {
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
     buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
-    bump, checkAchievements, progress, rewards, applyBattle,
+    bump, checkAchievements, progress, rewards, applyBattle, tutorialDone,
   };
 })();

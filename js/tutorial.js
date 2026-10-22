@@ -12,6 +12,13 @@ const Tutorial = (() => {
   const agl = (m, p) => p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
   const bankDeg = p => { const ax = Flight.axes(p); return Math.atan2(-ax.right.y, ax.up.y) * 180 / Math.PI; };
   const diveDeg = p => Math.asin(Math.max(-1, Math.min(1, p.vel.y / Math.max(1, p.speed)))) * 180 / Math.PI;
+  const pitchDeg = p => Math.asin(Math.max(-1, Math.min(1, new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat).y))) * 180 / Math.PI;
+  const upY = p => new THREE.Vector3(0, 1, 0).applyQuaternion(p.quat).y;             // 1 upright, -1 inverted
+  const hdgDeg = p => { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat); return Math.atan2(-f.x, -f.z) * 180 / Math.PI; };
+  const wrap = a => ((a + 540) % 360) - 180;
+  // what an aircraft can carry: some pylon takes a store that passes `test`
+  const carries = (pl, test) => Loadout.slots(pl).some(s => Object.keys(STORES).some(id => test(STORES[id]) && Loadout.allowed(pl, s, id)));
+  const isIR = s => s.kind === 'm' && s.seek === 'ir', isRadar = s => s.kind === 'm' && s.seek !== 'ir';
   const enemyBase = m => m.bases.find(b => b.team === 1);
   const home = m => m.bases.find(b => b.home && b.runway);
   // a deterministic loadout: every pylon that takes the wanted kind gets the heaviest store of it that fits (symmetric)
@@ -23,13 +30,17 @@ const Tutorial = (() => {
       for (const i of both) stores[i] = id; kg += STORES[id].mass * s.pylons * both.length; }
     return { belts: {}, stores, perSlot: true, mods: {} };
   }
-  // air-to-air fit: Sidewinders on the wingtip rails, AMRAAMs on the pylons that take them
-  function missileFit(pl) { const sl = Loadout.slots(pl);
-    return { belts: {}, perSlot: true, mods: {}, stores: sl.map(s => s.band === 5 && Loadout.allowed(pl, s, 'aim9l') ? 'aim9l' : Loadout.allowed(pl, s, 'aim120') && s.band >= 3 ? 'aim120' : Loadout.allowed(pl, s, 'aim9l') ? 'aim9l' : null) }; }
+  // air-to-air fit: heat seekers on the wingtip rails, the best radar missile on the pylons that take one (the newest
+  // of each type the aircraft can carry; the F-16C gets AIM-9L/M Sidewinders and AIM-120 AMRAAMs)
+  function missileFit(pl) { const sl = Loadout.slots(pl), best = (s, test) => Object.keys(STORES).filter(id => test(STORES[id]) && Loadout.allowed(pl, s, id)).sort((a, b) => STORES[b].range - STORES[a].range)[0] || null;
+    const ir = sl.map(s => best(s, isIR)), rad = sl.map(s => best(s, isRadar));
+    return { belts: {}, perSlot: true, mods: {}, stores: sl.map((s, i) => s.band === 5 && ir[i] ? ir[i] : rad[i] && s.band >= 1 && s.band !== 5 ? rad[i] : ir[i]) }; }
+  // the name of the first store on the player's aircraft that passes `test`
+  const WN = test => { const p = Game.match && Game.match.player, id = p && p.weaponSlots().find(id => test(STORES[id])); return id ? STORES[id].name.replace(/ \(.*\)$/, '') : 'missile'; };
   const target = (id, plane, x, y, z, extra) => ({ id, team: 1, name: 'Target', plane, bot: true, owner: 'H', skill: 0, task: 'air', loadout: { belts: {}, stores: [], mods: {} }, lives: 1, passive: true, spawnAt: [x, y, z], ...(extra || {}) });
 
   const LIST = [
-    { id: 'basics', name: 'Flight basics', icon: '🛩️', plane: 'spit9', desc: 'Mouse-aim flying, throttle and emergency power, rolling with the keys, the camera and zoom. Fly through three waypoints.',
+    { id: 'basics', cat: 'mech', name: 'Flight basics', icon: '🛩️', plane: 'spit9', desc: 'Mouse-aim flying, throttle and emergency power, rolling with the keys, the camera and zoom. Fly through three waypoints.',
       start: { alt: 1200 },
       steps: [
         { text: () => `The aircraft flies towards your mouse aim (the small circle). Move the mouse to turn, and fly through the waypoint marker.`, wp: V(1500, 1300, -2500), done: c => c.near(260) },
@@ -40,7 +51,7 @@ const Tutorial = (() => {
         { text: () => `Hold ${K('zoom')} to zoom in.`, done: c => Input.down('zoom') },
         { text: () => `Fly through the last waypoint.`, wp: V(0, 1500, -6500), done: c => c.near(260) },
       ] },
-    { id: 'takeoff', name: 'How to take off', icon: '🛫', plane: 'p51d', realistic: true, desc: 'From a standing start on the runway: power, the take-off roll, rotating at the right speed, raising the gear and climbing out (Realistic mode).',
+    { id: 'takeoff', cat: 'man', name: 'How to take off', icon: '🛫', plane: 'p51d', realistic: true, desc: 'From a standing start on the runway: power, the take-off roll, rotating at the right speed, raising the gear and climbing out (Realistic mode).',
       airfield: true,
       steps: [
         { text: c => `You are at the start of the runway. Hold ${K('throttleUp')} to open the throttle fully.`, done: c => c.p.ctl.throttle >= 0.98 },
@@ -49,7 +60,7 @@ const Tutorial = (() => {
         { text: () => `Raise the landing gear with ${K('gear')}: it drags and slows the climb.`, done: c => !c.p.gearDown },
         { text: () => `Climb to 600 m above the ground at full power.`, done: c => agl(c.m, c.p) > 600 },
       ] },
-    { id: 'landing', name: 'How to land', icon: '🛬', plane: 'p51d', realistic: true, desc: 'A straight-in approach to your home airfield: slowing down, flaps, gear, lining up, the flare and touchdown, then stopping to refuel and rearm (Realistic mode).',
+    { id: 'landing', cat: 'man', name: 'How to land', icon: '🛬', plane: 'p51d', realistic: true, desc: 'A straight-in approach to your home airfield: slowing down, flaps, gear, lining up, the flare and touchdown, then stopping to refuel and rearm (Realistic mode).',
       airfield: true, approach: true,
       steps: [
         { text: () => `You are on a long final approach. Throttle back with ${K('throttleDown')} to below 30%.`, done: c => c.p.ctl.throttle < 0.3 },
@@ -59,7 +70,33 @@ const Tutorial = (() => {
         { text: c => `Descend gently towards the start of the runway. Just above it, raise the nose a little (the flare) and touch down below ${Math.round((c.p.perf.vs * 1.9 + 15) * 3.6)} km/h.`, done: c => c.p.onGround && c.p.atHome },
         { text: () => `Throttle to zero and hold ${K('brakes')} for the wheel brakes until you stop. Stay put to refuel, rearm and repair.`, done: c => c.p.serviced },
       ] },
-    { id: 'gunnery', name: 'Air gunnery', icon: '🎯', plane: 'bf109g', desc: 'Lead the target with the lead indicator and shoot down three unarmed target aircraft. Fire when the indicator turns white and says FIRE.',
+    { id: 'turns', cat: 'man', name: 'Turns', icon: '↪️', plane: 'p51d', desc: 'The level turn (hold your height all the way round), the break turn (the hardest turn the aircraft can pull, to spoil an attacker\'s aim) and the chandelle (a climbing 180° turn that trades speed for height).',
+      start: { alt: 2000 },
+      steps: [
+        { text: c => `Level turn: bank 60-70° (${K('rollLeft')} / ${K('rollRight')} or the mouse) and turn a full circle without gaining or losing more than 150 m. ${Math.round(Math.abs(c.turned()))}° of 360°${c.S.lost ? ' (height lost: start again)' : ''}`,
+          done: c => { c.altBand(150); return Math.abs(c.turned()) >= 360; } },
+        { text: c => `Break turn: roll hard to 80-90° of bank and pull with the mouse (or hold ${K('pitchUp')}): turn 90° within 5 seconds. Best so far ${Math.round(c.S.best || 0)}° in 5 s.`,
+          done: c => c.window('turned', 5) >= 90 },
+        { text: c => `Chandelle: from level flight, roll to about 30° of bank and pull up into a climbing turn. Finish after 180° with the wings level, slow but 250 m higher. ${Math.round(Math.abs(c.turned()))}° turned, ${Math.max(0, Math.round(c.climb()))} m gained`,
+          done: c => { if (c.climb() < -100) c.restart(); return Math.abs(c.turned()) >= 160 && c.climb() >= 250 && Math.abs(bankDeg(c.p)) < 25 && upY(c.p) > 0.5; } },
+      ] },
+    { id: 'rolls', cat: 'man', name: 'Rolls and the loop', icon: '🔄', plane: 'p51d', desc: 'The aileron roll (a full turn around the aircraft\'s own axis) and the loop (a full circle in the vertical): the building blocks of every other maneuver.',
+      start: { alt: 1800 },
+      steps: [
+        { text: c => `Aileron roll: from level flight, hold ${K('rollRight')} (or ${K('rollLeft')}) and roll a full 360° within 6 seconds, keeping the nose on the horizon. ${Math.round(c.S.best || 0)}° so far`,
+          done: c => Math.abs(pitchDeg(c.p)) < 35 && c.window('rolled', 6) >= 330 },
+        { text: c => `Loop: build speed (a shallow dive helps), then hold ${K('pitchUp')} to pull up and over the top, upside down, and back down to level flight on the same heading. ${['Pull up', 'Keep pulling over the top', 'Down the back side', 'Level out'][Math.min(c.S.ph || 0, 3)]}`,
+          done: c => c.phases([() => pitchDeg(c.p) > 60, () => upY(c.p) < -0.3, () => pitchDeg(c.p) < -40, () => upY(c.p) > 0.7 && Math.abs(pitchDeg(c.p)) < 25]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) < 60 },
+      ] },
+    { id: 'reversals', cat: 'man', name: 'Immelmann and split-S', icon: '↩️', plane: 'p51d', desc: 'Two ways to turn round in a few seconds: the Immelmann (half a loop up, roll upright at the top: height gained, speed lost) and the split-S (roll inverted, half a loop down: speed gained, height lost).',
+      start: { alt: 3000 },
+      steps: [
+        { text: c => `Immelmann: with good speed, hold ${K('pitchUp')} for half a loop. When you are upside down at the top, roll upright with ${K('rollLeft')} / ${K('rollRight')}. ${['Pull up', 'Over the top', 'Roll upright'][Math.min(c.S.ph || 0, 2)]}`,
+          done: c => c.phases([() => pitchDeg(c.p) > 60, () => upY(c.p) < -0.3 && pitchDeg(c.p) < 35, () => upY(c.p) > 0.7 && Math.abs(pitchDeg(c.p)) < 25]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) > 135 && c.climb() > 150 },
+        { text: c => `Split-S: roll upside down with ${K('rollLeft')} / ${K('rollRight')}, then hold ${K('pitchUp')} to pull through half a loop downwards and level out the other way. Keep at least 1,000 m of height for it. ${['Roll inverted', 'Pull down', 'Pull through and level out'][Math.min(c.S.ph || 0, 2)]}`,
+          done: c => c.phases([() => upY(c.p) < -0.5 && Math.abs(pitchDeg(c.p)) < 30, () => pitchDeg(c.p) < -45, () => upY(c.p) > 0.7 && Math.abs(pitchDeg(c.p)) < 25]) && Math.abs(wrap(hdgDeg(c.p) - c.S.h0)) > 135 && c.climb() < -150 },
+      ] },
+    { id: 'gunnery', cat: 'mech', fits: pl => pl.guns.length > 0, name: 'Air gunnery', icon: '🎯', plane: 'bf109g', desc: 'Lead the target with the lead indicator and shoot down three unarmed target aircraft. Fire when the indicator turns white and says FIRE.',
       start: { alt: 1500 },
       bots: () => [target('t1', 'b25j', -300, 1500, -1600), target('t2', 'b25j', 900, 1600, -2600), target('t3', 'b25j', -1200, 1400, -3600)],
       steps: [
@@ -67,7 +104,7 @@ const Tutorial = (() => {
         { text: () => `Put your aim on the lead indicator (the circle ahead of the target) and hold ${K('fire')} when it turns white and says FIRE.`, done: c => c.kills() >= 1 },
         { text: () => `Two more. Short bursts: guns overheat nothing here, but ammunition runs out.`, done: c => c.kills() >= 3 },
       ] },
-    { id: 'bombing', name: 'Level bombing with a bombsight', icon: '💣', plane: 'b17g', realistic: true, desc: 'A B-17G with its Norden bombsight: look through the sight, steer the target down the course hair and release at the cross hair to destroy a factory from 3,000 m.',
+    { id: 'bombing', cat: 'mech', fits: pl => !!pl.bombsight && carries(pl, s => s.kind === 'b'), name: 'Level bombing with a bombsight', icon: '💣', plane: 'b17g', realistic: true, desc: 'A B-17G with its Norden bombsight: look through the sight, steer the target down the course hair and release at the cross hair to destroy a factory from 3,000 m.',
       start: { alt: 3000, z: 7500 }, lo: pl => loadout(pl, 'b'), target: { size: 'medium', kind: 'factory', x: 0, z: -2000 },
       steps: [
         { text: () => `A factory is straight ahead. Press ${K('bombsight')} to look through the Norden bombsight.`, done: c => c.G.camMode === 'sight' },
@@ -75,7 +112,7 @@ const Tutorial = (() => {
         { text: () => `Release the bombs with ${WK(s => s.kind === 'b')} just as the target meets the cross hair. Each press drops two.`, done: c => c.p.count('b') < c.full },
         { text: () => `Keep dropping until the factory is destroyed. Out of bombs? They are reloaded for another pass.`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
       ] },
-    { id: 'divebomb', name: 'Dive bombing', icon: '⬇️', plane: 'ju87', desc: 'The Ju 87 Stuka: fly over the target, extend the dive brakes, dive at 60-80°, release low and pull out.',
+    { id: 'divebomb', cat: 'mech', fits: pl => carries(pl, s => s.kind === 'b'), name: 'Dive bombing', icon: '⬇️', plane: 'ju87', desc: 'The Ju 87 Stuka: fly over the target, extend the dive brakes, dive at 60-80°, release low and pull out.',
       start: { alt: 2500, z: 4000 }, lo: pl => loadout(pl, 'b'), target: { size: 'small', kind: 'camp', x: 0, z: -1500 },
       steps: [
         { text: () => `Fly towards the camp ahead until it is almost under you.`, done: c => c.hdist(enemyBase(c.m).pos) < 700 },
@@ -84,23 +121,23 @@ const Tutorial = (() => {
         { text: () => `Pull out! Let go of the brakes and climb away.`, done: c => c.p.vel.y > 0 && agl(c.m, c.p) > 150 },
         { text: () => `Did it hit? Make more passes until the camp is destroyed (bombs are reloaded when you run out).`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
       ] },
-    { id: 'rockets', name: 'Ground attack with rockets', icon: '🚀', plane: 'p47d', desc: 'The P-47D with 5-inch HVAR rockets against a column of tanks: a shallow dive, aim ahead of the target, fire in pairs.',
+    { id: 'rockets', cat: 'mech', fits: pl => carries(pl, s => s.kind === 'r'), name: 'Ground attack with rockets', icon: '🚀', plane: 'p47d', desc: 'The P-47D with 5-inch HVAR rockets against a column of tanks: a shallow dive, aim ahead of the target, fire in pairs.',
       start: { alt: 1200, z: 3500 }, lo: pl => loadout(pl, 'r'), tanks: 4,
       steps: [
         { text: () => `Tanks ahead (red diamonds). Line up on them in a shallow 20-30° dive.`, done: c => c.m.vehicles.list.some(v => !v.dead && v.pos.distanceTo(c.p.pos) < 1500) && diveDeg(c.p) < -10 },
         { text: () => `Fire rockets with ${WK(s => s.kind === 'r')}: they fall a little, so put the nose just above the tank.`, done: c => c.p.count('r') < c.full },
         { text: () => `Destroy two tanks.`, done: c => c.m.vehicles.list.filter(v => v.dead).length >= 2 },
       ] },
-    { id: 'missiles', name: 'Air-to-air missiles', icon: '🎯', plane: 'f16c', desc: 'The F-16C with Sidewinders and AMRAAMs: getting a lock and firing, with each missile type on its own key.',
+    { id: 'missiles', cat: 'mech', fits: pl => carries(pl, isIR) && carries(pl, isRadar), name: 'Air-to-air missiles', icon: '🎯', plane: 'f16c', desc: 'The F-16C with Sidewinders and AMRAAMs: getting a lock and firing, with each missile type on its own key.',
       start: { alt: 4000 }, lo: pl => missileFit(pl),
       bots: () => [target('m1', 'mig21bis', 200, 4100, -3500), target('m2', 'mig21bis', -600, 4300, -14000)],
       steps: [
-        { text: () => `Point the nose at the target ahead. The Sidewinder's seeker growls when it sees the heat; LOCK appears and the tone rises when it has a lock.`, done: c => c.G.locked },
-        { text: () => `Fire the Sidewinder with ${WK(s => s.kind === 'm' && s.seek === 'ir')}.`, done: c => c.m.combat.missiles.some(x => x.owner === c.p) || c.kills() >= 1 },
+        { text: () => `Point the nose at the target ahead. The ${WN(isIR)} seeker growls when it sees the heat; LOCK appears and the tone rises when it has a lock.`, done: c => c.G.locked },
+        { text: () => `Fire the ${WN(isIR)} with ${WK(isIR)}.`, done: c => c.m.combat.missiles.some(x => x.owner === c.p) || c.kills() >= 1 },
         { text: () => `Wait for the hit. If it missed, lock and fire again.`, done: c => c.kills() >= 1 },
-        { text: () => `The second target is 10 km out: too far for a Sidewinder. Each weapon has its own key: the radar-guided AMRAAM is on ${WK(s => s.kind === 'm' && s.seek !== 'ir')}. Point at the target, wait for the lock and press it. The AMRAAM guides itself.`, done: c => c.kills() >= 2 },
+        { text: () => `The second target is 10 km out: too far for a heat seeker. Each weapon has its own key: the radar-guided ${WN(isRadar)} is on ${WK(isRadar)}. Point at the target, wait for the lock and press it.`, done: c => c.kills() >= 2 },
       ] },
-    { id: 'flares', name: 'Missile defence', icon: '🎆', plane: 'f16c', desc: 'Heat-seeking missiles are fired at you: release flares and turn hard to make them miss.',
+    { id: 'flares', cat: 'mech', fits: pl => pl.flares > 0, name: 'Missile defence', icon: '🎆', plane: 'f16c', desc: 'Heat-seeking missiles are fired at you: release flares and turn hard to make them miss.',
       start: { alt: 4000 }, bots: () => [target('e1', 'mig29', 0, 4000, 4000, { team: 1 })],
       steps: [
         { text: () => `An enemy is behind you and will fire heat-seeking missiles. When you hear the warning, release flares with ${K('flares')} and turn hard.`, launch: true, done: c => c.survived >= 1 },
@@ -108,11 +145,15 @@ const Tutorial = (() => {
       ] },
   ];
   const byId = id => LIST.find(t => t.id === id);
+  const CATS = [['mech', 'Basic Game Mechanics', 'Controls, weapons and defending yourself.'], ['man', 'Basic Flight Maneuvers', 'Taking off and landing, turns, rolls, the loop and the reversals pilots use in a dogfight.']];
+  // the aircraft a lesson can be replayed with (any the player owns that can do it)
+  const fits = (t, pl) => !!pl && !pl.aiOnly && (!t.fits || t.fits(pl));
 
   // ---- match planning (host): the tutorial's aircraft, bots and bases
   function plan(t, human) {
-    const pl = PLANES[t.plane], lo = t.lo ? t.lo(pl) : { belts: {}, stores: [], perSlot: true, mods: {} };
-    const roster = [Object.assign({}, human, { id: 1, bot: false, team: 0, plane: t.plane, loadout: lo, lives: 99 })];
+    const plane = human.plane && fits(t, PLANES[human.plane]) ? human.plane : t.plane;
+    const pl = PLANES[plane], lo = t.lo ? t.lo(pl) : { belts: {}, stores: [], perSlot: true, mods: {} };
+    const roster = [Object.assign({}, human, { id: 1, bot: false, team: 0, plane, loadout: lo, lives: 99 })];
     (t.bots ? t.bots() : []).forEach((b, i) => roster.push(Object.assign(b, { id: 2 + i })));
     const bases = [];
     if (t.airfield) bases.push({ id: 'B0', team: 0, size: 'medium', kind: 'airfield', x: 0, z: 0, home: true });
@@ -134,11 +175,21 @@ const Tutorial = (() => {
   }
   // ---- runtime (host): one step at a time
   function start(m) {
-    const t = byId(m.cfg.tutorial); m.tut = { t, step: 0, stepT: 0, survived: 0, launchT: 3, done: false, full: 0 };
+    const t = byId(m.cfg.tutorial); m.tut = { t, step: 0, stepT: 0, survived: 0, launchT: 3, done: false, full: 0, S: {} };
   }
   function ctx(m) {
-    const T = m.tut, p = m.player, G = Game, st = T.t.steps[T.step];
-    return { m, p, G, T, full: T.full, survived: T.survived,
+    const T = m.tut, p = m.player, G = Game, st = T.t.steps[T.step], S = T.S, time = m.time;
+    if (S.h0 == null) { S.h0 = hdgDeg(p); S.alt0 = p.pos.y; S.hd = S.h0; S.bk = bankDeg(p); S.turned = 0; S.rolled = 0; S.hist = []; S.ph = 0; }
+    const c = { m, p, G, T, S, full: T.full, survived: T.survived,
+      // heading turned / bank rolled since the step began (signed, unwrapped) and height gained
+      turned: () => S.turned, climb: () => p.pos.y - S.alt0,
+      restart: () => { S.h0 = null; S.lost = true; },
+      // keep within `band` metres of the starting height, or the measurement starts again
+      altBand: band => { if (Math.abs(p.pos.y - S.alt0) > band) c.restart(); },
+      // the change of `key` over the last `secs` seconds (the best so far is shown in the text)
+      window: (key, secs) => { const old = S.hist.find(h => h.t >= time - secs) || S.hist[0]; const v = old ? Math.abs(S[key] - old[key]) : 0; S.best = Math.max(S.best || 0, v); return v; },
+      // a maneuver as a sequence of conditions, met one after another
+      phases: list => { while (S.ph < list.length && list[S.ph]()) S.ph++; return S.ph >= list.length; },
       kills: () => m.crafts.filter(c => c.team === 1 && !c.alive).length,
       near: d => st.wp && p.pos.distanceTo(st.wp) < d,
       hdist: q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z),
@@ -149,6 +200,14 @@ const Tutorial = (() => {
       onCourse: dx => { const b = enemyBase(m); if (!b) return true; const v = new THREE.Vector3(p.vel.x, 0, p.vel.z).normalize(), to = b.pos.clone().sub(p.pos).setY(0); return to.dot(v) > 0 && Math.abs(to.x * v.z - to.z * v.x) < dx; },
       reload: () => { p.loadStores(); p.buildStoreMeshes(); T.full = p.count('b') + p.count('r'); m.events.push({ t: m.time, e: 'msg', text: 'Reloaded — make another pass' }); },
     };
+    return c;
+  }
+  // per-frame measurement for the maneuver lessons (heading and bank changes, a short history for the time windows)
+  function track(m) {
+    const T = m.tut, S = T.S, p = m.player; if (S.h0 == null) return;
+    const h = hdgDeg(p), b = bankDeg(p);
+    if (Math.abs(pitchDeg(p)) < 75) { S.turned += wrap(h - S.hd); S.rolled += wrap(b - S.bk); } // near the vertical heading and bank mean nothing
+    S.hd = h; S.bk = b; S.hist.push({ t: m.time, turned: S.turned, rolled: S.rolled }); while (S.hist.length && S.hist[0].t < m.time - 8) S.hist.shift();
   }
   function update(m, dt) {
     const T = m.tut; if (!T || T.done) return; const p = m.player; if (!p || !p.alive) return;
@@ -156,9 +215,10 @@ const Tutorial = (() => {
     T.stepT += dt;
     const st = T.t.steps[T.step];
     if (st.launch) missileDrill(m, T, dt);
-    if (T.stepT > 0.6 && st.done(ctx(m))) {
-      Sound.clunk && Sound.clunk(); T.step++; T.stepT = 0;
-      if (T.step >= T.t.steps.length) { T.done = true; m.end(0, 'Tutorial complete: ' + T.t.name); }
+    track(m); const c = ctx(m), ok = st.done(c);
+    if (T.stepT > 0.6 && ok) {
+      Sound.clunk && Sound.clunk(); T.step++; T.stepT = 0; T.S = {};
+      if (T.step >= T.t.steps.length) { T.done = true; Profile.tutorialDone(T.t.id); m.end(0, 'Tutorial complete: ' + T.t.name); }
     }
   }
   // missile defence drill: the enemy closes in behind the player and fires a heat seeker; surviving it counts
@@ -184,5 +244,5 @@ const Tutorial = (() => {
     if (st.wp && !T.done) { const s = proj(st.wp, cam); if (s) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(s.x, s.y - 16); g.lineTo(s.x + 16, s.y); g.lineTo(s.x, s.y + 16); g.lineTo(s.x - 16, s.y); g.closePath(); g.stroke();
       text(Math.round(st.wp.distanceTo(m.player.pos)) + ' m', s.x, s.y + 32, '#ffd34d', 12, 'center', true); } }
   }
-  return { LIST, byId, plan, spawn, start, update, draw };
+  return { LIST, CATS, byId, fits, plan, spawn, start, update, draw, ctx };
 })();
