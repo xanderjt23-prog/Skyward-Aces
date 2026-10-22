@@ -616,7 +616,7 @@ class Match {
   cosmeticFx(m) {
     const c = this.byId[m.id], V = a => new V3(a[0], a[1], a[2]);
     if (m.k === 'f' && c) this.combat.flare(c, true);
-    if (m.k === 'b' && c) { const mesh = Models.bomb(STORES[m.s].mass); this.scene.add(mesh); this.combat.bombs.push({ p: V(m.p), v: V(m.v), owner: c, team: c.team, s: STORES[m.s], mesh, real: false }); }
+    if (m.k === 'b' && c) { const mesh = Models.bomb(STORES[m.s]); this.scene.add(mesh); this.combat.bombs.push({ p: V(m.p), v: V(m.v), owner: c, team: c.team, s: STORES[m.s], mesh, real: false }); }
     if (m.k === 'r' && c) { const mesh = Models.missile(1.6, 0.06); this.scene.add(mesh); this.combat.rockets.push({ p: V(m.p), prev: V(m.p), v: V(m.v).addScaledVector(V(m.d), 40), dir: V(m.d), owner: c, team: c.team, s: STORES[m.s], life: 6, t: 0, mesh, real: false }); }
     if (m.k === 'm') {
       const tg = this.byId[m.tg]; if (!tg) return;

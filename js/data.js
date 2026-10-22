@@ -219,12 +219,32 @@ const BOMB_LIST = [
   ['fab250m54', 'FAB-250M54', 268, [5, 6], ['ussr'], 'gp'], ['fab500m62', 'FAB-500M62', 500, [5, 7], ['ussr'], 'gp'], ['ofab250', 'OFAB-250-270', 266, [5, 7], ['ussr'], 'gp'],
   ['fab1500', 'FAB-1500M54', 1550, [5, 6], ['ussr'], 'gp'], ['rbk500', 'RBK-500 cluster bomb', 500, [6, 7], ['ussr'], 'cl'], ['kab500', 'KAB-500L (laser-guided)', 525, [6, 7], ['ussr'], 'lgb'], ['kab500s', 'KAB-500S (satellite-guided)', 560, [7, 7], ['ussr'], 'gps'],
 ];
+// ---- bomb bodies (published length and body diameter, metres). The fall (combat.js Combat.bombStep) takes its drag
+// from the diameter, the mass and a drag coefficient for the shape: streamlined GP bombs, blunter WW1 and cluster
+// bodies, the flat-nosed HC "Cookie" (it tumbled), finned guided bombs, and the Snakeye's retarding fins.
+const BOMB_DIM = {
+  cooper: [0.61, 0.13], rl112: [1.09, 0.20], rl230: [1.42, 0.25], puw12: [0.90, 0.10], puw50: [1.60, 0.18], puw100: [1.95, 0.22], puw300: [2.68, 0.36],
+  ga10: [0.70, 0.11], ga50: [1.20, 0.19], pood: [0.60, 0.14], pood5: [1.10, 0.24],
+  m30: [1.02, 0.21], m31: [1.30, 0.28], m32: [1.53, 0.36], m33: [1.78, 0.48], fra50: [1.10, 0.18], fra200: [1.60, 0.32], fra500: [2.10, 0.45], type94_60: [1.20, 0.20],
+  an_m30: [1.02, 0.21], an_m57: [1.14, 0.28], an_m64: [1.50, 0.36], an_m65: [1.78, 0.47], an_m66: [2.33, 0.59], an_m1a2: [1.20, 0.36],
+  sc50: [1.09, 0.20], sc250: [1.64, 0.37], sc500: [2.01, 0.47], sd250: [1.64, 0.37], sc1000: [2.58, 0.65], sc1800: [3.50, 0.66], ab250: [1.64, 0.37],
+  gp250: [1.37, 0.26], mc500: [1.67, 0.33], mc1000: [1.98, 0.43], hc4000: [2.79, 0.76],
+  fab50: [1.07, 0.22], fab100: [0.96, 0.27], fab250: [1.50, 0.29], fab500: [2.10, 0.39], fab1000: [2.65, 0.50], ptab: [1.50, 0.29],
+  t99_25: [1.90, 0.30], t99_25ap: [1.90, 0.30], t99_80: [2.42, 0.45], t92_50: [1.00, 0.20],
+  m117: [2.16, 0.41], mk81: [1.88, 0.23], mk82: [2.22, 0.273], mk82se: [2.22, 0.273], mk83: [3.00, 0.357], mk84: [3.28, 0.458], cbu87: [2.34, 0.40],
+  gbu12: [3.33, 0.273], gbu10: [4.32, 0.458], gbu38: [2.38, 0.273], gbu31: [3.88, 0.458],
+  uk1000: [2.20, 0.43], bl755: [2.45, 0.42], pw1000: [3.60, 0.36], samp250: [2.15, 0.33], samp400: [2.60, 0.40], bap100: [1.80, 0.10], belouga: [3.30, 0.36], aasm: [3.10, 0.24],
+  fab250m54: [1.96, 0.325], fab500m62: [2.40, 0.40], ofab250: [1.46, 0.325], fab1500: [3.00, 0.58], rbk500: [2.50, 0.45], kab500: [3.05, 0.35], kab500s: [3.00, 0.40],
+};
+const BOMB_CD = { gp: 0.25, ap: 0.25, rt: 0.25, cl: 0.4, hc: 0.9, lgb: 0.35, gps: 0.35 };
 for (const [id, name, kg, eras, who, type] of BOMB_LIST) {
   // blast: ~420 damage and 22 m at 50 kg, ~4300 and 62 m at 1000 kg; thin-cased HC bombs blast further, AP bombs less
   const k = { gp: [1, 1], hc: [1.45, 1.3], ap: [0.85, 0.7], cl: [0.75, 1.6], rt: [1, 1], lgb: [1.05, 1], gps: [1.05, 1] }[type];
   STORES[id] = { kind: 'b', name, mass: kg, eras, dmg: Math.round(420 * Math.pow(kg / 50, 0.777) * k[0]), rad: Math.round(8 * Math.pow(kg, 0.3) * k[1]), type,
     guided: type === 'lgb' || type === 'gps', price: Math.round(55 * Math.pow(kg, 0.55) * (1 + (eras[0] - 1) * 0.3) * (type === 'lgb' || type === 'gps' ? 2.4 : type === 'cl' ? 1.4 : 1) / 10) * 10,
     ...(Array.isArray(who) ? { nat: who } : { bloc: who }) };
+  if (!BOMB_DIM[id]) throw new Error('bomb without body data: ' + id);
+  Object.assign(STORES[id], { len: BOMB_DIM[id][0], dia: BOMB_DIM[id][1], cd: eras[0] === 1 && type === 'gp' ? 0.35 : BOMB_CD[type], ret: type === 'rt' });
 }
 // saves from before the named bombs: each old generic bomb becomes the nearest bomb by mass that the aircraft can carry
 const OLD_BOMBS = { b50: 50, b100: 100, b250: 250, b500: 500, b1000: 1000 };

@@ -317,9 +317,11 @@ class Craft {
     return true;
   }
   // where a bomb released now would land (same ballistics as Combat's bombs), or null
-  bombImpact() {
-    const p = this.pos.clone(), v = this.vel.clone(), w = this.match.world;
-    for (let i = 0; i < 600; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); const gy = w.groundAt(p.x, p.z); if (p.y <= gy) { p.y = gy; p.tti = (i + 1) * 0.1; return p; } }
+  // where a bomb released now would land (the heaviest one carried, or `s`), with the bombs' own fall (Combat.bombStep)
+  bombImpact(s) {
+    s = s || (this.stationsOf('b').sort((a, b) => b.s.mass - a.s.mass)[0] || {}).s || STORES.mk82;
+    const p = this.pos.clone(), v = this.vel.clone(), w = this.match.world, dt = 0.05;
+    for (let i = 0; i < 1600; i++) { Combat.bombStep(s, p, v, dt, (i + 1) * dt); const gy = w.groundAt(p.x, p.z); if (p.y <= gy) { p.y = gy; p.tti = (i + 1) * dt; return p; } }
     return null;
   }
   // where to put the nose so the guns hit the target now (bullets inherit our velocity; drop lifted)

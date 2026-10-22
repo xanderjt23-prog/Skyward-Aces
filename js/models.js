@@ -329,7 +329,7 @@ const Models = (() => {
   // a store as it hangs on a pylon (bomb, rocket pod / rails, missile, gun pod); userData.r / len for placement
   function storeMesh(s, id) {
     let m, r, len;
-    if (s.kind === 'b') { m = bomb(s.mass); r = 0.12 * Math.cbrt(s.mass / 20) * 0.6; len = r * 9; if (s.guided) { const b2 = new Builder(); b2.add(box(r * 3, 0.02, r * 1.2), 0x555555, [0, 0, -len * 0.45]); m.add(new THREE.Mesh(b2.build(), mat('vc'))); } }
+    if (s.kind === 'b') { m = bomb(s); r = s.dia / 2; len = s.len; if (s.guided) { const b2 = new Builder(); b2.add(box(r * 3, 0.02, r * 1.2), 0x555555, [0, 0, -len * 0.45]); m.add(new THREE.Mesh(b2.build(), mat('vc'))); } }
     else if (s.kind === 'm') { len = s.len; r = s.dia / 2; m = missile(len, r); }
     else if (s.kind === 'g') { len = 2.4 + s.mass / 600; r = 0.22 + s.mass / 4000; const b2 = new Builder(); b2.add(zcyl(r * 0.6, r, len, 12), 0x5c6268, [0, 0, 0]); b2.add(zcyl(0.03, 0.03, 0.6, 6), 0x222222, [0, -r * 0.3, -len / 2 - 0.3]); m = new THREE.Mesh(b2.build(), mat('vc')); }
     else { // rockets: a pod for many small rockets, rails for a few big ones
@@ -340,6 +340,15 @@ const Models = (() => {
     }
     m.userData.r = r; m.userData.len = len; return m;
   }
-  function bomb(mass) { const r = 0.12 * Math.cbrt(mass / 20), b = new Builder(); b.add(zcyl(r * 0.6, r * 0.5, r * 5, 8), 0x4a5040, [0, 0, 0]); b.add(new THREE.SphereGeometry(r, 8, 6), 0x4a5040, [0, 0, -r * 2.5]); b.add(box(r * 2, 0.02, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); b.add(box(0.02, r * 2, r * 1.2), 0x3a4030, [0, 0, r * 2.8]); return new THREE.Mesh(b.build(), mat('vc')); }
+  function bomb(s) {
+    const r = s.dia / 2, L = s.len, b = new Builder(), col = s.type === 'lgb' || s.type === 'gps' ? 0x6b6f5a : 0x4a5040;
+    if (s.type === 'hc') { b.add(zcyl(r, r, L, 12), col, [0, 0, 0]); return new THREE.Mesh(b.build(), mat('vc')); } // the Cookie: a thin-walled drum
+    const nose = Math.min(L * 0.3, r * 2.4), tail = L * 0.3, body = L - nose - tail;
+    b.add(zcyl(r, r, body, 10), col, [0, 0, -L / 2 + nose + body / 2]);
+    const ns = new THREE.SphereGeometry(r, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2); ns.rotateX(-Math.PI / 2); ns.scale(1, 1, nose / r); b.add(ns, col, [0, 0, -L / 2 + nose]);
+    b.add(zcyl(r, r * 0.35, tail, 10), col, [0, 0, L / 2 - tail / 2]);
+    const fw = r * (s.ret ? 1.6 : 1.1); b.add(box(fw * 2 + r * 0.7, 0.012, tail * 0.7), 0x3a4030, [0, 0, L / 2 - tail * 0.35]); b.add(box(0.012, fw * 2 + r * 0.7, tail * 0.7), 0x3a4030, [0, 0, L / 2 - tail * 0.35]);
+    return new THREE.Mesh(b.build(), mat('vc'));
+  }
   return { aircraft: null /* set by aircraft3d.js */, skinMat, storeMesh, layout, turretPos, paint, insignia, base, aaMount, missile, bomb, debris, mat, Builder, mulberry, TEAM_COL, zcyl, box, cyl, panel };
 })();

@@ -87,10 +87,9 @@ class Combat {
     });
     // ---- bombs
     this.bombs = this.bombs.filter(bm => {
-      bm.v.y -= 9.81 * dt; bm.v.multiplyScalar(1 - 0.02 * dt);
+      bm.t = (bm.t || 0) + dt; Combat.bombStep(bm.s, bm.p, bm.v, dt, bm.t, true);
       // guided bombs glide towards the nearest enemy target under them
       if (bm.s.guided && bm.target) { const to = bm.target.clone().sub(bm.p); const h = Math.hypot(to.x, to.z), sp = bm.v.length(); if (h > 5) { const want = to.normalize().multiplyScalar(sp); bm.v.lerp(want, Math.min(1, dt * 0.8)); } }
-      bm.p.addScaledVector(bm.v, dt);
       if (bm.mesh) { bm.mesh.position.copy(bm.p); bm.mesh.lookAt(bm.p.clone().add(bm.v)); bm.mesh.rotateY(Math.PI); }
       const gy = w.groundAt(bm.p.x, bm.p.z);
       if (bm.p.y < gy + 0.5) { bm.p.y = gy; this.explode(bm.p, bm.s.dmg, bm.s.rad, bm.s.dmg * 0.1, bm.s.rad * 0.5, bm.owner, bm.team, bm.real, 'bomb', true); this.removeMesh(bm); return false; }
@@ -233,6 +232,15 @@ class Combat {
   // drag factor k (deceleration = k * density ratio * v^2, from Cd 0.35 on the body cross-section), boost thrust (reaches
   // the rated speed from a typical launch speed by burn-out), the cruise speed a sustainer / ramjet holds and the speed
   // the fins reach full G at sea level
+  // one step of a falling bomb (moves p and v): gravity and drag 0.5 rho v^2 Cd A / m, with the drag rise near the
+  // speed of sound; a Snakeye's fins open half a second after release. Shared by the bombs, the CCIP sight and the bots
+  // so the pipper shows exactly where the bomb will land.
+  static bombStep(s, p, v, dt, t) {
+    const sp = v.length(), rho = 1.225 * Math.exp(-Math.max(0, p.y) / 9000), mach = sp / 330;
+    const area = s.ret && t > 0.5 ? 0.5 : Math.PI * (s.dia || 0.3) * (s.dia || 0.3) / 4, cd = s.ret && t > 0.5 ? 1.2 : (s.cd || 0.3) * (1 + 1.6 * Math.max(0, Math.min(1, (mach - 0.8) / 0.4)));
+    const dec = 0.5 * rho * sp * cd * area / Math.max(1, s.mass);
+    v.y -= 9.81 * dt; v.multiplyScalar(Math.max(0, 1 - dec * dt)); p.addScaledVector(v, dt);
+  }
   static phys(s) {
     if (s._ph) return s._ph;
     const A = Math.PI * (s.dia || 0.2) * (s.dia || 0.2) / 4, k = 0.5 * 0.35 * A * 1.225 / Math.max(20, s.mass), burn = s.burn || 3, cruise = s.speed * 0.75;
@@ -256,7 +264,7 @@ class Combat {
     }
   }
   bomb(p, v, owner, s) {
-    const mesh = Models.bomb(s.mass); this.m.scene.add(mesh); if (owner === this.m.player) Sound.clunk();
+    const mesh = Models.bomb(s); this.m.scene.add(mesh); if (owner === this.m.player) Sound.clunk();
     const bm = { p: p.clone(), v: v.clone(), owner, team: owner.team, s, mesh, real: owner.local };
     if (s.guided) { const b = this.m.nearestEnemyBase(owner.team, p, 4000); if (b) bm.target = b.pos.clone(); }
     this.bombs.push(bm);

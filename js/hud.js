@@ -168,7 +168,7 @@ const HUD = (() => {
     for (const g2 of p.guns) if (g2.pod) parts.push(`POD ${Math.max(0, g2.pod.gunAmmo | 0)}`);
     p.weaponSlots().forEach((id, i) => { const n = p.countOf(id), s = STORES[id], short = s.name.replace(/ \(.*\)$/, '').replace(/ (pod|rockets).*$/, '').slice(0, 18);
       parts.push(`[${Input.label(Input.bind('weapon' + (i + 1)))}] ${short} ×${n}${s.kind === 'm' && id === game.armed && game.locked ? ' LOCK' : ''}`); });
-    if (p.def.flares) parts.push(`FLARES ${p.flares} [${Input.label(Input.bind('flares'))}]`);
+    if (p.def.flares) parts.push(`${p.def.chaff ? "FLARE/CHAFF" : "FLARES"} ${p.flares} [${Input.label(Input.bind("flares"))}]`);
     if (game.match.cfg.realistic) parts.push(Models.layout(p.def).fixed ? 'GEAR FIXED' : p.gearDown ? 'GEAR ▼ DOWN' : 'GEAR ▲ UP');
     if (pit) { const t2 = parts.join('   '); g.font = '12px sans-serif'; const w2 = g.measureText(t2).width + 24; g.fillStyle = 'rgba(8,14,22,0.5)'; round(cx - w2 / 2, 62, w2, 22, 8); g.fill(); text(t2, cx, 77, COL.white, 12, 'center'); }
     else text(parts.join('   '), cx, y + 40, COL.white, 12, 'center');

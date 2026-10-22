@@ -264,8 +264,8 @@ class BotBrain {
   }
   // where a bomb released now would land (same drag as Combat's bombs)
   static impact(c, groundY) {
-    const p = c.pos.clone(), v = c.vel.clone();
-    for (let i = 0; i < 400 && p.y > groundY; i++) { v.y -= 9.81 * 0.1; v.multiplyScalar(1 - 0.002); p.addScaledVector(v, 0.1); }
+    const p = c.pos.clone(), v = c.vel.clone(), s = (c.stationsOf('b').sort((a, b) => b.s.mass - a.s.mass)[0] || {}).s || STORES.mk82;
+    for (let i = 0; i < 1200 && p.y > groundY; i++) Combat.bombStep(s, p, v, 0.05, (i + 1) * 0.05);
     return p;
   }
 }
