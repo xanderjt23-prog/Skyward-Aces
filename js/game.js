@@ -272,7 +272,9 @@ const Game = (() => {
     const s = p.stats;
     const reward = Profile.applyBattle({ left: !!left, tanks: s.tanks || 0, kills: s.kills, assists: s.assists, basePoints: s.basePoints, damage: Math.round(s.damage / 10), deaths: s.deaths, won, era: p.def.era, mode: m.mode,
       minutes: m.time / 60, waves: m.mode === 'survival' ? Math.max(0, m.wave - 1) : 0, score: 0, nation: p.def.nation, plane: p.def.id,
-      basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills });
+      basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills,
+      online: !!m.net, night: !!m.cfg.night, weather: m.cfg.weather, size: m.cfg.size, evadedIR: s.evadedIR, evadedRadar: s.evadedRadar, bombKg: s.bombKg,
+      oldSchool: p.def.era >= 6 && p.def.kind === 'jet' && s.kills - s.missileKills - s.crashKills >= 3 });
     document.exitPointerLock && document.exitPointerLock();
     Sound.stopAll();
     UI.showResults(m, { won, left, reward, reason: r.reason });

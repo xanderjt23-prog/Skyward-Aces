@@ -223,14 +223,18 @@ const UI = (() => {
     const p = P(); const done = ACHIEVEMENTS.filter(a => p.ach[a.id]).length;
     let h = `<h2>Achievements</h2><p class="muted">${done} / ${ACHIEVEMENTS.length} unlocked</p><div class="grid c2">`;
     for (const a of ACHIEVEMENTS) { const pr = Profile.progress(a), got = !!p.ach[a.id], val = Math.min(a.goal, Math.floor(p.stats[a.stat] || 0));
-      h += `<div class="card ach ${got ? 'done' : ''}"><div class="ic">${a.icon}</div><div style="flex:1"><div class="t">${a.name}</div><div class="small muted">${a.desc}</div><div class="bar"><i style="width:${pr * 100}%"></i></div><div class="small muted">${got ? 'Unlocked ' + new Date(p.ach[a.id]).toLocaleDateString() : fmt(val) + ' / ' + fmt(a.goal)}</div></div></div>`; }
+      h += `<div class="card ach ${got ? 'done' : ''}"><div class="ic">${a.icon}</div><div style="flex:1"><div class="t">${a.name}</div><div class="small muted">${a.desc}</div><div class="bar"><i style="width:${pr * 100}%"></i></div><div class="small muted">${got ? 'Unlocked ' + new Date(p.ach[a.id]).toLocaleDateString() : fmt(val) + ' / ' + fmt(a.goal)} · reward ${fmt(ACH_REWARD[a.tier || 1].coins)} coins, ${fmt(ACH_REWARD[a.tier || 1].xp)} XP</div></div></div>`; }
     body(h + '</div>');
   }
   function renderProfile() {
     const p = P(), s = p.stats, li = Profile.levelInfo();
-    const kd = (s.kills || 0) / Math.max(1, s.deaths || 0), fav = Object.entries(s.planeUse || {}).sort((a, b) => b[1] - a[1])[0];
-    const rows = [['Level', li.level], ['XP to next level', `${fmt(li.into)} / ${fmt(li.need)}`], ['Total XP earned', fmt(p.totalXp)], ['Battles', fmt(s.battles || 0)], ['Victories', fmt(s.wins || 0)], ['Win rate', ((s.wins || 0) / Math.max(1, s.battles || 0) * 100).toFixed(0) + '%'],
-      ['Aircraft shot down', fmt(s.kills || 0)], ['Times shot down', fmt(s.deaths || 0)], ['K/D ratio', kd.toFixed(2)], ['Assists', fmt(s.assists || 0)], ['Bases destroyed', fmt(s.bases || 0)], ['Missions completed', fmt(s.missions || 0)],
+    // K/D and win rate count multiplayer battles only; singleplayer has its own lines
+    const kd = (s.mpKills || 0) / Math.max(1, s.mpDeaths || 0), fav = Object.entries(s.planeUse || {}).sort((a, b) => b[1] - a[1])[0];
+    const rows = [['Level', li.level], ['XP to next level', `${fmt(li.into)} / ${fmt(li.need)}`], ['Total XP earned', fmt(p.totalXp)], ['Battles (all)', fmt(s.battles || 0)],
+      ['Multiplayer battles', fmt(s.mpBattles || 0)], ['Multiplayer victories', fmt(s.mpWins || 0)], ['Win rate (multiplayer)', s.mpBattles ? ((s.mpWins || 0) / s.mpBattles * 100).toFixed(0) + '%' : '—'],
+      ['K/D ratio (multiplayer)', s.mpBattles ? kd.toFixed(2) : '—'], ['Multiplayer kills / deaths', `${fmt(s.mpKills || 0)} / ${fmt(s.mpDeaths || 0)}`],
+      ['Singleplayer battles / victories', `${fmt(s.spBattles || 0)} / ${fmt(s.spWins || 0)}`], ['Singleplayer kills / deaths', `${fmt(s.spKills || 0)} / ${fmt(s.spDeaths || 0)}`],
+      ['Aircraft shot down (all)', fmt(s.kills || 0)], ['Times shot down (all)', fmt(s.deaths || 0)], ['Missiles defeated', fmt((s.evadedIR || 0) + (s.evadedRadar || 0))], ['Bombs dropped', fmt(Math.round((s.bombKg || 0) / 1000)) + ' t'], ['Assists', fmt(s.assists || 0)], ['Bases destroyed', fmt(s.bases || 0)], ['Missions completed', fmt(s.missions || 0)],
       ['Flight time', `${Math.floor((s.flightTime || 0) / 3600)} h ${Math.floor((s.flightTime || 0) % 3600 / 60)} min`], ['Aircraft owned', Object.keys(p.owned).length], ['Favourite aircraft', fav && PLANES[fav[0]] ? PLANES[fav[0]].name : '—'], ['Achievements', `${Object.keys(p.ach).length} / ${ACHIEVEMENTS.length}`], ['Coins earned', fmt(s.coinsEarned || 0)]];
     const st = p.settings;
     body(`<h2>Pilot profile</h2><div class="split"><div class="card"><div class="field"><label>Username</label><div class="row"><input id="pf-name" maxlength="18" value="${esc(p.name)}"><button id="pf-save">Save</button></div></div>
@@ -529,7 +533,7 @@ const UI = (() => {
     $('#results').innerHTML = `<div class="card"><div class="big-result ${cls}">${title}</div><div class="muted">${esc(info.reason || r.reason || '')}${teams ? ` · ${m.scores[my]} – ${m.scores[1 - my]}` : ''}</div>
       <div class="rewards"><div class="card"><span class="muted small">XP EARNED</span><b>+${fmt(rw.xp)}</b></div><div class="card"><span class="muted small">COINS EARNED</span><b>+${fmt(rw.coins)}</b></div><div class="card"><span class="muted small">ERA BONUS</span><b>×${ERAS[p.def.era].xpMul}</b></div></div>
       ${rw.levelUp ? `<h3>🎉 Level up! You are now level ${rw.levelUp}</h3>` : ''}
-      ${rw.achievements.length ? `<h3>Achievements unlocked</h3><div class="row">${rw.achievements.map(a => `<span class="pill ok">${a.icon} ${a.name}</span>`).join(' ')}</div>` : ''}
+      ${rw.achievements.length ? `<h3>Achievements unlocked</h3><div class="row">${rw.achievements.map(a => `<span class="pill ok">${a.icon} ${a.name} · +${fmt(ACH_REWARD[a.tier || 1].coins)} coins, +${fmt(ACH_REWARD[a.tier || 1].xp)} XP</span>`).join(' ')}</div>` : ''}
       <div class="row" style="margin:12px 0"><span class="pill">Kills ${s.kills}</span><span class="pill">Assists ${s.assists}</span><span class="pill">Deaths ${s.deaths}</span><span class="pill">Bases ${s.bases}</span><span class="pill">Tanks ${s.tanks || 0}</span><span class="pill">Damage dealt ${fmt(s.damage)}</span>${m.mode === 'survival' ? `<span class="pill">Waves ${Math.max(0, m.wave - 1)}</span>` : ''}</div>
       ${teams ? `<div class="grid c2"><div><h3 class="team0">Your team</h3>${table(my)}</div><div><h3 class="team1">Enemy team</h3>${table(1 - my)}</div></div>` : table(my)}
       <div class="row" style="margin-top:16px"><button class="primary" id="res-ok" style="font-size:20px;padding:10px 30px">Continue</button></div></div>`;

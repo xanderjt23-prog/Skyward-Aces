@@ -18,7 +18,7 @@ class Craft {
     this.pos = new V3(); this.vel = new V3(); this.quat = new THREE.Quaternion(); this.rates = new V3();
     this.ctl = { pitch: 0, roll: 0, yaw: 0, throttle: 1 };
     this.alive = false; this.everSpawned = false; this.deadT = 0; this.respawnAt = 0;
-    this.stats = { kills: 0, deaths: 0, assists: 0, tanks: 0, bases: 0, basePoints: 0, score: 0, damage: 0, crewKills: 0, wingKills: 0, fires: 0, crashKills: 0, missileKills: 0, giantKills: 0, bigBases: 0, basesDestroyed: 0 };
+    this.stats = { kills: 0, deaths: 0, assists: 0, tanks: 0, bases: 0, basePoints: 0, score: 0, damage: 0, crewKills: 0, wingKills: 0, fires: 0, crashKills: 0, missileKills: 0, giantKills: 0, bigBases: 0, basesDestroyed: 0, evadedIR: 0, evadedRadar: 0, bombKg: 0 };
     this.lives = spec.lives != null ? spec.lives : Infinity;
     this.model = Models.aircraft(this.def, this.lo.livery); this.model.visible = false; match.scene.add(this.model);
     this.smokeT = 0; this.fireFxT = 0; this.flareT = -99; this.lastHitT = -99; this.missileWarn = 0; this.lockT = 0; this.lockTarget = null;
@@ -309,7 +309,7 @@ class Craft {
     if (this.dm.destroyed) return false;
     const heavy = this.stationsOf('b').reduce((m, s) => Math.max(m, s.s.mass), 0), set = this.releaseSet('b', id ? s => s.id === id : s => s.s.mass === heavy); if (!set.length) return false;
     for (const st of set) { const n = st.slot.bay ? Math.min(st.n, 2) : 1; // a bay releases two at a time, an external pylon its one bomb
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i++) { this.stats.bombKg += st.s.mass;
         // bombs tumble and scatter a little on release (more from high altitude level bombers)
         const agl = this.pos.y - this.match.world.groundAt(this.pos.x, this.pos.z), sc = 1.5 + agl * (this.def.role === 'bomber' ? 0.004 : 0.0015), v = this.vel.clone().add(new V3((Math.random() - 0.5) * sc, 0, (Math.random() - 0.5) * sc));
         this.match.combat.bomb(this.releasePoint(st).add(new V3(i ? 0.6 : 0, 0, 0).applyQuaternion(this.quat)), v, this, st.s); }

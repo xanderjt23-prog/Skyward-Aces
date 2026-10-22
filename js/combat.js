@@ -141,6 +141,7 @@ class Combat {
     ms.prev.copy(ms.p); ms.p.addScaledVector(ms.v, dt);
     if (ms.motor) FX.puff('missile', ms.p);
     if (ms.mesh) { ms.mesh.position.copy(ms.p); ms.mesh.lookAt(ms.p.clone().add(ms.v)); ms.mesh.rotateY(Math.PI); }
+    if (ms.target) ms.minD = Math.min(ms.minD || 1e9, ms.p.distanceTo(ms.target.pos));
     let boom = ms.life <= 0 || ms.p.y < m.world.groundAt(ms.p.x, ms.p.z);
     // proximity fuse against any enemy (not only the target)
     // (it detonates at the point of closest approach along this frame's path, not where the frame ends)
@@ -148,6 +149,7 @@ class Combat {
     if (!boom && ms.t > 0.5) for (const c of this.near(ms.p)) { if (c.team === ms.team || !c.alive || c === ms.owner) continue;
       const d = this.segDist(ms.prev, ms.p, c.pos); if (d < 12 + c.dm.radius * 0.3) { boom = true; ms.hitCraft = c; at = this.segPoint(ms.prev, ms.p, c.pos); break; } }
     if (ms.decoy && ms.decoy.flare && ms.p.distanceTo(ms.decoy.p) < 8) boom = true;
+    if (boom && ms.target && ms.target.alive && ms.hitCraft !== ms.target && ms.minD < 3000 && ms.target.stats && !ms.cosmeticEnd) { if (s.seek === 'ir') ms.target.stats.evadedIR++; else ms.target.stats.evadedRadar++; }
     if (boom) { const big = s.mass > 150; this.explode(at.clone(), 200, 8, big ? 520 : 380, big ? 16 : 12, ms.owner, ms.team, ms.real, 'missile', false); this.removeMesh(ms); return false; }
     return true;
   }

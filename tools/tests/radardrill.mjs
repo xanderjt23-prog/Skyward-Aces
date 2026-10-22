@@ -14,7 +14,7 @@ export default async function (t) {
           const gy = m.world.groundAt(p.pos.x, p.pos.z); p.vel.copy(side).multiplyScalar(260); p.vel.y = p.pos.y - gy > 400 ? -60 : 0; p.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(p.pos, p.pos.clone().add(p.vel), new V(0, 1, 0)));
           if (i % 15 === 0 && cm++ < 12) p.dropFlares(); }
         Game.update(1/30); if (p.wLaunch != null && m.time - p.wLaunch < 0.1) warn = 'RWR launch'; }
-      return JSON.stringify({ how: '${how}', survived: T.survived, step: m.over ? 'done' : T.step, alive: p.alive, damaged: p.dm.comps.reduce((a, c) => a + c.hp, 0) < hp0, warn }); })()`);
+      return JSON.stringify({ how: '${how}', survived: T.survived, step: m.over ? 'done' : T.step, alive: p.alive, damaged: p.dm.comps.reduce((a, c) => a + c.hp, 0) < hp0, warn, evadedRadar: p.stats.evadedRadar }); })()`);
     console.log(r);
     await t.eval("Game.leave(); const b = document.querySelector('#res-ok'); if (b) b.click(); 1");
   }

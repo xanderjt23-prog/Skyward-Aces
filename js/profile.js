@@ -8,7 +8,7 @@ const Profile = (() => {
   let p = null;
   function fresh() {
     const owned = {}; for (const pl of PLANE_LIST) if (pl.starter) owned[pl.id] = true;
-    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, tut: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
+    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, achPaid: {}, tut: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
   }
   function load() {
     try { const s = localStorage.getItem(KEY); if (s) p = JSON.parse(s); } catch (e) { p = null; }
@@ -17,10 +17,11 @@ const Profile = (() => {
     for (const k in f.settings) if (p.settings[k] === undefined) p.settings[k] = f.settings[k];
     for (const pl of PLANE_LIST) if (pl.starter) p.owned[pl.id] = true;
     if (!PLANES[p.selected] || !p.owned[p.selected]) p.selected = 'camel';
+    if (!p.achPaid) p.achPaid = {}; if (!p.tut) p.tut = {};
     return p;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
-  function tutorialDone(id) { if (!p.tut[id]) { p.tut[id] = Date.now(); save(); } }
+  function tutorialDone(id) { if (!p.tut[id]) { p.tut[id] = Date.now(); save(); } return checkAchievements(); }
 
   // ---- levels: each level needs 1.1x the XP of the one before
   const need = lvl => Math.round(1000 * Math.pow(1.1, lvl - 1));
@@ -116,10 +117,15 @@ const Profile = (() => {
     const owned = Object.keys(p.owned).map(id => PLANES[id]).filter(Boolean);
     p.stats.owned = owned.length; p.stats.jets = owned.filter(x => x.kind === 'jet').length; p.stats.modern = owned.filter(x => x.era === 7).length;
     p.stats.level = levelInfo().level; p.stats.nationsWon = Object.keys(p.stats.nationWins || {}).length;
+    p.stats.erasFlown = new Set(Object.keys(p.stats.planeUse || {}).map(id => PLANES[id] && PLANES[id].era).filter(Boolean)).size;
+    if (typeof Tutorial !== 'undefined') { const t = p.tut || {}; p.stats.tutorials = Tutorial.LIST.filter(x => t[x.id]).length; p.stats.maneuverTuts = Tutorial.LIST.filter(x => x.cat === 'man' && t[x.id]).length; }
   }
+  // unlocking pays the achievement's reward (coins and XP); achievements unlocked before rewards existed are paid once
+  function pay(a) { if (p.achPaid[a.id]) return; const r = ACH_REWARD[a.tier || 1]; p.coins += r.coins; p.xp += r.xp; p.totalXp += r.xp; p.achPaid[a.id] = Date.now(); }
   function checkAchievements() {
     derived(); const got = [];
     for (const a of ACHIEVEMENTS) if (!p.ach[a.id] && (p.stats[a.stat] || 0) >= a.goal) { p.ach[a.id] = Date.now(); got.push(a); }
+    for (const a of ACHIEVEMENTS) if (p.ach[a.id]) pay(a);
     save(); return got;
   }
   function progress(a) { derived(); return Math.min(1, (p.stats[a.stat] || 0) / a.goal); }
@@ -139,6 +145,12 @@ const Profile = (() => {
     const before = levelInfo().level, rw = rewards(r);
     p.totalXp += rw.xp; p.xp += rw.xp; p.coins += rw.coins;
     bump('coinsEarned', rw.coins); bump('battles', 1); bump('kills', r.kills); bump('deaths', r.deaths); bump('assists', r.assists);
+    // K/D and win rate are multiplayer only (against bots they would say little); singleplayer is counted on its own
+    if (r.online) { bump('mpBattles', 1); bump('mpKills', r.kills); bump('mpDeaths', r.deaths); if (r.won) bump('mpWins', 1); }
+    else if (!r.left || r.minutes > 1) { bump('spBattles', 1); bump('spKills', r.kills); bump('spDeaths', r.deaths); if (r.won) bump('spWins', 1); }
+    bump('evadedIR', r.evadedIR || 0); bump('evadedRadar', r.evadedRadar || 0); bump('bombKg', Math.round(r.bombKg || 0));
+    if (r.oldSchool) bump('oldSchool', 1); if (r.size === 'massive' && !r.left) bump('massiveBattles', 1);
+    if (r.won && r.night) bump('nightWins', 1); if (r.won && r.weather === 'storm') bump('stormWins', 1);
     bump('bases', r.basesDestroyed); bump('bigBases', r.bigBases); bump('crewKills', r.crewKills); bump('wingKills', r.wingKills); bump('fires', r.fires);
     bump('crashKills', r.crashKills); bump('tanks', r.tanks || 0); bump('missileKills', r.missileKills); bump('giantKills', r.giantKills); bump('flightTime', Math.round(r.minutes * 60));
     maxStat('bestKills', r.kills); if (r.waves) maxStat('bestWave', r.waves);
