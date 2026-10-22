@@ -77,6 +77,10 @@ const UI = (() => {
   function bindTabs(cb) { $$('[data-nat]').forEach(b => b.onclick = () => cb(b.dataset.nat)); }
 
   // ---------------------------------------------------------------- hangar
+  // real photographs (Wikimedia Commons, js/photocredits.js): the image with its credit, or null when there is none
+  const photoOf = (kind, id) => (typeof PHOTO_CREDITS !== 'undefined' && PHOTO_CREDITS[kind + '/' + id]) || null;
+  const credit = c => `Photo: ${c.author} · ${c.licence} · Wikimedia Commons`;
+  const photoTag = (kind, id, cls) => { const c = photoOf(kind, id); return c ? `<img class="${cls || 'photo'}" src="${c.src}" loading="lazy" alt="" title="${esc(credit(c))}">` : ''; };
   function renderHangar() {
     hangarNation = hangarNation || cur().nation; const p = P();
     if (!hangarSel || PLANES[hangarSel].nation !== hangarNation) hangarSel = PLANES[p.selected].nation === hangarNation ? p.selected : planesOf(hangarNation)[0].id;
@@ -85,12 +89,13 @@ const UI = (() => {
       const list = planesOf(hangarNation).filter(x => x.era === e); if (!list.length) continue;
       h += `<div class="era-sec"><div class="era-h">${ERAS[e].name} <small>${ERAS[e].years}</small></div><div class="planes">`;
       for (const pl of list) { const owned = p.owned[pl.id], flying = p.selected === pl.id;
-        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div>${Thumbs.tag(pl.id)}<div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
+        h += `<div class="pc ${owned ? 'owned' : 'locked'} ${flying ? 'flying' : ''} ${hangarSel === pl.id ? 'sel' : ''}" data-pid="${pl.id}"><div class="n" title="${esc(pl.name)}">${esc(pl.short)}</div>${photoTag('planes', pl.id, 'thumb photo') || Thumbs.tag(pl.id)}<div class="ty">${esc(pl.type)}</div><div class="y">${pl.year} · ${pl.spd} km/h</div><span class="badge">${flying ? 'Flying' : owned ? 'Owned' : 'Locked'}</span></div>`; }
       h += `</div></div>`;
     }
     const pl = PLANES[hangarSel], owned = p.owned[pl.id];
     h += `</div>`;
-    let side = `<div class="card"><h3>${esc(pl.name)}</h3><p class="muted small">${esc(pl.desc || '')}</p>${planeStats(pl)}<div class="row" style="margin-top:12px">`;
+    const ph = photoOf('planes', pl.id);
+    let side = `<div class="card"><h3>${esc(pl.name)}</h3>${ph ? `<img class="side-photo" src="${ph.src}" alt=""><div class="credit"><a href="${esc(ph.page)}" target="_blank" rel="noopener">${esc(credit(ph))}</a></div>` : ''}<p class="muted small">${esc(pl.desc || '')}</p>${planeStats(pl)}<div class="row" style="margin-top:12px">`;
     side += owned ? (p.selected === pl.id ? `<button disabled>Selected</button>` : `<button class="primary" id="h-select">Fly this aircraft</button>`) + ` <button id="h-mods">Modifications</button>` : `<button id="h-research">Research (${fmt(pl.cost)} XP)</button>`;
     side += `</div></div>`;
     $('#side').innerHTML = side; $('#side').classList.remove('hidden'); $('#panel').classList.add('narrow'); Game.menuView = 'side';
@@ -195,7 +200,7 @@ const UI = (() => {
           if (k === 'b') d += ` · blast ${s.rad} m${s.guided ? ' · laser guided' : ''}`; if (k === 'r') d += ` · ${s.count} rockets`;
           if (k === 'm') d += ` · ${s.seek === 'ir' ? 'infrared' + (s.rear ? ', rear aspect' : ', all aspect') : s.seek === 'sarh' ? 'semi-active radar' : 'active radar'} · ${(s.range / 1000).toFixed(1)} km · ${s.g} G`;
           if (k === 'g') d += ` · ${s.guns}× ${GUNS[s.gun].name}`;
-          h += `<div class="shop-item"><div><b>${esc(s.name)}</b><div class="d">${d}</div></div><div>${m.stores[id] ? '<span class="pill ok">Owned</span>' : `<button class="primary" data-buystore="${id}">Buy ◎${fmt(s.price)}</button>`}</div></div>`; }
+          h += `<div class="shop-item">${photoTag('stores', id, 'store-photo') || '<span class="store-photo none"></span>'}<div style="flex:1"><b>${esc(s.name)}</b><div class="d">${d}</div></div><div>${m.stores[id] ? '<span class="pill ok">Owned</span>' : `<button class="primary" data-buystore="${id}">Buy ◎${fmt(s.price)}</button>`}</div></div>`; }
         h += `</div>`;
       }
       if (!avail.length && pl.hp.length) h += `<p class="muted">No ordnance of this era fits.</p>`;
@@ -240,17 +245,17 @@ const UI = (() => {
     body(h + '</div>');
   }
   // ---- leaderboard: you and every pilot whose card reached you through multiplayer lobbies (no server needed)
-  let boardSort = 'mpWins';
+  let boardSort = 'elo';
   function renderBoard() {
     const p = P(), me = Object.assign(Profile.myCard(), { you: true }), rows = Object.values(p.board || {}).concat([me]);
     const kd = r => r.mpKills / Math.max(1, r.mpDeaths), wr = r => r.mpBattles ? r.mpWins / r.mpBattles : 0;
-    const key = { mpWins: r => r.mpWins, mpKills: r => r.mpKills, kd: r => r.mpBattles >= 5 ? kd(r) : -1, wr: r => r.mpBattles >= 5 ? wr(r) : -1, level: r => r.level }[boardSort];
+    const key = { elo: r => r.eloGames ? r.elo : -1, mpWins: r => r.mpWins, mpKills: r => r.mpKills, kd: r => r.mpBattles >= 5 ? kd(r) : -1, wr: r => r.mpBattles >= 5 ? wr(r) : -1, level: r => r.level }[boardSort];
     rows.sort((a, b) => key(b) - key(a) || b.level - a.level);
-    const opts = [['mpWins', 'Multiplayer wins'], ['mpKills', 'Multiplayer kills'], ['kd', 'K/D (5+ battles)'], ['wr', 'Win rate (5+ battles)'], ['level', 'Level']];
+    const opts = [['elo', 'Elo rating'], ['mpWins', 'Multiplayer wins'], ['mpKills', 'Multiplayer kills'], ['kd', 'K/D (5+ battles)'], ['wr', 'Win rate (5+ battles)'], ['level', 'Level']];
     body(`<h2>Leaderboard</h2>
       <div class="row" style="margin-bottom:10px"><label class="small">Rank by</label><select id="lb-sort">${opts.map(([k, n]) => `<option value="${k}" ${k === boardSort ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">${rows.length - 1} other pilot${rows.length === 2 ? '' : 's'} known</span></div>
-      <table class="board"><tr><th>#</th><th>Pilot</th><th>Level</th><th>Battles</th><th>Wins</th><th>Win rate</th><th>Kills</th><th>K/D</th><th></th></tr>
-      ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' <span class="pill">you</span>' : ''}</td><td>${r.level}</td><td>${fmt(r.mpBattles)}</td><td>${fmt(r.mpWins)}</td><td>${r.mpBattles ? Math.round(wr(r) * 100) + '%' : '—'}</td><td>${fmt(r.mpKills)}</td><td>${r.mpBattles ? kd(r).toFixed(2) : '—'}</td>
+      <table class="board"><tr><th>#</th><th>Pilot</th><th>Elo</th><th>Level</th><th>Battles</th><th>Wins</th><th>Win rate</th><th>Kills</th><th>K/D</th><th></th></tr>
+      ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' <span class="pill">you</span>' : ''}</td><td><b>${r.eloGames ? r.elo : '—'}</b>${r.eloGames && r.eloGames < 10 ? '<span class="small muted"> (prov.)</span>' : ''}</td><td>${r.level}</td><td>${fmt(r.mpBattles)}</td><td>${fmt(r.mpWins)}</td><td>${r.mpBattles ? Math.round(wr(r) * 100) + '%' : '—'}</td><td>${fmt(r.mpKills)}</td><td>${r.mpBattles ? kd(r).toFixed(2) : '—'}</td>
         <td class="small muted">${r.you ? '' : r.met ? 'met ' + new Date(r.met).toLocaleDateString() : 'via other pilots'}</td></tr>`).join('')}</table>
       ${rows.length === 1 ? '<p class="muted" style="margin-top:12px">Nobody else yet: play a multiplayer game and the pilots you meet (and the ones they have met) appear here.</p>' : ''}`);
     $('#lb-sort').onchange = e => { boardSort = e.target.value; renderBoard(); };
@@ -261,7 +266,7 @@ const UI = (() => {
     const kd = (s.mpKills || 0) / Math.max(1, s.mpDeaths || 0), fav = Object.entries(s.planeUse || {}).sort((a, b) => b[1] - a[1])[0];
     const rows = [['Level', li.level], ['XP to next level', `${fmt(li.into)} / ${fmt(li.need)}`], ['Total XP earned', fmt(p.totalXp)], ['Battles (all)', fmt(s.battles || 0)],
       ['Multiplayer battles', fmt(s.mpBattles || 0)], ['Multiplayer victories', fmt(s.mpWins || 0)], ['Win rate (multiplayer)', s.mpBattles ? ((s.mpWins || 0) / s.mpBattles * 100).toFixed(0) + '%' : '—'],
-      ['K/D ratio (multiplayer)', s.mpBattles ? kd.toFixed(2) : '—'], ['Multiplayer kills / deaths', `${fmt(s.mpKills || 0)} / ${fmt(s.mpDeaths || 0)}`],
+      ['K/D ratio (multiplayer)', s.mpBattles ? kd.toFixed(2) : '—'], ['Elo rating (multiplayer vs people)', s.eloGames ? `${Math.round(s.elo)} (peak ${Math.round(s.eloPeak || s.elo)}, ${s.eloGames} rated)` : '1000 (unrated)'], ['Multiplayer kills / deaths', `${fmt(s.mpKills || 0)} / ${fmt(s.mpDeaths || 0)}`],
       ['Singleplayer battles / victories', `${fmt(s.spBattles || 0)} / ${fmt(s.spWins || 0)}`], ['Singleplayer kills / deaths', `${fmt(s.spKills || 0)} / ${fmt(s.spDeaths || 0)}`],
       ['Aircraft shot down (all)', fmt(s.kills || 0)], ['Times shot down (all)', fmt(s.deaths || 0)], ['Missiles defeated', fmt((s.evadedIR || 0) + (s.evadedRadar || 0))], ['Bombs dropped', fmt(Math.round((s.bombKg || 0) / 1000)) + ' t'], ['Assists', fmt(s.assists || 0)], ['Bases destroyed', fmt(s.bases || 0)], ['Missions completed', fmt(s.missions || 0)],
       ['Flight time', `${Math.floor((s.flightTime || 0) / 3600)} h ${Math.floor((s.flightTime || 0) % 3600 / 60)} min`], ['Aircraft owned', Object.keys(p.owned).length], ['Favourite aircraft', fav && PLANES[fav[0]] ? PLANES[fav[0]].name : '—'], ['Achievements', `${Object.keys(p.ach).length} / ${ACHIEVEMENTS.length}`], ['Coins earned', fmt(s.coinsEarned || 0)]];
@@ -279,6 +284,8 @@ const UI = (() => {
       <div id="binds">${Input.ACTIONS.filter(([id]) => !/^weapon\d/.test(id)).map(([id, name]) => `<div class="stat"><span>${name}</span><button class="bind" data-bind="${id}">${esc(Input.label(Input.bind(id)))}</button></div>`).join('')}</div>
       <button id="pf-binds-reset" style="margin-top:8px">Reset controls to defaults</button><br>
       <button class="danger" id="pf-reset" style="margin-top:18px">Reset all progress</button></div></div>
+      <div class="card" style="margin-top:14px"><h3>Photo credits</h3><p class="small muted">The aircraft and weapon photographs are the lead images of their Wikipedia articles, from Wikimedia Commons.</p>
+      <details><summary class="small">Show all ${typeof PHOTO_CREDITS !== 'undefined' ? Object.keys(PHOTO_CREDITS).length : 0} photo credits</summary>${typeof PHOTO_CREDITS !== 'undefined' ? Object.entries(PHOTO_CREDITS).map(([k, c]) => `<div class="small" style="margin:3px 0"><b>${esc(k.startsWith('planes/') ? (PLANES[k.slice(7)] || {}).name || k : (STORES[k.slice(7)] || {}).name || k)}</b> — <a href="${esc(c.page)}" target="_blank" rel="noopener">${esc(c.file)}</a> by ${esc(c.author)}, ${esc(c.licence)}</div>`).join('') : ''}</details></div>
       <div class="card" style="margin-top:14px"><h3>Sound credits</h3><p class="small muted">The engines, guns, explosions and fly-bys use these real recordings (public domain and Creative Commons).</p>
       ${(typeof SOUND_CREDITS !== 'undefined' ? SOUND_CREDITS : []).map(c => `<div class="small" style="margin:3px 0"><b>${esc(c.use)}</b> — <a href="${esc(c.page)}" target="_blank" rel="noopener">${esc(c.title)}</a> by ${esc(c.author)}, ${esc(c.licence)}${c.note ? ' (' + esc(c.note) + ')' : ''}</div>`).join('')}</div>`);
     $('#pf-save').onclick = () => { const v = $('#pf-name').value.trim().slice(0, 18); if (v) { p.name = v; Profile.save(); refresh(); toastMenu('Saved'); } };
@@ -399,7 +406,7 @@ const UI = (() => {
       $('#p-start').onclick = startSingle;
     }
   }
-  function me() { const p = P(); return { name: p.name, plane: p.selected, loadout: Profile.loadoutFor(p.selected), level: Profile.levelInfo().level }; }
+  function me() { const p = P(); return { name: p.name, plane: p.selected, loadout: Profile.loadoutFor(p.selected), level: Profile.levelInfo().level, pid: p.pilotId, elo: Profile.elo() }; }
   function startSingle() {
     const s = JSON.parse(JSON.stringify(play.settings));
     const cfg = Plan.build(s, [Object.assign(me(), { owner: 'H', team: 0 })]);
@@ -463,7 +470,7 @@ const UI = (() => {
     const L = lobby; if (!L || !L.host) return;
     const s = JSON.parse(JSON.stringify(L.settings));
     L.players[0] = Object.assign(L.players[0], me());
-    const humans = L.players.map(p => ({ name: p.name, plane: p.plane, loadout: p.loadout, owner: p.peer, team: p.team, level: p.level }));
+    const humans = L.players.map(p => ({ name: p.name, plane: p.plane, loadout: p.loadout, owner: p.peer, team: p.team, level: p.level, pid: p.pid, elo: p.elo }));
     const cfg = Plan.build(s, humans);
     L.started = true;
     Net.broadcast({ t: 'start', cfg });
@@ -480,7 +487,7 @@ const UI = (() => {
         let p = L.players.find(x => x.peer === from);
         const valid = PLANES[msg.plane] && !PLANES[msg.plane].aiOnly;
         if (!p) { const t0 = L.players.filter(x => x.team === 0).length, t1 = L.players.length - t0; p = { peer: from, team: t1 < t0 ? 1 : 0 }; L.players.push(p); toastMenu(`${msg.name} joined`); }
-        Object.assign(p, { name: String(msg.name || 'Pilot').slice(0, 18), plane: valid ? msg.plane : 'camel', loadout: msg.loadout || { belts: {}, stores: [], mods: {} }, level: msg.level | 0 });
+        Object.assign(p, { name: String(msg.name || 'Pilot').slice(0, 18), plane: valid ? msg.plane : 'camel', loadout: msg.loadout || { belts: {}, stores: [], mods: {} }, level: msg.level | 0, pid: /^[a-z0-9]{8,32}$/.test(msg.pid || '') ? msg.pid : null, elo: Math.max(100, Math.min(4000, +msg.elo || 1000)) });
         lobbySync(); renderLobby();
       }
       if (msg.t === 'team') { const p = L.players.find(x => x.peer === from); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } }
@@ -565,6 +572,7 @@ const UI = (() => {
     $('#results').innerHTML = `<div class="card"><div class="big-result ${cls}">${title}</div><div class="muted">${esc(info.reason || r.reason || '')}${teams ? ` · ${m.scores[my]} – ${m.scores[1 - my]}` : ''}</div>
       <div class="rewards"><div class="card"><span class="muted small">XP EARNED</span><b>+${fmt(rw.xp)}</b></div><div class="card"><span class="muted small">COINS EARNED</span><b>+${fmt(rw.coins)}</b></div><div class="card"><span class="muted small">ERA BONUS</span><b>×${ERAS[p.def.era].xpMul}</b></div></div>
       ${rw.levelUp ? `<h3>🎉 Level up! You are now level ${rw.levelUp}</h3>` : ''}
+      ${rw.rating ? `<div class="row" style="margin:6px 0"><span class="pill">Elo ${rw.rating.before} → <b>${rw.rating.after}</b> (${rw.rating.delta >= 0 ? '+' : ''}${rw.rating.delta}) · win chance was ${Math.round(rw.rating.expected * 100)}%</span></div>` : ''}
       ${rw.achievements.length ? `<h3>Achievements unlocked</h3><div class="row">${rw.achievements.map(a => `<span class="pill ok">${a.icon} ${a.name} · +${fmt(ACH_REWARD[a.tier || 1].coins)} coins, +${fmt(ACH_REWARD[a.tier || 1].xp)} XP</span>`).join(' ')}</div>` : ''}
       <div class="row" style="margin:12px 0"><span class="pill">Kills ${s.kills}</span><span class="pill">Assists ${s.assists}</span><span class="pill">Deaths ${s.deaths}</span><span class="pill">Bases ${s.bases}</span><span class="pill">Tanks ${s.tanks || 0}</span><span class="pill">Damage dealt ${fmt(s.damage)}</span>${m.mode === 'survival' ? `<span class="pill">Waves ${Math.max(0, m.wave - 1)}</span>` : ''}</div>
       ${teams ? `<div class="grid c2"><div><h3 class="team0">Your team</h3>${table(my)}</div><div><h3 class="team1">Enemy team</h3>${table(1 - my)}</div></div>` : table(my)}

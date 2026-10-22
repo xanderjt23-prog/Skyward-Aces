@@ -55,6 +55,7 @@ await A.shot('mp-host'); await B.shot('mp-client');
 await A.ev("Game.match.end(0, 'test end'); 1"); await sleep(4000);
 console.log('host results', await A.ev("document.querySelector('#results .big-result') && document.querySelector('#results .big-result').textContent"), 'client results', await B.ev("document.querySelector('#results .big-result') && document.querySelector('#results .big-result').textContent"));
 await A.ev("document.querySelector('#res-ok') && document.querySelector('#res-ok').click(); 1"); await B.ev("document.querySelector('#res-ok') && document.querySelector('#res-ok').click(); 1");
+console.log('elo: host', await A.ev('Profile.elo()'), 'guest', await B.ev('Profile.elo()'), '| result line', await B.ev("(document.querySelector('#results') || {}).textContent.match(/Elo[^%]*%/) + ''"));
 console.log('multiplayer stats: host', await A.ev("JSON.stringify([Profile.get().stats.mpBattles, Profile.get().stats.spBattles || 0])"), 'guest', await B.ev("JSON.stringify([Profile.get().stats.mpBattles, Profile.get().stats.spBattles || 0])"));
 console.log('after battle: guest knows', await brd(B), '| host card', await A.ev('JSON.stringify(Profile.myCard())'), '| host net', await A.ev("Net.role + ' ' + Net.peers().length"), '| guest net', await B.ev('Net.role')); await B.ev("UI.open('board'); 1"); await B.shot('leaderboard');
 console.log('A logs', A.logs.slice(0, 10)); console.log('B logs', B.logs.slice(0, 10));

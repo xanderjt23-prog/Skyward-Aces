@@ -275,6 +275,12 @@ const Game = (() => {
       basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills,
       online: !!m.net, night: !!m.cfg.night, weather: m.cfg.weather, size: m.cfg.size, evadedIR: s.evadedIR, evadedRadar: s.evadedRadar, bombKg: s.bombKg,
       oldSchool: p.def.era >= 6 && p.def.kind === 'jet' && s.kills - s.missileKills - s.crashKills >= 3 });
+    // multiplayer against other people: the Elo rating (from the ratings everyone brought from the lobby)
+    let rating = null;
+    if (m.net && !left) { const hum = m.crafts.filter(c => !c.isBot && c.spec && !c.spec.bot), rate = c => Math.max(100, Math.min(4000, +c.spec.elo || 1000));
+      const mine = hum.filter(c => c.team === p.team).map(rate), theirs = hum.filter(c => c.team !== p.team).map(rate);
+      rating = Profile.rateBattle(mine, theirs, r.winner === -1 ? 0.5 : won ? 1 : 0); }
+    reward.rating = rating;
     // multiplayer: tell the others our updated pilot card for their leaderboards
     if (m.net) { const msg = { t: 'cards', cards: Profile.shareCards() }; if (m.isHost) Net.broadcast(msg); else Net.send(msg); }
     document.exitPointerLock && document.exitPointerLock();

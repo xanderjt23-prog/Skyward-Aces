@@ -156,6 +156,7 @@ const ACHIEVEMENTS = [
   { id: 'tut_all', tier: 2, name: 'Flight School Graduate', desc: 'Complete every tutorial.', icon: '🎓', stat: 'tutorials', goal: 13 },
   { id: 'mp10', tier: 2, name: 'Wingman', desc: 'Fly 10 multiplayer battles.', icon: '🤝', stat: 'mpBattles', goal: 10 },
   { id: 'mpwin10', tier: 3, name: 'Squadron Leader', desc: 'Win 10 multiplayer battles.', icon: '🏅', stat: 'mpWins', goal: 10 },
+  { id: 'elo1200', tier: 3, name: 'Rising Star', desc: 'Reach an Elo rating of 1,200 in multiplayer battles against other pilots.', icon: '📈', stat: 'eloPeak', goal: 1200 },
   { id: 'mpk25', tier: 3, name: 'Online Ace', desc: 'Shoot down 25 aircraft in multiplayer battles.', icon: '🛰', stat: 'mpKills', goal: 25 },
   { id: 'battles100', tier: 3, name: 'Old Hand', desc: 'Fly 100 battles.', icon: '📅', stat: 'battles', goal: 100 },
   { id: 'hours10', tier: 3, name: 'Ten Hours Aloft', desc: 'Spend 10 hours in the air.', icon: '⏱️', stat: 'flightTime', goal: 36000 },

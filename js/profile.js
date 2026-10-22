@@ -25,14 +25,23 @@ const Profile = (() => {
   // multiplayer lobbies, together with the cards each player already knows, so the board spreads from player to player.
   // A card is only as honest as the game that sent it.
   const num = v => Math.max(0, Math.min(1e7, Math.floor(+v || 0)));
-  function myCard() { const s = p.stats; return { id: p.pilotId, name: p.name, level: levelInfo().level, mpBattles: s.mpBattles || 0, mpWins: s.mpWins || 0, mpKills: s.mpKills || 0, mpDeaths: s.mpDeaths || 0, updated: Date.now() }; }
+  // Elo rating from multiplayer battles against other people (bots never count): team average against team average,
+  // K = 40 for the first 10 rated battles, 32 after; a draw is half a win
+  function elo() { return Math.round(p.stats.elo || 1000); }
+  function rateBattle(myTeam, enemy, score) {
+    if (!enemy.length || !myTeam.length) return null;
+    const avg = l => l.reduce((a, x) => a + x, 0) / l.length, E = 1 / (1 + Math.pow(10, (avg(enemy) - avg(myTeam)) / 400)), K = (p.stats.eloGames || 0) < 10 ? 40 : 32;
+    const before = elo(), d = K * (score - E); p.stats.elo = Math.max(100, before + d); p.stats.eloGames = (p.stats.eloGames || 0) + 1; p.stats.eloPeak = Math.max(p.stats.eloPeak || 1000, p.stats.elo); save();
+    return { before, after: elo(), delta: Math.round(d), expected: E };
+  }
+  function myCard() { const s = p.stats; return { id: p.pilotId, name: p.name, level: levelInfo().level, elo: elo(), eloGames: s.eloGames || 0, mpBattles: s.mpBattles || 0, mpWins: s.mpWins || 0, mpKills: s.mpKills || 0, mpDeaths: s.mpDeaths || 0, updated: Date.now() }; }
   function shareCards() { return [myCard()].concat(Object.values(p.board).sort((a, b) => b.updated - a.updated).slice(0, 100).map(c => { const o = Object.assign({}, c); delete o.met; return o; })); }
   // merge received cards (the newest card of each pilot wins); `metId`: the pilot who sent them, met in person
   function mergeCards(cards, metId) {
     if (!Array.isArray(cards)) return 0; let n = 0;
     for (const c of cards.slice(0, 101)) {
       if (!c || typeof c.id !== 'string' || !/^[a-z0-9]{8,32}$/.test(c.id) || c.id === p.pilotId) continue;
-      const card = { id: c.id, name: String(c.name || 'Pilot').slice(0, 18), level: Math.min(999, num(c.level)), mpBattles: num(c.mpBattles), mpWins: Math.min(num(c.mpWins), num(c.mpBattles)), mpKills: num(c.mpKills), mpDeaths: num(c.mpDeaths), updated: Math.min(Date.now(), Math.max(0, Math.floor(+c.updated || 0))) };
+      const card = { id: c.id, name: String(c.name || 'Pilot').slice(0, 18), level: Math.min(999, num(c.level)), mpBattles: num(c.mpBattles), mpWins: Math.min(num(c.mpWins), num(c.mpBattles)), mpKills: num(c.mpKills), mpDeaths: num(c.mpDeaths), elo: Math.max(100, Math.min(4000, num(c.elo) || 1000)), eloGames: num(c.eloGames), updated: Math.min(Date.now(), Math.max(0, Math.floor(+c.updated || 0))) };
       const old = p.board[c.id]; if (old && old.updated >= card.updated) { if (c.id === metId) old.met = Date.now(); continue; }
       if (old && old.met) card.met = old.met; if (c.id === metId) card.met = Date.now(); p.board[c.id] = card; n++;
     }
@@ -191,6 +200,6 @@ const Profile = (() => {
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
     buyBelt, hasBelt, selectBelt, buyStore, setWeaponKey, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
-    bump, checkAchievements, progress, rewards, applyBattle, tutorialDone, myCard, shareCards, mergeCards,
+    bump, checkAchievements, progress, rewards, applyBattle, tutorialDone, myCard, shareCards, mergeCards, elo, rateBattle,
   };
 })();
