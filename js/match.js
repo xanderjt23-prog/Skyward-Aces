@@ -99,17 +99,36 @@ const Plan = {
       for (const h of hum) { h.team = 0; h.lives = respawns + 1; roster.push(h); }
       if (settings.fill !== false) for (let i = 0; i < Math.max(0, 3 - hum.length); i++) { const pl = Plan.pick(botPlanes(era)); roster.push(Plan.bot(nid++, 0, pl.id, { extra: { lives: 1 }, suffix: ' (wingman)' })); }
     }
-    // bases
+    // bases: on the right ground (ships in open water, everything else on land), far enough apart that the ground each
+    // one levels (an airfield's is as wide as its runway) never overlaps another's; team 1's are a mirror image of team
+    // 0's (same kinds, same distances), moved only as far as the terrain needs
     const bases = [], rnd = Models.mulberry(seed), water = map === 'islands' || map === 'arctic';
-    const place = (team, size, kind, zMin, zMax) => {
-      for (let t = 0; t < 150; t++) { // (spacing relaxes a little with every failed try, for small maps)
-        const x = (rnd() - 0.5) * half * 1.4, z = (team === 0 ? 1 : -1) * (zMin + rnd() * (zMax - zMin)) * half;
+    const hRaw = (x, z) => World.rawHeight({ map, half: worldHalf, seed }, x, z);
+    const foot = (kind, size) => kind === 'airfield' ? Math.max(Models.BASE_R[size] || 300, [0, 450, 650, 1000, 1500, 1700, 1800, 1800][era] * 0.62) + 40 : kind === 'ship' || kind === 'carrier' ? 420 : (Models.BASE_R[size] || 200) * 1.3;
+    const ground = (kind, size, x, z) => { const sea = kind === 'ship' || kind === 'carrier', r = foot(kind, size) * (sea ? 0.6 : 0.8);
+      for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r], [r * 0.7, r * 0.7], [-r * 0.7, -r * 0.7], [r * 0.7, -r * 0.7], [-r * 0.7, r * 0.7]]) { const h = hRaw(x + dx, z + dz); if (sea ? h > -12 : h < 6) return false; }
+      return Math.abs(x) < half * 0.85 && Math.abs(z) < half * 0.92; };
+    const clear = (kind, size, x, z, slack) => bases.every(b => Math.hypot(b.x - x, b.z - z) > (foot(kind, size) + foot(b.kind, b.size) + 250) * slack);
+    const spot = (team, size, kind, zMin, zMax, near) => {
+      for (let t = 0; t < 400; t++) { const slack = 1 - Math.min(0.45, t / 600);
+        const x = near ? near.x + (rnd() - 0.5) * 120 * (1 + t / 8) : (rnd() - 0.5) * half * 1.4, z = near ? near.z + (rnd() - 0.5) * 120 * (1 + t / 8) : (team === 0 ? 1 : -1) * (zMin + rnd() * (zMax - zMin)) * half;
+        if ((team === 0 ? z : -z) < half * 0.08) continue; // stays on its own side
         if (map === 'coast' && (kind === 'ship' || kind === 'carrier') !== (x > half * 0.35)) continue;
-        const R = Models.BASE_R[size] || 200; if (bases.some(b => Math.hypot(b.x - x, b.z - z) < (R + (Models.BASE_R[b.size] || 200) + 400) * (1 - t / 220))) continue;
-        bases.push({ id: 'B' + bases.length, team, size, kind, x, z }); return bases[bases.length - 1];
-      }
-      const b = { id: 'B' + bases.length, team, size, kind, x: (rnd() - 0.5) * half, z: (team === 0 ? 1 : -1) * half * zMax }; bases.push(b); return b;
+        if (!ground(kind, size, x, z) || !clear(kind, size, x, z, slack)) continue;
+        return { x, z }; }
+      return null;
     };
+    const place = (team, size, kind, zMin, zMax) => {
+      let p = spot(team, size, kind, zMin, zMax), k = kind;
+      if (!p && (kind === 'ship' || kind === 'carrier')) { k = size === 'big' ? 'airfield' : size === 'medium' ? 'factory' : 'camp'; p = spot(team, size, k, zMin, zMax); } // no open water: a land base instead
+      if (!p) p = { x: (rnd() - 0.5) * half, z: (team === 0 ? 1 : -1) * half * zMax };
+      const b = { id: 'B' + bases.length, team, size, kind: k, x: p.x, z: p.z }; bases.push(b); return b;
+    };
+    // team 0 places, team 1 mirrors (x, z) -> (-x, -z), searching outwards from the mirror point when the terrain disagrees
+    const pair = (size, kind, zMin, zMax) => { const a = place(0, size, kind, zMin, zMax);
+      let p = ground(a.kind, size, -a.x, -a.z) && clear(a.kind, size, -a.x, -a.z, 1) ? { x: -a.x, z: -a.z } : spot(1, size, a.kind, zMin, zMax, { x: -a.x, z: -a.z });
+      if (!p) { const b = place(1, size, a.kind, zMin, zMax); return [a, b]; }
+      const b = { id: 'B' + bases.length, team: 1, size, kind: a.kind, x: p.x, z: p.z }; bases.push(b); return [a, b]; };
     const kindFor = size => {
       const sea = water ? rnd() < 0.5 : map === 'coast' ? rnd() < 0.25 : false;
       if (sea) return size === 'big' ? 'carrier' : 'ship';
@@ -119,7 +138,7 @@ const Plan = {
     };
     if (mode === 'destroy') {
       const extra = Math.max(...settings.teamSize) > 20 ? 1 : 0;
-      for (const t of [0, 1]) { for (let i = 0; i < 3 + extra; i++) place(t, 'small', kindFor('small'), 0.15, 0.7); for (let i = 0; i < 2 + extra; i++) place(t, 'medium', kindFor('medium'), 0.2, 0.75); place(t, 'big', water ? 'carrier' : 'airfield', 0.45, 0.8); } // every team flies from a main airfield (or carrier)
+      { pair('big', water ? 'carrier' : 'airfield', 0.45, 0.8); for (let i = 0; i < 2 + extra; i++) pair('medium', kindFor('medium'), 0.2, 0.75); for (let i = 0; i < 3 + extra; i++) pair('small', kindFor('small'), 0.15, 0.7); } // every team flies from a main airfield (or carrier)
     } else if (mode === 'missions') {
       const tg = mission.targets || (mission.type === 'escort' ? [mission.target] : []);
       tg.forEach((t, i) => { const b = place(1, t.size, t.kind, 0.25, 0.65); b.objective = true; if (i === 0) b.id = 'T1'; });

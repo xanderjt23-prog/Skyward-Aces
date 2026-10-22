@@ -1,0 +1,37 @@
+p26 (Boeing P-26A Peashooter): climb m/s game 11.8 vs Wikipedia 3.7 (Boeing P-26 Peashooter)
+f4u1d (Vought F4U-1D Corsair): climb m/s game 16 vs Wikipedia 22.1 (Vought F4U Corsair)
+f80c (Lockheed F-80C Shooting Star): climb m/s game 35 vs Wikipedia 24.7 (Lockheed T-33)
+f15c (McDonnell Douglas F-15C Eagle): climb m/s game 254 vs Wikipedia 340.6 (McDonnell Douglas F-15 Eagle)
+fd7 (Fokker D.VII): climb m/s game 5.5 vs Wikipedia 3.92 (Fokker D.VII)
+bf109e: no {{Aircraft specs}} in "Wikimedia Commons"
+bf109g (Messerschmitt Bf 109 G-6): top speed km/h game 630 vs Wikipedia 530 (Messerschmitt Bf 109)
+bf109g (Messerschmitt Bf 109 G-6): climb m/s game 17 vs Wikipedia 22.7 (Messerschmitt Bf 109)
+f104g (Lockheed F-104G Starfighter): top speed km/h game 2125 vs Wikipedia 2459 (Lockheed F-104 Starfighter)
+spit9 (Supermarine Spitfire LF Mk IX): climb m/s game 22 vs Wikipedia 13.2 (Supermarine Spitfire)
+hunter6: no {{Aircraft specs}} in "Hawker Hunter variants"
+lightning (English Electric Lightning F.6): climb m/s game 250 vs Wikipedia 101.6 (English Electric Lightning)
+ki10 (Kawasaki Ki-10-II): climb m/s game 10 vs Wikipedia 16.67 (Kawasaki Ki-10)
+n1k2 (Kawanishi N1K2-J Shiden-Kai): climb m/s game 16 vs Wikipedia 19.7 (Kawanishi N1K)
+ki84 (Nakajima Ki-84 Hayate): climb m/s game 18 vs Wikipedia 21.84 (Nakajima Ki-84 Hayate)
+f104j (Mitsubishi F-104J Eiko): top speed km/h game 2125 vs Wikipedia 2459 (Lockheed F-104 Starfighter)
+f4ej: no text
+d510 (Dewoitine D.510): climb m/s game 12 vs Wikipedia 14.85 (Dewoitine D.500)
+mystere4 (Dassault Mystère IV A): climb m/s game 45 vs Wikipedia 40 (Dassault Mystère IV)
+mirage3c (Dassault Mirage IIIC): climb m/s game 200 vs Wikipedia 83 (Dassault Mirage III)
+f6f5 (Grumman F6F-5 Hellcat): climb m/s game 17.4 vs Wikipedia 13.2 (Grumman F6F Hellcat)
+fw190d9: no text
+mig25pd (Mikoyan MiG-25PD Foxbat): length m game 19.75 vs Wikipedia 23.82 (Mikoyan-Gurevich MiG-25)
+mirageF1c (Dassault Mirage F1C): climb m/s game 213 vs Wikipedia 243 (Dassault Mirage F1)
+ho400 (Handley Page O/400): climb m/s game 2 vs Wikipedia 1.2 (Handley Page Type O)
+a4 (Douglas A-4 Skyhawk): climb m/s game 43 vs Wikipedia 29.2 (Douglas A-4 Skyhawk)
+dh4 (Airco DH.4 (Liberty)): top speed km/h game 200 vs Wikipedia 230 (Airco DH.4)
+do17 (Dornier Do 17 Z-2): top speed km/h game 410 vs Wikipedia 350 (Dornier Do 17)
+bf110 (Messerschmitt Bf 110 G-2): top speed km/h game 550 vs Wikipedia 475 (Messerschmitt Bf 110)
+muromets (Sikorsky Ilya Muromets): top speed km/h game 110 vs Wikipedia 130 (Sikorsky Ilya Muromets)
+tb3 (Tupolev TB-3): climb m/s game 3 vs Wikipedia 1.25 (Tupolev TB-3)
+tu2 (Tupolev Tu-2S): climb m/s game 7 vs Wikipedia 8.2 (Tupolev Tu-2)
+su7b (Sukhoi Su-7BMK): top speed km/h game 2150 vs Wikipedia 1150 (Sukhoi Su-7)
+g4m: no text
+br14 (Breguet 14 B2): climb m/s game 3.8 vs Wikipedia 4.867 (Breguet 14)
+jaguar (SEPECAT Jaguar A): top speed km/h game 1700 vs Wikipedia 1350 (SEPECAT Jaguar)
+m2000d: no text

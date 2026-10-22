@@ -140,7 +140,7 @@ P('ussr', 'su57', 'Sukhoi Su-57', 7, 2020, { shape: 'jet_tt', kind: J, eng: 2, a
 // ------------------------------------------------------------------ Japan
 P('jpn', 'n24ko3', 'Nieuport 24 (Ko 3)', 1, 1918, { shape: 'bi', spd: 176, clb: 4.3, turn: 11, roll: 105, mass: 550, span: 8.2, len: 5.9, guns: [['vickers', 1, 'sync']], hp: [], payload: 0, g: 5, starter: true,
   desc: 'French design built for the Imperial Japanese Army as the Ko 3.' });
-P('jpn', 'ki10', 'Kawasaki Ki-10-II', 2, 1935, { shape: 'bi', spd: 400, clb: 10, turn: 10.5, roll: 115, mass: 1740, span: 10.0, len: 7.6, guns: [['type89', 2, 'sync']], hp: [], payload: 0, g: 7,
+P('jpn', 'ki10', 'Kawasaki Ki-10-II', 2, 1935, { shape: 'bi', spd: 400, clb: 15, turn: 10.5, roll: 115, mass: 1740, span: 10.0, len: 7.6, guns: [['type89', 2, 'sync']], hp: [], payload: 0, g: 7,
   desc: 'The Army\'s last biplane fighter, superbly agile.' });
 P('jpn', 'ki27', 'Nakajima Ki-27b', 2, 1938, { shape: 'mono', spd: 470, clb: 12.5, turn: 12, roll: 110, mass: 1790, span: 11.3, len: 7.5, guns: [['type89', 2, 'sync']], hp: [['Wing racks', 'b', 25, 4]], payload: 100, g: 7.5, fixedGear: true,
   desc: 'Fixed-gear monoplane with an incredible turn: Nomonhan veteran.' });
@@ -148,9 +148,9 @@ P('jpn', 'a6m2', 'Mitsubishi A6M2 Zero', 3, 1940, { shape: 'mono', spd: 533, clb
   desc: 'Light, long-legged and unmatched in a slow turning fight, but no armour.' });
 P('jpn', 'ki43', 'Nakajima Ki-43-II Hayabusa', 3, 1942, { shape: 'mono', spd: 530, clb: 16, turn: 12, roll: 95, mass: 2590, span: 10.8, len: 8.9, guns: [['ho103', 2, 'sync']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 7, sealing: false,
   desc: '"Oscar", the Army\'s most numerous fighter.' });
-P('jpn', 'n1k2', 'Kawanishi N1K2-J Shiden-Kai', 3, 1945, { shape: 'mono', spd: 594, clb: 16, turn: 14, roll: 100, mass: 4000, span: 12.0, len: 9.3, guns: [['type99', 4, 'wing']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 8.5, armor: 1,
+P('jpn', 'n1k2', 'Kawanishi N1K2-J Shiden-Kai', 3, 1945, { shape: 'mono', spd: 594, clb: 19, turn: 14, roll: 100, mass: 4000, span: 12.0, len: 9.3, guns: [['type99', 4, 'wing']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 8.5, armor: 1,
   desc: 'Automatic combat flaps and four cannon: a match for the Hellcat.' });
-P('jpn', 'ki84', 'Nakajima Ki-84 Hayate', 3, 1944, { shape: 'mono', spd: 660, clb: 18, turn: 15, roll: 100, mass: 3750, span: 11.2, len: 9.9, guns: [['ho103', 2, 'sync'], ['ho5', 2, 'wing']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 8.5, armor: 1,
+P('jpn', 'ki84', 'Nakajima Ki-84 Hayate', 3, 1944, { shape: 'mono', spd: 660, clb: 20, turn: 15, roll: 100, mass: 3750, span: 11.2, len: 9.9, guns: [['ho103', 2, 'sync'], ['ho5', 2, 'wing']], hp: [['Wing racks', 'b', 250, 2]], payload: 500, g: 8.5, armor: 1,
   desc: 'Japan\'s best wartime fighter when its engine ran right.' });
 P('jpn', 'f86fj', 'F-86F-40 Sabre (JASDF)', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1106, clb: 47, turn: 24, roll: 160, mass: 7700, span: 11.9, len: 11.4, guns: [['m3', 6, 'nose']], hp: [['Inner pylons', 'brm', 500, 2]], payload: 900, g: 8, aoa: 18,
   desc: 'Extended-wing Sabre that founded the Japan Air Self-Defense Force\'s fighter arm.' });
@@ -168,7 +168,7 @@ P('fra', 'n17', 'Nieuport 17', 1, 1916, { shape: 'bi', spd: 165, clb: 4.0, turn:
   desc: 'Agile sesquiplane that helped end the "Fokker Scourge". Can carry Le Prieur rockets.' });
 P('fra', 'spad13', 'SPAD S.XIII', 1, 1917, { shape: 'bi', spd: 218, clb: 5.5, turn: 14, roll: 85, mass: 820, span: 8.1, len: 6.3, guns: [['vickers', 2, 'sync']], hp: [['Wing racks', 'b', 10, 2]], payload: 20, g: 6,
   desc: 'Guynemer and Fonck\'s fast, sturdy fighter: 8,472 were built.' });
-P('fra', 'd510', 'Dewoitine D.510', 2, 1935, { shape: 'mono', spd: 402, clb: 12, turn: 14, roll: 110, mass: 1930, span: 12.1, len: 7.9, guns: [['hs404', 1, 'nose'], ['mac34', 2, 'wing']], hp: [], payload: 0, g: 7.5, fixedGear: true,
+P('fra', 'd510', 'Dewoitine D.510', 2, 1935, { shape: 'mono', spd: 402, clb: 14, turn: 14, roll: 110, mass: 1930, span: 12.1, len: 7.9, guns: [['hs404', 1, 'nose'], ['mac34', 2, 'wing']], hp: [], payload: 0, g: 7.5, fixedGear: true,
   desc: 'Engine-mounted 20 mm cannon firing through the propeller hub.' });
 P('fra', 'ms406', 'Morane-Saulnier M.S.406', 3, 1939, { shape: 'mono', spd: 486, clb: 11, turn: 16, roll: 90, mass: 2540, span: 10.6, len: 8.2, guns: [['hs404', 1, 'nose'], ['mac34', 2, 'wing']], hp: [], payload: 0, g: 8,
   desc: 'France\'s most numerous fighter in 1940.' });
@@ -176,9 +176,9 @@ P('fra', 'd520', 'Dewoitine D.520', 3, 1940, { shape: 'mono', spd: 535, clb: 13,
   desc: 'The best French fighter of the Battle of France.' });
 P('fra', 'ouragan', 'Dassault MD 450 Ouragan', 4, 1952, { shape: 'jet_s', kind: J, spd: 940, clb: 38, turn: 25, roll: 120, mass: 7900, span: 13.2, len: 10.7, guns: [['hs404', 4, 'nose']], hp: [['Wing pylons', 'br', 500, 2]], payload: 900, g: 7.5, aoa: 15,
   desc: 'Dassault\'s first jet fighter.' });
-P('fra', 'mystere4', 'Dassault Mystère IV A', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1120, clb: 45, turn: 23, roll: 160, mass: 8510, span: 11.1, len: 12.9, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'brm', 500, 2]], payload: 1000, g: 7.5, aoa: 18,
+P('fra', 'mystere4', 'Dassault Mystère IV A', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1120, clb: 40, turn: 23, roll: 160, mass: 8510, span: 11.1, len: 12.9, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'brm', 500, 2]], payload: 1000, g: 7.5, aoa: 18,
   desc: 'Swept-wing fighter that fought in Suez and the Six-Day War.' });
-P('fra', 'mirage3c', 'Dassault Mirage IIIC', 5, 1961, { shape: 'jet_d', kind: J, ab: true, spd: 2350, clb: 200, turn: 24, roll: 200, mass: 12700, span: 8.2, len: 15.0, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'mbr', 500, 2], ['Centreline', 'mb', 500, 1]], payload: 2000, g: 7, aoa: 25, radar: true, flares: 20,
+P('fra', 'mirage3c', 'Dassault Mirage IIIC', 5, 1961, { shape: 'jet_d', kind: J, ab: true, spd: 2350, clb: 85, turn: 24, roll: 200, mass: 12700, span: 8.2, len: 15.0, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'mbr', 500, 2], ['Centreline', 'mb', 500, 1]], payload: 2000, g: 7, aoa: 25, radar: true, flares: 20,
   desc: 'The delta that made Dassault famous, with an optional rocket booster.' });
 P('fra', 'm2000c', 'Dassault Mirage 2000C', 6, 1984, { shape: 'jet_d', kind: J, ab: true, spd: 2530, clb: 285, turn: 17, roll: 270, mass: 13800, span: 9.13, len: 14.36, guns: [['defa', 2, 'nose']], hp: [['Outer pylons', 'm', 150, 2], ['Inner pylons', 'mbr', 1000, 2], ['Fuselage', 'mb', 500, 2]], payload: 6300, g: 9, aoa: 30, radar: true, flares: 60,
   desc: 'Fly-by-wire delta: fast, agile and with superb high-alpha handling.' });
@@ -207,7 +207,7 @@ P('fra', 'mirageF1c', 'Dassault Mirage F1C', 5, 1973, { shape: 'jet_sw', kind: J
   desc: 'Swept-wing successor to the Mirage III: better range, slower landings and a stronger radar.' });
 const AIP = (n, id, name, era, year, c) => P(n, id, name, era, year, Object.assign({ aiOnly: true, role: 'bomber', cost: 0 }, c));
 AIP('ger', 'gotha', 'Gotha G.V', 1, 1917, { shape: 'bomber2', bi: true, eng: 2, spd: 140, clb: 2.5, turn: 30, roll: 30, mass: 3980, span: 23.7, len: 12.4, crew: ['pilot', 'gunner', 'gunner'], turrets: [['parab', 1, 'dorsal'], ['parab', 1, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 50, 6]], payload: 500, g: 3 });
-AIP('uk', 'ho400', 'Handley Page O/400', 1, 1918, { shape: 'bomber2', bi: true, eng: 2, spd: 157, clb: 2, turn: 32, roll: 28, mass: 6060, span: 30.5, len: 19.2, crew: ['pilot', 'gunner', 'gunner'], turrets: [['lewis', 2, 'dorsal'], ['lewis', 1, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 50, 8]], payload: 900, g: 3 });
+AIP('uk', 'ho400', 'Handley Page O/400', 1, 1918, { shape: 'bomber2', bi: true, eng: 2, spd: 157, clb: 1.3, turn: 32, roll: 28, mass: 6060, span: 30.5, len: 19.2, crew: ['pilot', 'gunner', 'gunner'], turrets: [['lewis', 2, 'dorsal'], ['lewis', 1, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 50, 8]], payload: 900, g: 3 });
 AIP('ger', 'he111', 'Heinkel He 111 H-3', 3, 1940, { shape: 'bomber2', eng: 2, spd: 405, clb: 4, turn: 40, roll: 40, mass: 12000, span: 22.6, len: 16.4, crew: ['pilot', 'gunner', 'gunner', 'gunner'], turrets: [['mg15', 1, 'dorsal'], ['mg15', 1, 'ventral'], ['mg15', 1, 'nose']], guns: [], hp: [['Bomb bay', 'b', 250, 8]], payload: 2000, g: 3.5 });
 AIP('ger', 'ju87', 'Junkers Ju 87 B-2 Stuka', 3, 1940, { shape: 'mono', fixedGear: true, spd: 390, clb: 6, turn: 22, roll: 70, mass: 4400, span: 13.8, len: 11.0, crew: ['pilot', 'gunner'], turrets: [['mg15', 1, 'rear']], guns: [['mg17', 2, 'wing']], hp: [['Centreline', 'b', 500, 1], ['Wing racks', 'b', 50, 4]], payload: 700, g: 6, role: 'attack', fixedGear: true, gull: true });
 AIP('usa', 'b17g', 'Boeing B-17G Flying Fortress', 3, 1943, { shape: 'bomber4', eng: 4, spd: 462, clb: 4.6, turn: 45, roll: 35, mass: 25000, span: 31.6, len: 22.7, crew: ['pilot', 'copilot', 'gunner', 'gunner', 'gunner', 'gunner'], turrets: [['m2', 2, 'dorsal'], ['m2', 2, 'ventral'], ['m2', 2, 'tail'], ['m2', 2, 'nose']], guns: [], hp: [['Bomb bay', 'b', 500, 6]], payload: 2700, g: 3 });

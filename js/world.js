@@ -38,12 +38,9 @@ const World = (() => {
 
   let W = null; // current world
   const CH = 64; // terrain chunk size in cells
-  function create(scene, opt) {
-    const map = MAPS[opt.map] || MAPS.land, half = opt.half, seed = opt.seed || 1, sites = opt.sites || [];
-    // terrain covers 1.3x the play area, at least 256 cells across and no coarser than ~140 m a cell (big maps get more)
-    const N = Math.max(256, Math.ceil(half * 2.6 / 140 / CH) * CH), cell = (half * 2.6) / N, origin = -half * 1.3;
-    const H = new Float32Array((N + 1) * (N + 1));
-    const raw = (x, z) => {
+  // the terrain height before bases are levelled into it (also used by the battle planner to place bases)
+  function rawHeight(opt, x, z) {
+    const half = opt.half, seed = opt.seed || 1;
       const nx = x / 4200, nz = z / 4200;
       let h = fbm(nx, nz, seed, 5);
       let base;
@@ -60,15 +57,24 @@ const World = (() => {
       const edge = Math.max(Math.abs(x), Math.abs(z)) / half;
       if (edge > 0.95 && opt.map !== 'islands' && opt.map !== 'arctic') base += (edge - 0.95) * 1800 * h;
       return base;
-    };
+  }
+  function create(scene, opt) {
+    const map = MAPS[opt.map] || MAPS.land, half = opt.half, seed = opt.seed || 1, sites = opt.sites || [];
+    // terrain covers 1.3x the play area, at least 256 cells across and no coarser than ~140 m a cell (big maps get more)
+    const N = Math.max(256, Math.ceil(half * 2.6 / 140 / CH) * CH), cell = (half * 2.6) / N, origin = -half * 1.3;
+    const H = new Float32Array((N + 1) * (N + 1));
+    const raw = (x, z) => rawHeight(opt, x, z);
     // each base sits on one level pad: its height is fixed from the terrain at its centre
     for (const st of sites) st.level = st.water ? -25 : Math.max(18, Math.min(raw(st.x, st.z), 160));
     for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
       const x = origin + i * cell, z = origin + j * cell; let h = raw(x, z);
-      for (const s of sites) { // flatten land bases, deepen water bases
-        const d = Math.hypot(x - s.x, z - s.z), r0 = s.radius * 1.2, r1 = s.radius * 2.6;
-        if (d < r1) { const t = d < r0 ? 1 : 1 - (d - r0) / (r1 - r0), k = t * t * (3 - 2 * t), target = s.level; h = h * (1 - k) + target * k; }
-      }
+      // flatten land bases, deepen water bases: each point follows the one base that matters most there (so one base's
+      // blend never tilts another's level pad; where two pads overlap, the closer base wins). The pad reaches at least 1.5
+      // terrain cells past the base, so the grid points either side of its edge are both level.
+      let bs = 0, bk = 0, bt = 0;
+      for (const s of sites) { const d = Math.hypot(x - s.x, z - s.z), r0 = Math.max(s.radius * 1.2, s.radius + cell * 1.5), r1 = r0 + Math.max(s.radius * 1.4, cell * 2);
+        if (d < r1) { const u = (r1 - d) / (r1 - r0); if (u > bs) { const t = Math.min(1, u); bs = u; bk = t * t * (3 - 2 * t); bt = s.level; } } }
+      if (bk > 0) h = h * (1 - bk) + bt * bk;
       H[j * (N + 1) + i] = h;
     }
     function heightAt(x, z) {
@@ -212,5 +218,5 @@ const World = (() => {
     return W;
   }
   // can a base go here? water bases need sea, land bases need land (checked against raw noise before flattening)
-  return { create, MAPS, SIZES, WEATHER, fbm, get current() { return W; } };
+  return { create, rawHeight, MAPS, SIZES, WEATHER, fbm, get current() { return W; } };
 })();

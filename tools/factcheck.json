@@ -1,0 +1,2683 @@
+{
+ "spad13us": {
+  "article": "SPAD S.XIII",
+  "variant": "French Aircraft of the First World War",
+  "crew": "1",
+  "length": 6.25,
+  "span": 8.25,
+  "speed": 211,
+  "mach": null,
+  "climb": null,
+  "ceiling": 6800,
+  "gross": 856.5,
+  "maxTO": null,
+  "engines": [
+   "1 × Hispano-Suiza 8Ba, Bb or Bd Water cooled 8-cylinder vee-type 200 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × .303 in Vickers machine guns or on USAS Examples, 2 × Marlin M1917 or M1918 machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "n28": {
+  "article": "Nieuport 28",
+  "variant": "The Nieuport 28C-I",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 196,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Gnome Monosoupape 9N 9-cylinder air-cooled rotary piston engine (119 kW)"
+  ],
+  "avionics": "",
+  "guns": "2 × .303 in Vickers machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "p12": {
+  "article": "Boeing P-12",
+  "variant": "",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 304,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney R-1340-17 Wasp 9-cylinder air-cooled radial piston engine 500 hp"
+  ],
+  "avionics": "",
+  "guns": "2 x .30 inch (7.62 mm) Browning machine guns with 600 rounds per gun or 1 x .30 inch (7.62 mm) machine gun with 600 rounds and 1 x .50 inch (12.7 mm) machine gun with 200 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "p26": {
+  "article": "Boeing P-26 Peashooter",
+  "variant": "Aviation-history.com",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 377,
+  "mach": null,
+  "climb": 3.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney R-1340-27 Wasp 9-cylinder air-cooled radial piston engine 600 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × .30 in M1919 Browning machine guns or 1 x .30 in and 1 x .50 in machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "p40e": {
+  "article": "Curtiss P-40 Warhawk",
+  "variant": "Curtiss Aircraft 1907–1947, America's hundred thousand : the U.S. production fighter aircraft of World War II",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 581,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Allison V-1710-39 V-12 liquid-cooled piston engine 1240 hp"
+  ],
+  "avionics": "",
+  "guns": "6 × 0.5 in M2 Browning machine guns in the wings",
+  "missiles": "",
+  "g": null
+ },
+ "p51d": {
+  "article": "North American P-51 Mustang",
+  "variant": "Erection and Maintenance Manual for P-51D and P-51K, P-51 Tactical Planning Characteristics & Performance Chart, The Great Book of Fighters, and Quest for Performance",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 709,
+  "mach": null,
+  "climb": 16.3,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": 5490,
+  "engines": [
+   "1 × Packard (Rolls-Royce) V-1650-7 Merlin 12-cylinder liquid cooled engine 1,490 hp"
+  ],
+  "avionics": "",
+  "guns": "6 × .50 caliber (12.7mm) AN/M2 Browning machine guns with 1,840 total rounds (380 rounds for each on the inboard pair and 270 rounds for each of the outer two pair)",
+  "missiles": "",
+  "g": null
+ },
+ "p47d": {
+  "article": "Republic P-47 Thunderbolt",
+  "variant": "P-47 Thunderbolt in Action, National Museum of the United States Air Force",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 714,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney R-2800-59 18-cylinder air-cooled radial piston engine 2,000 hp"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "p38l": {
+  "article": "Lockheed P-38 Lightning",
+  "variant": "Lockheed P-38H/J/L Pilot's Flight Operating Instructions, P-38H/J/L Pilot's Flight Operating Instructions",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 666,
+  "mach": null,
+  "climb": 24.1,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Allison V-1710 (-111 left hand rotation and -113 right hand rotation) V-12 liquid-cooled turbo-supercharged piston engine 1600 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** 1× Hispano M2(C) 20 mm cannon with 150 rounds ** 4× M2 Browning machine gun 0.50 in (12.7 mm) machine guns with 500 rpg.",
+  "missiles": "",
+  "g": null
+ },
+ "f4u1d": {
+  "article": "Vought F4U Corsair",
+  "variant": "F4U-4 Detail Specification; F4U-4 Airplane Characteristics and Performance",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 717,
+  "mach": null,
+  "climb": 22.1,
+  "ceiling": null,
+  "gross": 6654,
+  "maxTO": 6592,
+  "engines": [
+   "1 × Pratt & Whitney R-2800-18W radial engine 2380 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "6 × 0.50 in (12.7 mm) M2 Browning machine guns 375-400 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "f80c": {
+  "article": "Lockheed T-33",
+  "variant": "Lockheed Aircraft since 1913",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 965,
+  "mach": null,
+  "climb": 24.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Allison J33-A-35 centrifugal flow turbojet engine 5,400 lbf"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "f86f": {
+  "article": "North American F-86 Sabre",
+  "variant": "The North American Sabre and North American F-86F-40-NA",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 1105,
+  "mach": null,
+  "climb": 45.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × General Electric J47-GE-27 turbojet engine 5910 lbf"
+  ],
+  "avionics": "* AN/APG-5 – Airborne Range-Only (ARO) radar * AN/APG-30 – Fire-control radar * AN/APG-37 – Search radar * AN/ARC-34 – UHF radio system",
+  "guns": "6 x 0.50 in (12.7 mm) M3 Browning machine guns (1,800 rounds in total)",
+  "missiles": "",
+  "g": null
+ },
+ "f100d": {
+  "article": "North American F-100 Super Sabre",
+  "variant": "Quest for Performance, Encyclopedia of US Air Force Aircraft and Missile Systems",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 1487,
+  "mach": 1.4,
+  "climb": 113.8,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney J57-P-21/21A afterburning turbojet engine 10,200 lbf"
+  ],
+  "avionics": "* Minneapolis-Honeywell MB-3 automatic pilot * AN/AJB-1B – Low-altitude bombing system * AN/ALQ-87 – ECM pod * AN/APG-25 – Tail gun tracking radar * AN/APG-30 – Fire-control radar * AN/APR-25 – Radar Homing and Warning (RHAW) system * AN/APR-26 – Rearward radar warning * AN/ARC-34 – UHF radio",
+  "guns": "4× 20 mm (0.787 in) M39A1 revolver cannon each with 200 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "f4e": {
+  "article": "McDonnell Douglas F-4 Phantom II",
+  "variant": "The Great Book of Fighters, Quest for Performance, Encyclopedia of USAF Aircraft, and McDonnell F-4 Phantom: Spirit in the Skies",
+  "crew": "2",
+  "length": 19.2,
+  "span": 11.7,
+  "speed": 2370,
+  "mach": 2.23,
+  "climb": 209.8,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × General Electric J79-GE-17A after-burning turbojet engines 11905 lbf"
+  ],
+  "avionics": "* AN/APG-30 – fire-control radar * AN/APG-76 – Multimode synthetic-aperture radar * AN/APQ-117 – Terrain-following radar * AN/ASQ-153 – Part of Pave Spike laser designator targeting pod * AN/ASX-1 – Target Identification System Electro-Optical (TISEO) * AN/AVQ-23 – Part of Pave Spike laser designator targeting pod",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "f15c": {
+  "article": "McDonnell Douglas F-15 Eagle",
+  "variant": "USAF fact sheet, Jane's All the World's Aircraft, Combat Legend, F-15 Eagle and Strike Eagle, Florida International University, USAF F-15A/B/C/D Flight Manual (TO 1F-15A-1) Change 5",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 2.5,
+  "climb": 340.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Pratt & Whitney F100-PW-220 afterburning turbofans 14590 lbf"
+  ],
+  "avionics": "* Radar: ** Hughes (now Raytheon) AN/APG-63 or AN/APG-70 or ** Raytheon AN/APG-63(V)1 or ** Raytheon AN/APG-63(V)2 Active Electronically Scanned Array (AESA) or ** Raytheon AN/APG-63(V)3 Active Electronically Scanned Array (AESA)|group=N}} * Countermeasures: ** Northrop Grumman Electronic Systems AN/ALQ-131 electronic countermeasures pod ** Magnavox AN/ALQ-128 Electronic Warfare Warning Set (EWWS) – part of Tactical Electronic Warfare Systems (TEWS) ** Loral AN/ALR-56 Radar warning receivers (RWR) – part of TEWS ** Northrop Grumman Electronic Systems AN/ALQ-135 Internal Countermeasures System (ICS) – part of TEWS ** Marconi (now Tracor) AN/ALE-45 Chaff/Flare dispenser system – part of TEWS * Joint Helmet Mounted Cueing System * Hazeltine AN/APX-76 or Raytheon AN/APX-119 Identify Friend/Foe (IFF) interrogator * Lockheed Martin Legion Pod with AN/ASG-34(V)1 IRST21 infrared search and track",
+  "guns": "1× 20 mm (0.787 in) M61A1 Vulcan 6-barrel rotary cannon, 940 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "f16c": {
+  "article": "General Dynamics F-16 Fighting Falcon",
+  "variant": "USAF sheet, International Directory of Military Aircraft, Flight Manual for F-16C/D Block 50/52+",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 2.05,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × General Electric F110-GE-129 for Block 50 aircraft hp ( kW) 17155 lbf ( kN), kN with afterburner"
+  ],
+  "avionics": "* AN/APG-68 radar * AN/ALR-56M radar warning receiver, being replaced on US Air Force F-16C/D Block 40/42 and 50/52 by AN/ALR-69A(V) * AN/ALQ-213 electronic warfare suite, being replaced on US Air Force F-16C/D Block 40/42 and 50/52 by AN/ALQ-257 * MIL-STD-1553 bus",
+  "guns": "1 × 20 mm (0.787 in) M61A1 Vulcan 6-barrel rotary cannon, 500 rounds",
+  "missiles": "; ** Air-to-air missiles: ***6 × AIM-9 Sidewinder ***6 × AIM-120 AMRAAM ***6 × IRIS-T ***6 × Python-4 ***6 × Python-5 ***2 × AIM-7 Sparrow and 4 × AIM-9 Sidewinder ** Air-to-surface missiles: ***6 × AGM-65 Maverick ***2 × AGM-88 HARM *** AGM-158 JASSM (JASSM) ** Anti-ship missiles: ***2 × AGM-84 Harpoon ***4 × AGM-119 Penguin *** Joint Strike Missile (to be integrated)",
+  "g": 9
+ },
+ "fa18e": {
+  "article": "Boeing F/A-18E/F Super Hornet",
+  "variant": "U.S. Navy fact file, F/A-18E/F NATOPS, F/A-18E Standard Aircraft Characteristics (SAC), FY 2012 Selected Acquisition Report",
+  "crew": "F/A-18E: 1 (pilot), F/A-18F: 2 (pilot and weapon systems officer)",
+  "length": 18.31,
+  "span": 13.62,
+  "speed": null,
+  "mach": 1.8,
+  "climb": 228,
+  "ceiling": 15940,
+  "gross": 21320,
+  "maxTO": 29937,
+  "engines": [
+   "2 × General Electric F414-GE-400 turbofans 13,000 lbf (62.3 kN), 97.9 kN with afterburner"
+  ],
+  "avionics": "*Hughes AN/APG-73 or Raytheon AN/APG-79 AESA radar *Northrop Grumman/ITT ALQ-165 self-protection jammer system or L3Harris AN/ALQ-214 integrated defensive electronic countermeasures system *Raytheon AN/ALE-50 or BAE Systems AN/ALE-55 towed decoy *Raytheon AN/ALR-67(V)3 radar warning receiver *Lockheed Martin AN/ASG-34(V)1 IRST21 infrared search and track (mounted on centerline external tank) *Raytheon AN/ASQ-228 ATFLIR or Northrop Grumman AN/AAQ-28(V) Litening targeting pod *MIDS LVT or MIDS JTRS datalink transceiver",
+  "guns": "1× 20 mm (0.787 in) M61A2 Vulcan, 412 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "f22a": {
+  "article": "Lockheed Martin F-22 Raptor",
+  "variant": "USAF, manufacturers' data, Aerofax, Aviation Week, Air Forces Monthly, and Journal of Electronic Defense",
+  "crew": "1",
+  "length": 18.92,
+  "span": 13.56,
+  "speed": null,
+  "mach": 2.25,
+  "climb": null,
+  "ceiling": null,
+  "gross": 29410,
+  "maxTO": 38000,
+  "engines": [
+   "2 × Pratt & Whitney F119-PW-100 augmented turbofans 26000 lbf (116 kN), 156 kN with afterburner"
+  ],
+  "avionics": "*AN/APG-77 or AN/APG-77(V)1 AESA radar: 125 - against 1 m2 targets (estimated range), more than 250 mi in narrow beams *AN/AAR-56 Missile Launch Detector (MLD) *AN/ALR-94 electronic warfare system: 250 nmi or more detection range for radar warning receiver (RWR) *AN/ASQ-220 Integrated CNI Avionics including: **Inter/Intra-Flight Datalink (IFDL) **MIDS-JTRS **Link 16/JTIDS **IFF (Mode 5) **Embedded GPS/INS (EGI) **TACAN **HAVE QUICK/SATURN **SINCGARS *MJU-39/40 flares for protection against IR missiles",
+  "guns": "",
+  "missiles": "",
+  "g": 9
+ },
+ "albd3": {
+  "article": "Albatros D.III",
+  "variant": "Austro-Hungarian Army Aircraft of World War One",
+  "crew": "1",
+  "length": 7.35,
+  "span": null,
+  "speed": 188,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": 987,
+  "maxTO": null,
+  "engines": [
+   "1 × Austro-Daimler 200hp 6-cylinder water-cooled in-line piston engine 200 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "2 × 8 mm Schwarzlose machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "dr1": {
+  "article": "Fokker Dr.I",
+  "variant": "Quest for Performance.",
+  "crew": "1",
+  "length": 5.77,
+  "span": null,
+  "speed": 180,
+  "mach": null,
+  "climb": 5.7,
+  "ceiling": 6100,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Oberursel Ur.II 9-cylinder air-cooled rotary piston engine 110 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "2 × 7.92 mm Maschinengewehr 08 \"Spandau\" machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "fd7": {
+  "article": "Fokker D.VII",
+  "variant": "",
+  "crew": "1",
+  "length": 6.954,
+  "span": 8.9,
+  "speed": 189,
+  "mach": null,
+  "climb": 3.92,
+  "ceiling": 6000,
+  "gross": 906,
+  "maxTO": null,
+  "engines": [
+   "1 × Mercedes D.III 6-cyl. water-cooled in-line piston engine 160 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × 7.92 mm LMG 08/15 \"Spandau\" machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "he51": {
+  "article": "Heinkel He 51",
+  "variant": "Warplanes of the Luftwaffe",
+  "crew": "One",
+  "length": 8.4,
+  "span": 11,
+  "speed": 330,
+  "mach": null,
+  "climb": null,
+  "ceiling": 7700,
+  "gross": 1900,
+  "maxTO": null,
+  "engines": [
+   "1 × BMW VI 7.3 Z V-12 liquid-cooled piston engine (559 kW)"
+  ],
+  "avionics": "",
+  "guns": "2 × 7.92 mm MG 17 machine guns in nose; 500 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "bf109g": {
+  "article": "Messerschmitt Bf 109",
+  "variant": "The Great Book of Fighters}} and the Finnish Air Force Bf 109 Manual",
+  "crew": "1",
+  "length": 8.95,
+  "span": 9.925,
+  "speed": 530,
+  "mach": null,
+  "climb": 22.7,
+  "ceiling": 12000,
+  "gross": 3148,
+  "maxTO": 3400,
+  "engines": [
+   "1 × Daimler-Benz DB 605A-1 V-12 inverted liquid-cooled piston engine hp ( kW) lbf ( kN)"
+  ],
+  "avionics": "FuG 16Z radio",
+  "guns": "; **2 × 13&nbsp;mm (.51 in) synchronized MG 131 machine guns with 300 rpg **1 × 20&nbsp;mm (.78 in) MG 151/20 cannon as centerline Motorkanone with 200 rpg or **1 x 30&nbsp;mm (1.18 in) MK 108 cannon as centerline Motorkanone with 65 rpg (G-6/U4 variant) **2 × 20&nbsp;mm MG 151/20 underwing gondolas with 135 rpg (optional kit—Rüstsatz VI)",
+  "missiles": "",
+  "g": null
+ },
+ "fw190a": {
+  "article": "Focke-Wulf Fw 190",
+  "variant": "Fw 190 A8,",
+  "crew": "One",
+  "length": 8.95,
+  "span": 10.506,
+  "speed": 652,
+  "mach": null,
+  "climb": 15,
+  "ceiling": 10350,
+  "gross": 4417,
+  "maxTO": 4900,
+  "engines": [
+   "1 × BMW 801D-2 14-cylinder air-cooled radial piston engine"
+  ],
+  "avionics": "",
+  "guns": "; * 2 × 13 mm synchronized MG 131 machine guns * 2 × 20 mm MG 151/20 E cannons, synchronized in the wing roots * 2 × 20 mm MG 151/20 E cannons in mid-wing mounts",
+  "missiles": "",
+  "g": null
+ },
+ "me262": {
+  "article": "Messerschmitt Me 262",
+  "variant": "Quest for Performance. Original Messerschmitt documents",
+  "crew": "1",
+  "length": 10.6,
+  "span": 12.6,
+  "speed": 900,
+  "mach": null,
+  "climb": 20,
+  "ceiling": 11450,
+  "gross": 6473,
+  "maxTO": 7130,
+  "engines": [
+   "2 × Junkers Jumo 004B-1 axial-flow turbojet engines 1,980 lbf"
+  ],
+  "avionics": "",
+  "guns": "4 × 30 mm MK 108 cannon",
+  "missiles": "",
+  "g": null
+ },
+ "sabre6": {
+  "article": "Canadair Sabre",
+  "variant": "Specification for the Canadair F-86 Sabre 6 Airplane for the Argentine Air Force, Report No. RD-13B-13 (Issue 1)",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 1122,
+  "mach": null,
+  "climb": 61.2,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Avro Canada Orenda 14 turbojet 7500 lbf"
+  ],
+  "avionics": "",
+  "guns": "6 x 0.50 in M3 Browning machine guns (1,600 rounds total)",
+  "missiles": "",
+  "g": null
+ },
+ "f104g": {
+  "article": "Lockheed F-104 Starfighter",
+  "variant": "Quest for Performance (NASA)",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 2459,
+  "mach": 2,
+  "climb": 243.8,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × General Electric J79 afterburning turbojet 10000 lbf"
+  ],
+  "avionics": "",
+  "guns": "1 × 20 mm (0.787 in) M61A1 Vulcan 6-barreled rotary cannon, 725 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "mig21mf": {
+  "article": "Mikoyan-Gurevich MiG-21",
+  "variant": "Jane's all the world's aircraft, 1992–93",
+  "crew": "1",
+  "length": 14.7,
+  "span": 7.154,
+  "speed": 2175,
+  "mach": null,
+  "climb": null,
+  "ceiling": 17500,
+  "gross": 8725,
+  "maxTO": 8800,
+  "engines": [
+   "1 × Tumansky R-25-300 afterburning turbojet (40.18 kN), 69.58 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "1 × internal 23 mm Gryazev-Shipunov GSh-23L autocannon with 200 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "mig29g": {
+  "article": "Mikoyan MiG-29",
+  "variant": "Mikoyan, Airforce technology, Deagel, Business World",
+  "crew": "1",
+  "length": 17.32,
+  "span": 11.36,
+  "speed": 2450,
+  "mach": 2.3,
+  "climb": 330,
+  "ceiling": 18000,
+  "gross": 14900,
+  "maxTO": 18000,
+  "engines": [
+   "2 × Klimov RD-33 afterburning turbofan engines hp ( kW) 11110 lbf (49.42 kN), 81.58 kN with afterburner"
+  ],
+  "avionics": "* Radar depands in variants: N019 family radar or Phazotron Zhuk-M (export designation Zhuk-ME) radar * OEPS-29 IRST * SPO-15 'Beryoza' RWR * DARE D-29 EW system (on MiG-29 UPG)",
+  "guns": "1 × 30 mm Gryazev-Shipunov GSh-30-1 autocannon. Originally held 150 rounds, reduced to 100 on later variants.",
+  "missiles": "",
+  "g": 9
+ },
+ "ef2000g": {
+  "article": "Eurofighter Typhoon",
+  "variant": "RAF Typhoon data, Air Forces Monthly, Superfighters, and Brassey's Modern Fighters",
+  "crew": "1 or 2",
+  "length": 15.96,
+  "span": 10.95,
+  "speed": 2495,
+  "mach": null,
+  "climb": 315,
+  "ceiling": 16764,
+  "gross": 16000,
+  "maxTO": 23500,
+  "engines": [
+   "2 × Eurojet EJ200 afterburning turbofan engines 13,500 lbf"
+  ],
+  "avionics": ":*Euroradar CAPTOR: :**Captor-M: Solid-state, mechanically scanned array radar :**European Common Radar System (ECRS) Mk0: Active electronically scanned array (AESA) radar developed by the original four Eurofighter consortium members. Commonly referred to as the Captor-E. Fitted to Qatari and Kuwaiti Eurofighters. :**ECRS Mk1: Upgraded Mk0, manufactured by Hendsoldt and Airbus. To be fitted to existing German and Spanish Eurofighters. :**ECRS Mk2: New (AESA) radar with additional electronic warfare capabilities. Manufactured in Edinburgh by Leonardo UK. To be fitted to existing Tranche 3 UK Eurofighters. :*Passive Infra-Red Airborne Tracking Equipment (PIRATE) :*Praetorian DASS :*Damocles (targeting pod) :*LITENING III laser targeting pod (LITENING 5 in RAF and Luftwaffe testing) :*Sniper Advanced Targeting Pod",
+  "guns": "1 × 27&nbsp;mm Mauser BK-27 revolver cannon with 150 rounds",
+  "missiles": "**Air-to-air missiles: ***AIM-120 AMRAAM ***MBDA Meteor ***IRIS-T ***AIM-132 ASRAAM ***AIM-9 Sidewinder ***Advanced Precision Kill Weapon System **Air-to-surface missiles: ***Storm Shadow/Scalp EG ***Brimstone ***AGM-88 HARM ***Taurus KEPD 350 ***SPEAR 3 (in progress) **Anti-ship missiles: ***Marte ER (up to 6 Marte ER anti-ship missiles at 6 hardpoints)",
+  "g": 9
+ },
+ "camel": {
+  "article": "Sopwith Camel",
+  "variant": "Quest for Performance, Profile Publications",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 182,
+  "mach": null,
+  "climb": 5.5,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Clerget 9B 9-cylinder air-cooled rotary piston engine 130 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × 0.303 in Vickers machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "se5a": {
+  "article": "Royal Aircraft Factory S.E.5",
+  "variant": "South African National Museum of Military History The Vintage Aviator",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 222,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Hispano-Suiza 8 or Wolseley Viper water cooled V8 engine 150 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** 1 x .303 in forward-firing Vickers machine gun with Constantinesco interrupter gear ** 1 x .303 in Lewis gun on Foster mounting on upper wing",
+  "missiles": "",
+  "g": null
+ },
+ "gladiator": {
+  "article": "Gloster Gladiator",
+  "variant": "Gloster Aircraft since 1917, The Gloster Gladiator,",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 407,
+  "mach": null,
+  "climb": 11.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Bristol Mercury IX nine-cylinder air-cooled radial piston engine 830 hp"
+  ],
+  "avionics": "",
+  "guns": "; :*Initially: two synchronised .303 in Vickers machine guns in fuselage sides, two .303 in Lewis machine guns; one beneath each lower wing. :*Later aircraft: four Browning .303 Mark II machine guns, two synchronised guns in fuselage sides and one beneath each lower wing. :*In at least some Sea Gladiators, provision existed for a pair of Brownings to be fitted under the upper wings as well, bringing the total to six. Official service release trials were not completed before the Sea Gladiators were replaced by later types – but some upper wing Brownings may have been fitted in the field, in particular in Malta.",
+  "missiles": "",
+  "g": null
+ },
+ "hurri1": {
+  "article": "Hawker Hurricane",
+  "variant": "Jane's Fighting Aircraft of World War II",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 547,
+  "mach": null,
+  "climb": 14.1,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Rolls-Royce Merlin XX V-12 liquid-cooled piston engine 1185 hp"
+  ],
+  "avionics": "",
+  "guns": "4 × 20 mm Hispano Mk II cannon",
+  "missiles": "",
+  "g": null
+ },
+ "spit9": {
+  "article": "Supermarine Spitfire",
+  "variant": "Spitfire: The History and Jane's Fighting Aircraft of World War II.",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 595,
+  "mach": null,
+  "climb": 13.2,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Rolls-Royce Merlin 45 V-12 liquid-cooled piston engine 1470 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** A wing *** 8 × .303 in Browning Mk II* machine guns (350 rounds per gun) ** B wing *** 2 × 20&nbsp;mm Hispano Mk II (60 rounds per gun) *** 4 × .303 in Browning Mk II* machine guns (350 rounds per gun) ** C wing *** 4 × 20&nbsp;mm Hispano Mk II cannon (120 rounds per gun) ** C wing (Alt.) *** 2 × 20&nbsp;mm Hispano Mk II (120 rounds per gun) *** 4 × .303 in Browning Mk II* machine guns (350 rounds per gun) ** E wing *** 2 × 20&nbsp;mm Hispano Mk II cannon (120 rounds per gun) *** 2 × .50 in M2 Browning machine guns (250 rounds per gun)",
+  "missiles": "",
+  "g": null
+ },
+ "typhoon1b": {
+  "article": "Hawker Typhoon",
+  "variant": "Mason 1991 unless otherwise stated",
+  "crew": "One",
+  "length": null,
+  "span": null,
+  "speed": 679,
+  "mach": null,
+  "climb": 13.9,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Napier Sabre IIA, IIB or IIC H-24 liquid-cooled sleeve-valve piston engine 2180 hp"
+  ],
+  "avionics": "",
+  "guns": "4 × 20 mm Hispano Mk II cannon",
+  "missiles": "",
+  "g": null
+ },
+ "meteor8": {
+  "article": "Gloster Meteor",
+  "variant": "The Great Book of Fighters, Quest for Performance and Aircraft in Profile, Volume 1",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 965,
+  "mach": 0.82,
+  "climb": 35.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce Derwent 8 centrifugal flow turbojet engine 3600 lbf"
+  ],
+  "avionics": "",
+  "guns": "4 × 20 mm Hispano MkV cannon",
+  "missiles": "",
+  "g": null
+ },
+ "lightning": {
+  "article": "English Electric Lightning",
+  "variant": "Pilots Notes and Operating Data Manual for Lightning F.6 (unless otherwise noted)",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 2.27,
+  "climb": 101.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce Avon 301R afterburning turbojet engines 12690 lbf"
+  ],
+  "avionics": "",
+  "guns": "2× 30 mm ADEN cannon",
+  "missiles": "",
+  "g": null
+ },
+ "tornadof3": {
+  "article": "Panavia Tornado ADV",
+  "variant": "Jane's All The World's Aircraft 1993–94,",
+  "crew": "2",
+  "length": 18.68,
+  "span": 13.91,
+  "speed": 2400,
+  "mach": null,
+  "climb": null,
+  "ceiling": 15240,
+  "gross": null,
+  "maxTO": 27986,
+  "engines": [
+   "2 × Turbo-Union RB199-34R afterburning 3-spool turbofan (40.5 kN), 73.5 kN with afterburner"
+  ],
+  "avionics": "* GEC-Marconi/Ferranti AI.24 Foxhunter radar",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "ef2000uk": {
+  "article": "Eurofighter Typhoon",
+  "variant": "RAF Typhoon data, Air Forces Monthly, Superfighters, and Brassey's Modern Fighters",
+  "crew": "1 or 2",
+  "length": 15.96,
+  "span": 10.95,
+  "speed": 2495,
+  "mach": null,
+  "climb": 315,
+  "ceiling": 16764,
+  "gross": 16000,
+  "maxTO": 23500,
+  "engines": [
+   "2 × Eurojet EJ200 afterburning turbofan engines 13,500 lbf"
+  ],
+  "avionics": ":*Euroradar CAPTOR: :**Captor-M: Solid-state, mechanically scanned array radar :**European Common Radar System (ECRS) Mk0: Active electronically scanned array (AESA) radar developed by the original four Eurofighter consortium members. Commonly referred to as the Captor-E. Fitted to Qatari and Kuwaiti Eurofighters. :**ECRS Mk1: Upgraded Mk0, manufactured by Hendsoldt and Airbus. To be fitted to existing German and Spanish Eurofighters. :**ECRS Mk2: New (AESA) radar with additional electronic warfare capabilities. Manufactured in Edinburgh by Leonardo UK. To be fitted to existing Tranche 3 UK Eurofighters. :*Passive Infra-Red Airborne Tracking Equipment (PIRATE) :*Praetorian DASS :*Damocles (targeting pod) :*LITENING III laser targeting pod (LITENING 5 in RAF and Luftwaffe testing) :*Sniper Advanced Targeting Pod",
+  "guns": "1 × 27&nbsp;mm Mauser BK-27 revolver cannon with 150 rounds",
+  "missiles": "**Air-to-air missiles: ***AIM-120 AMRAAM ***MBDA Meteor ***IRIS-T ***AIM-132 ASRAAM ***AIM-9 Sidewinder ***Advanced Precision Kill Weapon System **Air-to-surface missiles: ***Storm Shadow/Scalp EG ***Brimstone ***AGM-88 HARM ***Taurus KEPD 350 ***SPEAR 3 (in progress) **Anti-ship missiles: ***Marte ER (up to 6 Marte ER anti-ship missiles at 6 hardpoints)",
+  "g": 9
+ },
+ "n17ru": {
+  "article": "Nieuport 17",
+  "variant": "Those Classic Nieuports, The Nieuport 17",
+  "crew": "one",
+  "length": 5.8,
+  "span": 8.16,
+  "speed": 170,
+  "mach": null,
+  "climb": null,
+  "ceiling": 5300,
+  "gross": 560,
+  "maxTO": null,
+  "engines": [
+   "1 × Le Rhône 9Ja 9-cylinder rotary engine 110 hp (82 kW)"
+  ],
+  "avionics": "* 26 cm camera (some aircraft only)",
+  "guns": "; ** (French service) 1 × synchronised .303 in Vickers machine gun and/or 1 × .303 in Lewis gun on upper wing mounting ** (British service) 1 × Lewis gun on Foster mounting on upper wing",
+  "missiles": "",
+  "g": null
+ },
+ "i15": {
+  "article": "Polikarpov I-15",
+  "variant": "Of Chaika and Chato…",
+  "crew": "One",
+  "length": 6.1,
+  "span": null,
+  "speed": 367,
+  "mach": null,
+  "climb": null,
+  "ceiling": 9800,
+  "gross": 1385,
+  "maxTO": 1689,
+  "engines": [
+   "1 × Shvetsov M-25 9-cylinder air-cooled radial piston engine 700 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "i16": {
+  "article": "Polikarpov I-16",
+  "variant": "Istoriia konstruktskii samoletov v SSSR do 1938",
+  "crew": "One",
+  "length": 6.13,
+  "span": 9,
+  "speed": 489,
+  "mach": null,
+  "climb": 14.7,
+  "ceiling": 9700,
+  "gross": 1941,
+  "maxTO": null,
+  "engines": [
+   "1 × Shvetsov M-63 9-cylinder supercharged air-cooled radial engine 1100 hp"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "yak3": {
+  "article": "Yakovlev Yak-3",
+  "variant": "",
+  "crew": "1",
+  "length": 8.5,
+  "span": 9.2,
+  "speed": 646,
+  "mach": null,
+  "climb": null,
+  "ceiling": 10400,
+  "gross": null,
+  "maxTO": 2697,
+  "engines": [
+   "1 × Klimov VK-105PF2 V-12 liquid-cooled piston engine 1290 hp"
+  ],
+  "avionics": "",
+  "guns": "** 1 × 20 mm ShVAK cannon, with 150 rounds ** 2 × 12.7 mm Berezin UBS machine guns with 170 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "la5fn": {
+  "article": "Lavochkin La-5",
+  "variant": "Istoriia konstruktskii samoletov v SSSR, 1938–1950, Jane's Fighting Aircraft of World War II",
+  "crew": "One",
+  "length": 8.67,
+  "span": 9.8,
+  "speed": 648,
+  "mach": null,
+  "climb": 16.7,
+  "ceiling": 11000,
+  "gross": 3168,
+  "maxTO": 3402,
+  "engines": [
+   "1 × Shvetsov M-82FN 14-cylinder air-cooled radial piston engine (1460 kW)"
+  ],
+  "avionics": "",
+  "guns": "2 × 20 mm ShVAK cannon with 170 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "il2": {
+  "article": "Ilyushin Il-2",
+  "variant": "The Annals of Ilyusha…",
+  "crew": "2",
+  "length": 11.65,
+  "span": 14.6,
+  "speed": 410,
+  "mach": null,
+  "climb": null,
+  "ceiling": 4525,
+  "gross": null,
+  "maxTO": 6360,
+  "engines": [
+   "1 × Mikulin AM-38F liquid-cooled V12 engine 1720 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "; **2 × fixed forward-firing 23×152mm VYa-23 cannons, 150 rounds per gun **2 × fixed forward-firing 7.62×54mmR ShKAS machine guns, 750 rounds per gun **1 × manually aimed 12.7×108mm Berezin UBT machine gun in rear cockpit, 300 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "mig15": {
+  "article": "Mikoyan-Gurevich MiG-15",
+  "variant": "OKB Mikoyan, MiG: Fifty Years of Secret Aircraft Design",
+  "crew": "1",
+  "length": 10.102,
+  "span": 10.085,
+  "speed": 1076,
+  "mach": 0.87,
+  "climb": 51.2,
+  "ceiling": 15500,
+  "gross": 5044,
+  "maxTO": 6106,
+  "engines": [
+   "1 × Klimov VK-1 centrifugal-flow turbojet hp ( kW) 5950 lbf ( kN)"
+  ],
+  "avionics": "",
+  "guns": "; **2 × 23 mm Nudelman-Rikhter NR-23 autocannon in the lower left fuselage (80 rounds per gun, 160 rounds total) **1 × 37 mm Nudelman N-37 autocannon in the lower right fuselage (40 rounds total)",
+  "missiles": "",
+  "g": null
+ },
+ "mig17": {
+  "article": "Mikoyan-Gurevich MiG-17",
+  "variant": "Combat Aircraft since 1945, MiG: Fifty Years of Secret Aircraft Design",
+  "crew": "1",
+  "length": 11.264,
+  "span": 9.628,
+  "speed": 1100,
+  "mach": null,
+  "climb": 65,
+  "ceiling": 16600,
+  "gross": 5340,
+  "maxTO": 6069,
+  "engines": [
+   "1 × Klimov VK-1F afterburning centrifugal-flow turbojet engine (26.5 kN), 33.8 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "; **2 × 23 mm Nudelman-Rikhter NR-23 autocannon (80 rounds per gun, 160 rounds total) **1 × 37 mm Nudelman N-37 autocannon (40 rounds total)",
+  "missiles": "",
+  "g": 8
+ },
+ "mig21bis": {
+  "article": "Mikoyan-Gurevich MiG-21",
+  "variant": "Jane's all the world's aircraft, 1992–93",
+  "crew": "1",
+  "length": 14.7,
+  "span": 7.154,
+  "speed": 2175,
+  "mach": null,
+  "climb": null,
+  "ceiling": 17500,
+  "gross": 8725,
+  "maxTO": 8800,
+  "engines": [
+   "1 × Tumansky R-25-300 afterburning turbojet (40.18 kN), 69.58 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "1 × internal 23 mm Gryazev-Shipunov GSh-23L autocannon with 200 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "mig23": {
+  "article": "Mikoyan-Gurevich MiG-23",
+  "variant": "Brassey's world aircraft & systems directory, 1996/97 Jet Fighter MiG-23. Protecting the skies of the Motherland,",
+  "crew": "1 sat on a Mikoyan KM-1M ejection seat",
+  "length": 16.7,
+  "span": 13.965,
+  "speed": 2500,
+  "mach": null,
+  "climb": 230,
+  "ceiling": 18500,
+  "gross": 14840,
+  "maxTO": 17800,
+  "engines": [
+   "1 × Khatchaturov R-35-300 afterburning turbojet (83.6 kN), 127.49 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "1 × 23 mm Gryazev-Shipunov GSh-23L autocannon with 200 rounds",
+  "missiles": "",
+  "g": 8.5
+ },
+ "mig29": {
+  "article": "Mikoyan MiG-29",
+  "variant": "Mikoyan, Airforce technology, Deagel, Business World",
+  "crew": "1",
+  "length": 17.32,
+  "span": 11.36,
+  "speed": 2450,
+  "mach": 2.3,
+  "climb": 330,
+  "ceiling": 18000,
+  "gross": 14900,
+  "maxTO": 18000,
+  "engines": [
+   "2 × Klimov RD-33 afterburning turbofan engines hp ( kW) 11110 lbf (49.42 kN), 81.58 kN with afterburner"
+  ],
+  "avionics": "* Radar depands in variants: N019 family radar or Phazotron Zhuk-M (export designation Zhuk-ME) radar * OEPS-29 IRST * SPO-15 'Beryoza' RWR * DARE D-29 EW system (on MiG-29 UPG)",
+  "guns": "1 × 30 mm Gryazev-Shipunov GSh-30-1 autocannon. Originally held 150 rounds, reduced to 100 on later variants.",
+  "missiles": "",
+  "g": 9
+ },
+ "su27": {
+  "article": "Sukhoi Su-27",
+  "variant": "Sukhoi, KnAAPO, Deagel.com, Airforce-Technology.com",
+  "crew": "1",
+  "length": 21.9,
+  "span": 14.7,
+  "speed": 2500,
+  "mach": 2.35,
+  "climb": 300,
+  "ceiling": 18500,
+  "gross": 23430,
+  "maxTO": 33000,
+  "engines": [
+   "2 × Saturn AL-31F afterburning turbofan engines hp ( kW) (75.22 kN), 122.6 kN with afterburner"
+  ],
+  "avionics": "*N001E radar *Phazotron Zhuk-MSE radar *Phazotron Zhuk-MSFE radar *OEPS-27 electro-optical targeting system *SPO-15 Radar Warning Receiver *OLS-27 IRST and laser rangefinder * Shchel-3UM helmet-mounted display system",
+  "guns": "1 × 30 mm Gryazev-Shipunov GSh-30-1 autocannon with 150 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "su35s": {
+  "article": "Sukhoi Su-35",
+  "variant": "KnAAPO, Jane's All The World's Aircraft 2013",
+  "crew": "1",
+  "length": 21.9,
+  "span": 15.3,
+  "speed": 2400,
+  "mach": 2.25,
+  "climb": 280,
+  "ceiling": 18000,
+  "gross": 25300,
+  "maxTO": 34500,
+  "engines": [
+   "2 × Saturn AL-41F1S afterburning turbofan engines (86.3 kN), 137.3 kN with afterburner"
+  ],
+  "avionics": "* Sh135 weapon control complex ** Irbis-E passive electronically scanned array radar ** L175M Khibiny-M electronic countermeasures system * OLS-35 infra-red search and track system * OAR missile approach warning system * T-220 electro-optical targeting pod",
+  "guns": "1 × internal 30 mm Gryazev-Shipunov GSh-30-1 autocannon with 150 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "su57": {
+  "article": "Sukhoi Su-57",
+  "variant": "Rosoboronexport, United Aircraft Corporation, Aviation Week, Key Aero, Crecy Publishing",
+  "crew": "1",
+  "length": 20.1,
+  "span": 14.1,
+  "speed": null,
+  "mach": 2,
+  "climb": null,
+  "ceiling": 18800,
+  "gross": 26700,
+  "maxTO": 34000,
+  "engines": [
+   "2 × Saturn AL-41F-1 afterburning turbofan (88.3 kN), 142.2 kN with afterburner"
+  ],
+  "avionics": "* Sh-121 multifunctional integrated radio electronic system (MIRES) ** Byelka radar (400 km, 60 tracks with 16 targeted) *** N036-1-01: Frontal X-band active electronically scanned array (AESA) radar *** N036B-1-01: Cheek X-band AESA radars for increased angular coverage *** N036L-1-01: Slat L-band arrays for IFF ** L402 Himalayas electronic countermeasure suite * 101KS Atoll electro-optical targeting system ** 101KS-O: Laser directional infrared counter measures ** 101KS-V: Infrared search and track ** 101KS-U: Ultraviolet missile approach warning system ** 101KS-N: Targeting pod ** 101KS-P: Thermal imager for low altitude flying and night landing",
+  "guns": "1 × 30 mm Gryazev-Shipunov GSh-30-1 autocannon",
+  "missiles": "; ** Air-to-air missiles: *** R-77M *** R-74M2 *** R-37 (missile) ** Air-to-surface missiles: *** 4 × Kh-38M *** 4 × Kh-69 *** S-71K Kovyor ** Anti-ship missiles: *** 2 × Kh-35U *** 2 × Kh-31 ** Anti-radiation missiles: *** 4 × Kh-58UShK",
+  "g": 9
+ },
+ "n24ko3": {
+  "article": "Nieuport 24",
+  "variant": "",
+  "crew": "1",
+  "length": 5.87,
+  "span": null,
+  "speed": 176,
+  "mach": null,
+  "climb": null,
+  "ceiling": 6900,
+  "gross": 547,
+  "maxTO": null,
+  "engines": [
+   "1 × Le Rhône 9Ja 90 kW or Le Rhône 9Jb rotary engine 130 hp"
+  ],
+  "avionics": "",
+  "guns": "; **in French or Russian service: 1 × synchronised Vickers machine gun plus optionally 1 × Lewis gun on upper wing. **in British service: 1 × Lewis gun on Foster mounting on upper wing. **in American service: none.",
+  "missiles": "",
+  "g": null
+ },
+ "ki10": {
+  "article": "Kawasaki Ki-10",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "1",
+  "length": 7.2,
+  "span": 10.02,
+  "speed": 400,
+  "mach": null,
+  "climb": 16.67,
+  "ceiling": 11500,
+  "gross": 1740,
+  "maxTO": null,
+  "engines": [
+   "× Kawasaki Ha9-IIa V-12 liquid-cooled piston engine (634 kW)"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "ki27": {
+  "article": "Nakajima Ki-27",
+  "variant": "Nakajima Ki-27 Nate, Japanese Aircraft of the Pacific War",
+  "crew": "One",
+  "length": 7.53,
+  "span": 11.31,
+  "speed": 470,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": 1790,
+  "maxTO": null,
+  "engines": [
+   "1 × Nakajima Ha-1 Kotobuki Otsu (Ha-1b) nine-cylinder air-cooled radial piston engine 710 hp"
+  ],
+  "avionics": "",
+  "guns": "; :* 2 × 7.7 mm Type 89 machine guns, 500 rounds/gun :* 1 × 12.7 mm Ho-103 machine gun and 1 × 7.7 mm machine gun on later models",
+  "missiles": "",
+  "g": null
+ },
+ "a6m2": {
+  "article": "Mitsubishi A6M Zero",
+  "variant": "The Great Book of Fighters, Aircraft Profile #129: The Mitsubishi A6M2 Zero-sen",
+  "crew": "1",
+  "length": 9.06,
+  "span": 12,
+  "speed": 533,
+  "mach": null,
+  "climb": 15.7,
+  "ceiling": 10000,
+  "gross": 2796,
+  "maxTO": 2796,
+  "engines": [
+   "1 × Nakajima NK1C Sakae-12 14-cylinder air-cooled radial piston engine 940 hp"
+  ],
+  "avionics": "",
+  "guns": "thumb|Divergence of trajectories between 7.7 mm and 20 mm ammunition; ** 2 × 7.7 mm Type 97 aircraft machine guns in the engine cowling, with 500 rounds per gun. ** 2 × 20 mm Type 99-1 Mk.3 cannon in the wings, with 60 rounds per gun.",
+  "missiles": "",
+  "g": null
+ },
+ "ki43": {
+  "article": "Nakajima Ki-43 Hayabusa",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "One",
+  "length": 8.92,
+  "span": 10.84,
+  "speed": 530,
+  "mach": null,
+  "climb": null,
+  "ceiling": 11200,
+  "gross": 2590,
+  "maxTO": 2925,
+  "engines": [
+   "1 × Nakajima Ha-115 14-cylinder air-cooled radial piston engine 1,300 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × 12.7 mm Ho-103's in the forward fuselage with 270 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "n1k2": {
+  "article": "Kawanishi N1K",
+  "variant": "Japanese aircraft of the Pacific War, TAIC 107 A1 Report : Kawanishi N1K1-J",
+  "crew": "1",
+  "length": 8.885,
+  "span": 12,
+  "speed": 571,
+  "mach": null,
+  "climb": 19.7,
+  "ceiling": 12009,
+  "gross": 3900,
+  "maxTO": 4321,
+  "engines": [
+   "1 × Nakajima NK9H Homare 21 18-cylinder air-cooled radial piston engine 1975 hp"
+  ],
+  "avionics": "",
+  "guns": "; :* 4 × 20 mm Type 99 Mark 2 machine guns in the wings.",
+  "missiles": "",
+  "g": null
+ },
+ "ki84": {
+  "article": "Nakajima Ki-84 Hayate",
+  "variant": "Report on Frank 1",
+  "crew": "One",
+  "length": 9.92,
+  "span": 11.238,
+  "speed": 687,
+  "mach": null,
+  "climb": 21.84,
+  "ceiling": 11826,
+  "gross": 3601.5,
+  "maxTO": 4170,
+  "engines": [
+   "1 × Nakajima Homare Model Ha-45-21 (or Models 11, 12, 21, 23 or 25) 18-cylinder air-cooled radial piston engine (1,522 kW)"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "f86fj": {
+  "article": "North American F-86 Sabre",
+  "variant": "The North American Sabre and North American F-86F-40-NA",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 1105,
+  "mach": null,
+  "climb": 45.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × General Electric J47-GE-27 turbojet engine 5910 lbf"
+  ],
+  "avionics": "* AN/APG-5 – Airborne Range-Only (ARO) radar * AN/APG-30 – Fire-control radar * AN/APG-37 – Search radar * AN/ARC-34 – UHF radio system",
+  "guns": "6 x 0.50 in (12.7 mm) M3 Browning machine guns (1,800 rounds in total)",
+  "missiles": "",
+  "g": null
+ },
+ "f104j": {
+  "article": "Lockheed F-104 Starfighter",
+  "variant": "Quest for Performance (NASA)",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 2459,
+  "mach": 2,
+  "climb": 243.8,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × General Electric J79 afterburning turbojet 10000 lbf"
+  ],
+  "avionics": "",
+  "guns": "1 × 20 mm (0.787 in) M61A1 Vulcan 6-barreled rotary cannon, 725 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "f15j": {
+  "article": "Mitsubishi F-15J",
+  "variant": "",
+  "crew": "1",
+  "length": 19.43,
+  "span": 13.05,
+  "speed": 2650,
+  "mach": null,
+  "climb": 254,
+  "ceiling": 20000,
+  "gross": 20200,
+  "maxTO": 30845,
+  "engines": [
+   "2 × Pratt & Whitney F100-220 (or −100)The engine is a Pratt & Whitney F100 built under licence by IHI Corporation . afterburning turbofan engine (77.62 kN), 111.2 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "1× 20 mm M61 Vulcan 940 shells.",
+  "missiles": "",
+  "g": null
+ },
+ "f2a": {
+  "article": "Mitsubishi F-2",
+  "variant": "Jane's all the World's Aircraft 2010–11, Combat Aircraft since 1945",
+  "crew": "1 (F-2B: 2)",
+  "length": 15.52,
+  "span": 11.125,
+  "speed": 2124,
+  "mach": 2,
+  "climb": null,
+  "ceiling": 18000,
+  "gross": 13459,
+  "maxTO": 22100,
+  "engines": [
+   "1 × General Electric F110-IHI-129 afterburning turbofan 17000 lbf"
+  ],
+  "avionics": "*Mitsubishi Electric J/APG-2 AESA radar system *Raytheon AN/ARC-164 Have Quick UHF transceiver *NEC V/UHF transceiver *Hitachi Kokusai Electric HF transceiver *Tokyo Radio System/BAE AIFF *Japan Aviation Electronics/Honeywell digital AFCS *Japan Aviation Electronics ring laser IRS *Toshiba VOR/ILS *Rockwell Collins TACAN *Mitsubishi Electric mission computer *Mitsubishi MDS mission planning system *Toshiba digital map display system *Mitsubishi Electric integrated EW system",
+  "guns": "1 × 20 mm (0.787 in) JM61A2 6-barrel rotary cannon",
+  "missiles": "; ** Air-to-air missiles: ***4 × Mitsubishi AAM-3 ***4 × Mitsubishi AAM-4 ***4 × Mitsubishi AAM-5 ***4 × AIM-9L Sidewinder ***4 × AIM-7M Sparrow ** Anti-ship missiles: ***4* × ASM-1 ***4* × ASM-2 ***4* × ASM-3 ****There are umbilicals and attachment points for ASMs on the inner most pylon, potentially bringing the total up to 6 for each of the ASMs, however this loadout is not used in service.",
+  "g": null
+ },
+ "n17": {
+  "article": "Nieuport 17",
+  "variant": "Those Classic Nieuports, The Nieuport 17",
+  "crew": "one",
+  "length": 5.8,
+  "span": 8.16,
+  "speed": 170,
+  "mach": null,
+  "climb": null,
+  "ceiling": 5300,
+  "gross": 560,
+  "maxTO": null,
+  "engines": [
+   "1 × Le Rhône 9Ja 9-cylinder rotary engine 110 hp (82 kW)"
+  ],
+  "avionics": "* 26 cm camera (some aircraft only)",
+  "guns": "; ** (French service) 1 × synchronised .303 in Vickers machine gun and/or 1 × .303 in Lewis gun on upper wing mounting ** (British service) 1 × Lewis gun on Foster mounting on upper wing",
+  "missiles": "",
+  "g": null
+ },
+ "spad13": {
+  "article": "SPAD S.XIII",
+  "variant": "French Aircraft of the First World War",
+  "crew": "1",
+  "length": 6.25,
+  "span": 8.25,
+  "speed": 211,
+  "mach": null,
+  "climb": null,
+  "ceiling": 6800,
+  "gross": 856.5,
+  "maxTO": null,
+  "engines": [
+   "1 × Hispano-Suiza 8Ba, Bb or Bd Water cooled 8-cylinder vee-type 200 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × .303 in Vickers machine guns or on USAS Examples, 2 × Marlin M1917 or M1918 machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "d510": {
+  "article": "Dewoitine D.500",
+  "variant": "The Great Book of Fighters, The Dewoitine D.500 pursuit airplane",
+  "crew": "One",
+  "length": 7.94,
+  "span": 12.09,
+  "speed": 402,
+  "mach": null,
+  "climb": 14.85,
+  "ceiling": 11000,
+  "gross": 1929,
+  "maxTO": null,
+  "engines": [
+   "1 × Hispano-Suiza 12Ycrs V-12 liquid-cooled piston engine (640 kW)"
+  ],
+  "avionics": "",
+  "guns": "; ** 1 × 20 mm Hispano-Suiza HS.9 cannon, 60 rounds ** 2 × 7.5 mm MAC 1934 machine guns, 300 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "ms406": {
+  "article": "Morane-Saulnier M.S.406",
+  "variant": "The Morane Saulnier 406",
+  "crew": "1",
+  "length": 8.17,
+  "span": 10.61,
+  "speed": 452,
+  "mach": null,
+  "climb": null,
+  "ceiling": 9400,
+  "gross": 2540,
+  "maxTO": null,
+  "engines": [
+   "1 × Hispano-Suiza 12Y-31 V-12 liquid-cooled piston engine"
+  ],
+  "avionics": "",
+  "guns": "; :* 1 × 20 mm Hispano-Suiza HS.404 cannon :* 2 × 7.5 mm MAC 1934 machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "d520": {
+  "article": "Dewoitine D.520",
+  "variant": "Le Dewoitine D.520, The Dewoitine D.520",
+  "crew": "One",
+  "length": 8.6,
+  "span": 10.2,
+  "speed": 560,
+  "mach": null,
+  "climb": 14.3,
+  "ceiling": 10000,
+  "gross": 2677,
+  "maxTO": 2785,
+  "engines": [
+   "1 × Hispano-Suiza 12Y-49 V-12 liquid-cooled piston engine 950 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** 1 × 20 mm Hispano-Suiza HS.404 (60-round drum) cannon ** 4 × 7.5 mm MAC 1934 (675 rpg) machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "ouragan": {
+  "article": "Dassault Ouragan",
+  "variant": "The Dassault M.D. 450 Ouragan: Profile 143, The Great Book of Fighters",
+  "crew": "1",
+  "length": 10.73,
+  "span": 13.16,
+  "speed": 940,
+  "mach": 0.76,
+  "climb": 38,
+  "ceiling": 13000,
+  "gross": 7404,
+  "maxTO": 7900,
+  "engines": [
+   "1 × Rolls-Royce Nene Mk.104B centrifugal-flow turbojet engine (22.2 kN)"
+  ],
+  "avionics": "",
+  "guns": "4× 20 mm Hispano-Suiza HS.404 cannon with 125 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "mystere4": {
+  "article": "Dassault Mystère IV",
+  "variant": "The Complete Book of Fighters",
+  "crew": "1",
+  "length": 12.89,
+  "span": 11.12,
+  "speed": 1110,
+  "mach": null,
+  "climb": 40,
+  "ceiling": 15000,
+  "gross": 8510,
+  "maxTO": 9500,
+  "engines": [
+   "1 × Hispano-Suiza Verdon 350 turbojet engine (34.32 kN), kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "2× 30 mm (1.18 in) DEFA cannons with 150 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "mirage3c": {
+  "article": "Dassault Mirage III",
+  "variant": "Encyclopedia of World Military Aircraft",
+  "crew": "1",
+  "length": 15.03,
+  "span": 8.22,
+  "speed": 2350,
+  "mach": 2.2,
+  "climb": 83,
+  "ceiling": 17000,
+  "gross": 9600,
+  "maxTO": 13700,
+  "engines": [
+   "1 × SNECMA Atar 09C afterburning turbojet engine (41.97 kN), 60.8 kN with afterburner",
+   "1 × SEPR 841 liquid-fuelled rocket engine (14.7 kN)"
+  ],
+  "avionics": "*Thomson-CSF Cyrano II radar * Marconi continuous-wave Doppler navigation radar",
+  "guns": "2 × 30 mm DEFA 552 cannon with 125 rounds per gun",
+  "missiles": "2 × AIM-9B Sidewinder Air to Air missiles (AAM) or ** 2 × Matra R.550 Magic AAMs plus 1× Matra R.530 AAM",
+  "g": null
+ },
+ "m2000c": {
+  "article": "Dassault Mirage 2000",
+  "variant": "Complete Encyclopedia of World Aircraft, International Directory of Military Aircraft",
+  "crew": "1",
+  "length": 14.36,
+  "span": 9.13,
+  "speed": 2336,
+  "mach": null,
+  "climb": 285,
+  "ceiling": 17060,
+  "gross": 13800,
+  "maxTO": 17000,
+  "engines": [
+   "1 × SNECMA M53-P2 afterburning turbofan engine lbf (64.3 kN), 95.1 kN with afterburner"
+  ],
+  "avionics": "*Thomson-CSF RDM (Radar Doppler Multifunctiont) radar (early Mirage 2000C) . * Thomson-CSF RDI (Radar Doppler à Impulsions) radar (Late Mirage 2000C, until S5 specification). * Thomson-CSF RDY (Radar Doppler Multi-target) radar (Mirage 2000-5, Mirage 2000 I).",
+  "guns": "2× 30 mm DEFA 554 revolver cannon, 125 rounds per gun",
+  "missiles": "; ** Air-to-air missiles: *** 6 × MBDA MICA IR/RF (Mirage 2000-5, Mirage 2000-9, Mirage 2000 I) *** 2 × Matra R550 Magic-II and 2× Matra Super 530D (Mirage 2000 C, Mirage 2000 H) ** Air-to-surface missiles: *** 2 × AM.39 Exocet (Mirage 2000 EG, Mirage 2000-5 Mk2) *** 1 × SCALP EG (Mirage 2000 D, Mirage 2000-5) *** Crystal Maze *** Crystal Maze II",
+  "g": null
+ },
+ "rafalec": {
+  "article": "Dassault Rafale",
+  "variant": "Dassault Aviation, Superfighters, French Navy, International Directory of Military Aircraft",
+  "crew": "1 or 2",
+  "length": 15.27,
+  "span": 10.9,
+  "speed": 1912,
+  "mach": null,
+  "climb": 304.8,
+  "ceiling": 15835,
+  "gross": 15000,
+  "maxTO": 24500,
+  "engines": [
+   "2 × Snecma M88-4e turbofans hp ( kW) (50.00 kN), 75.00 kN with afterburner"
+  ],
+  "avionics": "* Thales RBE2-AA AESA radar * Thales SPECTRA Electronic Warfare (EW) system * Thales/SAGEM Optronique Secteur Frontal (OSF) Infrared search and track (IRST) system",
+  "guns": "1× 30 mm GIAT 30/M791 autocannon with 125 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "f6f5": {
+  "article": "Grumman F6F Hellcat",
+  "variant": "WWII Aircraft Performance'Jane's Fighting Aircraft of World War II'Standard Aircraft Characteristics",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 629,
+  "mach": null,
+  "climb": 13.2,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney R-2800-10W Double Wasp 18-cylinder air-cooled radial piston engine 2200 hp"
+  ],
+  "avionics": "",
+  "guns": "; **6 × 0.50 in (12.7 mm) M2 Browning machine guns, with 400 rounds per gun, (All F6F-3, and most F6F-5) or **2 × 0.79 in (20 mm) AN/M2 cannon, with 225 rounds per gun and 4 × 0.50 in (12.7 mm) Browning machine guns with 400 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "f14a": {
+  "article": "Grumman F-14 Tomcat",
+  "variant": "U.S. Navy file, Spick, Flight International March 1985",
+  "crew": "2 (pilot and radar intercept officer)",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 2.34,
+  "climb": 228.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × General Electric F110-GE-400 afterburning turbofans 16333 lbf ( kN), kN with afterburner"
+  ],
+  "avionics": "* Hughes AN/APG-71 radar * AN/ALR-67 radar warning receiver * AN/AAS-42 infrared search and track, AAX-1 TCS * AN/ASN-130 Inertial navigation system * Remotely Operated Video Enhanced Receiver (ROVER) upgrade",
+  "guns": "1× 20 mm (0.787 in) M61A1 Vulcan 6-barreled rotary cannon, with 675 rounds",
+  "missiles": "",
+  "g": 7.5
+ },
+ "f35a": {
+  "article": "Lockheed Martin F-35 Lightning II",
+  "variant": "Lockheed Martin: F-35 specifications, Lockheed Martin: F-35 weaponry, Lockheed Martin: F-35 Program Status, F-35 Program brief, FY2019 Select Acquisition Report (SAR), Director of Operational Test & Evaluation",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 1.6,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney F135-PW-100 afterburning turbofan 28000 lbf (125 kN), 191 kN with afterburner"
+  ],
+  "avionics": "*AN/APG-81 or AN/APG-85 (Lot 17 onwards) AESA radar * AN/AAQ-40 Electro-Optical Targeting System * AN/AAQ-37 Electro-Optical Distributed Aperture System * AN/ASQ-239 Barracuda electronic warfare/electronic countermeasures system * AN/ASQ-242 CNI suite, which includes ** Harris Corporation Multifunction Advanced Data Link (MADL) communication system ** Link 16 data link ** SINCGARS ** An IFF interrogator and transponder ** HAVE QUICK ** AM, VHF, UHF AM, and UHF FM Radio ** GUARD survival radio ** A radar altimeter ** An instrument landing system ** A TACAN system ** Instrument carrier landing system ** A JPALS ** TADIL-J JVMF/VMF",
+  "guns": "1 × 25&nbsp;mm GAU-22/A 4-barrel rotary cannon, 180 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "tempest5": {
+  "article": "Hawker Tempest",
+  "variant": "Jane's all the World's Aircraft 1947, Jane's Fighting Aircraft of World War II, Jane's all the World's Aircraft 1946, The Hawker Tempest I-IV",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 700,
+  "mach": null,
+  "climb": 23.9,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Napier Sabre IIB H-24 liquid-cooled sleeve-valve piston engine 2420 hp"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "yak9u": {
+  "article": "Yakovlev Yak-9",
+  "variant": "",
+  "crew": "",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "mig25pd": {
+  "article": "Mikoyan-Gurevich MiG-25",
+  "variant": "The Great Book of Fighters, International Directory of Military Aircraft, Combat Aircraft since 1945, airforce-technology.com, deagel.com",
+  "crew": "1",
+  "length": 23.82,
+  "span": 14.01,
+  "speed": 3000,
+  "mach": null,
+  "climb": 208,
+  "ceiling": 20700,
+  "gross": 36720,
+  "maxTO": null,
+  "engines": [
+   "2 × Tumansky R-15B-300 afterburning turbojet engines hp ( kW) (73.5 kN), 100.1 kN with afterburner"
+  ],
+  "avionics": "*Smerch-A2 radar based on vacuum tube electronics, for early and late MiG-25P, with up to 120 km of radar scanning distance (40 / 80 / 120 km) (50–70 km tracking fighter-sized targets, up to 105 km for bomber-sized targets at high altitude). Operational starting from 500 meters. The first examples of the MiG-25 uses the Smerch-A1, and the final variant was the Smerch-A3 after Belenko's defection with improved reliability. * Pulse-doppler RP-25M (Saphir-25) radar based on semiconductor electronics and developed from the RP-23ML of the MiG-23ML, for later MiG-25PD, with up to 110–120 km of detection range (depending on how good the tuning of the radar). * A RV-UM or a RV-4 radar altimeter * SPO-10M Sirena-3 RWR (SPO-15L Beryoza for MiG-25PDSG) * 2 x BVP-50-60 chaff/flare dispensers with KDS-155 cassettes and 30 CM rounds each (PPR-50 chaff and/or PPI-50 flares) (MiG-25PDSG / MiG-25PDSL) * Lazour datalink (BAN-75 for the MiG-25PD) * SRZO-2M Transmitter and SRZM-2 Receiver (IFF set) * Vozdukh-1 GCI * TP-26Sh IRST (MiG-25PD), 25 km of lock-on range at low altitude against afterburning targets, 50 km+ at high altitude (depending on the size of the heat source). Can slave infrared missiles for sneak attacks. * ARK-10 ADF * RV-UM low-range radio altimeter * R-832M + Prizma radios * SAU-155P1 automatic control system * KM-1 ejection seat (replaced by the KM-1M in later MiG-25P production examples)",
+  "guns": "",
+  "missiles": "; ** 4 × R-40R air-to-air missiles with 15 g launch overload ** 2 × R-40T air-to-air missiles with 15 g launch overload, only on inboard pylon ** 4 × R-40RD air-to-air missiles with 15 g launch overload and improved range (MiG-25PD) ** 2 × R-40TD air-to-air missiles with 15 g launch overload and improved range, only on inboard pylon (MiG-25PD) ** 4 × R-60/R-60M dogfight air-to-air missiles (MiG-25PD) ** 4 × R-60/R-60M dogfight air-to-air missiles + 2 x R-40RD air-to-air missiles (MiG-25PD)",
+  "g": 4.5
+ },
+ "ki61": {
+  "article": "Kawasaki Ki-61",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "1",
+  "length": 8.94,
+  "span": 12,
+  "speed": 580,
+  "mach": null,
+  "climb": 15.2,
+  "ceiling": 11600,
+  "gross": 3470,
+  "maxTO": null,
+  "engines": [
+   "1 × Kawasaki Ha40 inverted liquid-cooled V-12 piston engine (864 kW)"
+  ],
+  "avionics": "",
+  "guns": "; ** 2× 20 mm Ho-5 cannon, 120 rpg ** 2× 12.7 mm Ho-103 machine guns, 250 rpg",
+  "missiles": "",
+  "g": null
+ },
+ "mirageF1c": {
+  "article": "Dassault Mirage F1",
+  "variant": "Jane's All The World's Aircraft 1988–89,",
+  "crew": "1",
+  "length": 15.3,
+  "span": 8.4,
+  "speed": 2338,
+  "mach": 2.2,
+  "climb": 243,
+  "ceiling": 20000,
+  "gross": 10900,
+  "maxTO": 16200,
+  "engines": [
+   "1 × SNECMA Atar 9K-50 afterburning turbojet engine (49.03 kN), 70.6 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "2× 30 mm (1.18 in) DEFA 553 cannons with 150 rounds per gun",
+  "missiles": "2× AIM-9 Sidewinders OR Matra R550 Magics on wingtip pylons, 2× R.530 or Super 530Fs underwing, 1× AM-39 Exocet anti-ship missile, 2× AS-30L laser-guided missiles",
+  "g": null
+ },
+ "gotha": {
+  "article": "Gotha G.V",
+  "variant": "Die Deutschen Militärflugzeuge 1910-1918",
+  "crew": "3 (sometimes 4)",
+  "length": 12.36,
+  "span": 23.7,
+  "speed": 140,
+  "mach": null,
+  "climb": null,
+  "ceiling": 6500,
+  "gross": 3975,
+  "maxTO": null,
+  "engines": [
+   "2 × Mercedes D.IVa 6-cylinder water-cooled in-line piston engines 260 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "2 or 3 × 7.92 mm (.312 in) Parabellum MG 14 machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "ho400": {
+  "article": "Handley Page Type O",
+  "variant": "The British Bomber since 1914 and The War in the Air Appendices",
+  "crew": "4 or 5",
+  "length": null,
+  "span": null,
+  "speed": 157,
+  "mach": null,
+  "climb": 1.2,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce Eagle VIII V-12 water-cooled piston engines 360 hp"
+  ],
+  "avionics": "",
+  "guns": "5 × 0.303 in Lewis Guns (2 on nose Scarff ring, 2 on dorsal position and 1 at ventral hatch)",
+  "missiles": "",
+  "g": null
+ },
+ "he111": {
+  "article": "Heinkel He 111",
+  "variant": "Heinkel He 111: A Documentary History",
+  "crew": "5 (pilot, navigator/bombardier/nose gunner, ventral gunner, dorsal gunner/radio operator, side gunner)",
+  "length": 16.4,
+  "span": 22.6,
+  "speed": 440,
+  "mach": null,
+  "climb": null,
+  "ceiling": 6500,
+  "gross": 12030,
+  "maxTO": 14000,
+  "engines": [
+   "2 × Junkers Jumo 211F-1 or Junkers Jumo 211F-2 V-12 inverted liquid-cooled piston engines 1300 hp"
+  ],
+  "avionics": "",
+  "guns": "** up to 7 × 7.92 mm MG 15 machine guns or 7x MG 81 machine gun (2 in the nose, 1 in the dorsal, 2 in the side, 2 in the ventral), some of them replaced or augmented by ** 1 × 20 mm MG FF cannon (central nose mount or forward ventral position) ** 1 × 13 mm MG 131 machine gun (mounted dorsal and/or ventral rear positions)",
+  "missiles": "",
+  "g": null
+ },
+ "ju87": {
+  "article": "Junkers Ju 87",
+  "variant": "Warplanes of the Third Reich",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 410,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Junkers Jumo 211J V-12 inverted liquid-cooled piston engine 1400 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × 7.92 mm MG 17 machine guns forward firing, 1 × 7.92 mm twin MG 81 machine gun to rear",
+  "missiles": "",
+  "g": null
+ },
+ "b17g": {
+  "article": "Boeing B-17 Flying Fortress",
+  "variant": "The Encyclopedia of World Aircraft JANE'S Fighting Aircraft of World War II",
+  "crew": "10: Pilot, co-pilot, navigator, bombardier/nose gunner, flight engineer/top turret gunner, radio operator, waist gunners (2), ball turret gunner, tail gunner",
+  "length": 22.66,
+  "span": 31.62,
+  "speed": 472,
+  "mach": null,
+  "climb": 4.6,
+  "ceiling": 10850,
+  "gross": 24500,
+  "maxTO": 29700,
+  "engines": [
+   "4 × Wright R-1820-97 \"Cyclone\" turbosupercharged radial engines 1,200 hp (895 kW)"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "b5n": {
+  "article": "Nakajima B5N",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "3",
+  "length": 10.3,
+  "span": 15.518,
+  "speed": 378,
+  "mach": null,
+  "climb": 6.5,
+  "ceiling": 8260,
+  "gross": 3800,
+  "maxTO": 4100,
+  "engines": [
+   "1 × Nakajima Sakae 11 14-cylinder air-cooled radial piston engine 1,000 hp"
+  ],
+  "avionics": "",
+  "guns": "1 × 7.7 mm Type 92 machine gun 'Ru' (Lewis) in rear dorsal position, fed by hand loaded drum magazines of 97 rounds. A number of B5N1s were equipped with 2 × 7.7 Type 97 machine guns in the wings.",
+  "missiles": "",
+  "g": null
+ },
+ "pe2": {
+  "article": "Petlyakov Pe-2",
+  "variant": "From Sotka to Peshka",
+  "crew": "3",
+  "length": 12.66,
+  "span": 17.16,
+  "speed": 540,
+  "mach": null,
+  "climb": null,
+  "ceiling": 8800,
+  "gross": 7536,
+  "maxTO": 8520,
+  "engines": [
+   "2 × Klimov M-105RA V-12 liquid-cooled piston engines 1100 hp"
+  ],
+  "avionics": "",
+  "guns": "*2 × 7.62 mm (0.3 in) fixed ShKAS machine guns in the nose * 2 × rearward firing 7.62 mm (0.3 in) ShKAS machine guns (1 in dorsal mount, one in ventral mount) ** Some aircraft were also equipped with a DAG-10 launcher, firing parachute timed grenades.",
+  "missiles": "",
+  "g": null
+ },
+ "b29": {
+  "article": "Boeing B-29 Superfortress",
+  "variant": "Quest for Performance",
+  "crew": "11 (Pilot, co-pilot, bombardier, flight engineer, navigator, radio operator, radar observer, right gunner, left gunner, central fire control, tail gunner)",
+  "length": null,
+  "span": null,
+  "speed": 574,
+  "mach": null,
+  "climb": 4.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "4 × Wright R-3350-23 Duplex-Cyclone 18-cylinder air-cooled turbosupercharged radial piston engines 2200 hp"
+  ],
+  "avionics": "",
+  "guns": "}}",
+  "missiles": "",
+  "g": null
+ },
+ "tu16": {
+  "article": "Tupolev Tu-16",
+  "variant": "",
+  "crew": "6-7",
+  "length": 34.8,
+  "span": 33,
+  "speed": 1050,
+  "mach": null,
+  "climb": null,
+  "ceiling": 12800,
+  "gross": 76000,
+  "maxTO": 79000,
+  "engines": [
+   "2 × Mikulin AM-3 M-500 turbojets hp ( kW) lbf (93.2 kN), kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "6–7 × 23 mm Afanasev Makarov AM-23 cannons, two each in dorsal and ventral remote turrets and manned tail turret, with the occasional addition of one fixed forward in the nose",
+  "missiles": "; ** Badger-B 2 × Raduga KS-1 Komet (AS-1 Kennel) anti-ship missile on underwing hardpoints ** Badger-C 1 × Raduga K-10S (AS-2 Kipper) anti-ship missile semi-recessed in bomb bay ** Badger-C/G 2 × Raduga KSR-2 (AS-5 Kelt) or Raduga KSR-5 (AS-6 Kingfish) anti-ship missile on underwing hardpoints",
+  "g": null
+ },
+ "f105": {
+  "article": "Republic F-105 Thunderchief",
+  "variant": "The Great Book of Fighters, Quest for Performance, U.S. Standard Aircraft Characteristics: F-105D-31, Jane's All the World's Aircraft 1969-70",
+  "crew": "1 (F-105F: 2)",
+  "length": null,
+  "span": null,
+  "speed": 2241,
+  "mach": null,
+  "climb": 195.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney J75-P-19W afterburning turbojet engine 14,300 lbf"
+  ],
+  "avionics": "* NASARR R-14A radar * AN/ASG-19 Thunderstick fire control system * AN/ARN-85 LORAN (AN/ARN-92 in Thunderstick II-modified aircraft)",
+  "guns": "1 × 20 mm (0.787 in) M61A1 Vulcan 6-barreled Gatling cannon, 1,028 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "a4": {
+  "article": "Douglas A-4 Skyhawk",
+  "variant": "McDonnell Douglas aircraft since 1920 : Volume I, Global Security : A4D (A-4) Skyhawk",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 1083,
+  "mach": null,
+  "climb": 29.2,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Pratt & Whitney J52-P-6A turbojet engine 8,500 lbf"
+  ],
+  "avionics": "Typical avionics fitted to A-4s * Bendix AN/APN-141 Low altitude radar altimeter (refitted to C and E, standard in the F) * Stewart-Warner AN/APQ-145 Mapping & Ranging radar (mounted on A-4F, also found on A-4E/N/S/SU)",
+  "guns": "2× 20 mm (0.79 in) Colt Mk 12 cannon, 100 rounds/gun",
+  "missiles": "; ** Air-to-air missiles: *** 4× AIM-9 Sidewinder ** Air-to-surface missiles: *** 2× AGM-12 Bullpup *** 2× AGM-45 Shrike anti-radiation missile *** 2× AGM-62 Walleye TV-guided glide bomb *** 2× AGM-65 Maverick",
+  "g": 8
+ },
+ "su24": {
+  "article": "Sukhoi Su-24",
+  "variant": "Sukhoi, Combat Aircraft since 1945, deagel.com, airforce-technology.com",
+  "crew": "2 (pilot and weapons systems operator)",
+  "length": 22.53,
+  "span": 17.64,
+  "speed": 1654,
+  "mach": null,
+  "climb": 150,
+  "ceiling": 11000,
+  "gross": 38040,
+  "maxTO": 43755,
+  "engines": [
+   "2 × Lyulka AL-21F-3A turbojet engines (75 kN), 109.8 kN with afterburner"
+  ],
+  "avionics": "* SVP-24 targeting system",
+  "guns": "1 × internal 23 mm Gryazev-Shipunov GSh-6-23M rotary cannon with 500 rounds",
+  "missiles": "",
+  "g": 6
+ },
+ "f15e": {
+  "article": "McDonnell Douglas F-15E Strike Eagle",
+  "variant": "USAF F-15E Flight Manual (TO 1F-15E-1), USAF fact sheet, Davies, and Boeing",
+  "crew": "2 (pilot and weapon systems officer)",
+  "length": null,
+  "span": null,
+  "speed": null,
+  "mach": 2.5,
+  "climb": 254,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Pratt & Whitney F100-PW-220 afterburning turbofan 14590 lbf"
+  ],
+  "avionics": "*Radar: **Raytheon AN/APG-70 or AN/APG-82 **AN/ASQ-236 Radar Pod *Targeting pods: **AN/AAQ-14 LANTIRN or Lockheed Martin Sniper XR or AN/AAQ-28(V) Litening *Countermeasures: **Northrop Grumman Electronic Systems AN/ALQ-131 electronic countermeasures pod **Hazeltine AN/APX-76 or Raytheon AN/APX-119 Identify Friend/Foe (IFF) interrogator **Magnavox AN/ALQ-128 Electronic Warfare Warning Set (EWWS) – part of Tactical Electronic Warfare Systems (TEWS) **Loral AN/ALR-56 Radar warning receivers (RWR) – part of TEWS **Northrop Grumman Electronic Systems ALQ-135 Internal Countermeasures System (ICS) – part of TEWS **Marconi AN/ALE-45 Chaff/Flares dispenser system – part of TEWS **BAE Systems AN/ALQ-250 Eagle Passive Active Warning Survivability System (EPAWSS) - combined electronic warfare/electronic countermeasures system",
+  "guns": "1× 20 mm (0.787 in) M61A1 Vulcan 6-barreled rotary cannon, 500 rounds of either M-56 or PGU-28 ammunition",
+  "missiles": "; **Air-to-air missiles: ***4× AIM-7 Sparrow ***4× AIM-9 Sidewinder or IRIS-T (S variant of the Saudi Air Force) ***8× AIM-120 AMRAAM **Air-to-surface missiles: ***6× AGM-65 Maverick ***2× AGM-84 Harpoon ***2× AGM-84H/K SLAM-ER ***2x AGM-130 ***AGM-154 JSOW ***AGM-158 JASSM ***Joint Strike Missile (to be integrated) ***Taurus KEPD 350 (integrated on South Korean Air Force F-15Ks)",
+  "g": 9
+ },
+ "dh4": {
+  "article": "Airco DH.4",
+  "variant": "The British Bomber since 1914, The de Havilland DH.4",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 230,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Rolls-Royce Eagle VIII water-cooled V12 engine 375 hp"
+  ],
+  "avionics": "",
+  "guns": "One fixed forward-firing .303 in Vickers machine gun, 1 or 2 .303 in Lewis guns on a Scarff ring",
+  "missiles": "",
+  "g": null
+ },
+ "b10": {
+  "article": "Martin B-10",
+  "variant": "United States Military Aircraft Since 1909.",
+  "crew": "4",
+  "length": null,
+  "span": null,
+  "speed": 343,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Wright R-1820-33 Cyclone (F-3) 9-cylinder air-cooled radial piston engines 775 hp"
+  ],
+  "avionics": "",
+  "guns": "3 × 0.300 in Browning machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "sbd": {
+  "article": "Douglas SBD Dauntless",
+  "variant": "McDonnell Douglas aircraft since 1920 : Volume I",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 410,
+  "mach": null,
+  "climb": 8.6,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Wright R-1820-60 Cyclone 9-cylinder air-cooled radial piston engine 1200 hp"
+  ],
+  "avionics": "",
+  "guns": "** 2 × 0.50 in (12.7 mm) forward-firing synchronized Browning M2 machine guns in engine cowling ** 2 × 0.30 in (7.62 mm) flexible-mounted Browning M1919 machine guns in rear",
+  "missiles": "",
+  "g": null
+ },
+ "b25j": {
+  "article": "North American B-25 Mitchell",
+  "variant": "United States Military Aircraft since 1909, American Attack Aircraft Since 1926",
+  "crew": "five (comprising pilot, navigator/bombardier, turret gunner/engineer, radio operator/waist gunner, tail gunner)",
+  "length": null,
+  "span": null,
+  "speed": 438,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Wright R-2600-92 Twin Cyclone 14-cylinder two-row air-cooled radial piston engines 1,700 hp"
+  ],
+  "avionics": "",
+  "guns": "12–18 × .50 in (12.7 mm) machine guns and 75&nbsp;mm (2.95 in) T13E1 cannon",
+  "missiles": "",
+  "g": null
+ },
+ "a1h": {
+  "article": "Douglas A-1 Skyraider",
+  "variant": "McDonnell Douglas aircraft since 1920 : Volume I",
+  "crew": "1",
+  "length": null,
+  "span": null,
+  "speed": 518,
+  "mach": null,
+  "climb": 14.5,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Wright R-3350-26WA Duplex-Cyclone 18-cylinder air-cooled radial piston engine 2,700 hp"
+  ],
+  "avionics": "",
+  "guns": "4 × 20 mm AN/M3 cannon with 200 rounds per gun",
+  "missiles": "",
+  "g": null
+ },
+ "a10a": {
+  "article": "Fairchild Republic A-10 Thunderbolt II",
+  "variant": "The Great Book of Modern Warplanes, Fairchild-Republic A/OA-10, USAF",
+  "crew": "1",
+  "length": 16.26,
+  "span": 17.53,
+  "speed": 706,
+  "mach": null,
+  "climb": 30,
+  "ceiling": 13700,
+  "gross": 13782,
+  "maxTO": 20865,
+  "engines": [
+   "2 × General Electric TF34-GE-100A turbofans 9,065 lbf (40.32 kN)"
+  ],
+  "avionics": "*Targeting pods: **AN/AAQ-28(V)4 LITENING or AN/AAQ-33(V)1/2 Sniper *Countermeasures: **AN/ALQ-131 or AN/ALQ-184(V)-11/12 ECM pods",
+  "guns": "1× 30 mm (1.18 in) GAU-8/A Avenger rotary cannon with 1,174 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "f111f": {
+  "article": "General Dynamics F-111 Aardvark",
+  "variant": "General Dynamics F-111 \"Aardvark\", The Complete Encyclopedia of World Aircraft, RAND",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 2656,
+  "mach": 2.5,
+  "climb": 131.5,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Pratt & Whitney TF30-P-100 afterburning turbofan engines 14,560 lbf"
+  ],
+  "avionics": "",
+  "guns": "1× 20 mm (0.787 in) M61A1 Vulcan 6-barreled Gatling cannon in weapons bay (seldom fitted)",
+  "missiles": "",
+  "g": 7.33
+ },
+ "hannover": {
+  "article": "Hannover CL.III",
+  "variant": "Hannover CL.III; Hannover Aircraft of WWI: A Centennial Perspective on Great War Airplanes.",
+  "crew": "2",
+  "length": 7.58,
+  "span": null,
+  "speed": 165,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": 1120,
+  "maxTO": null,
+  "engines": [
+   "1 × Argus As III water-cooled straight-six piston engine 180 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × 7.92 mm (0.323 in); one synchronized LMG 08/15 machine gun firing forward, single ring-mounted Parabellum MG 14 in observer's cockpit",
+  "missiles": "",
+  "g": null
+ },
+ "do17": {
+  "article": "Dornier Do 17",
+  "variant": "Aircraft of the Third Reich, Fighters and Bombers of World War II and Do&nbsp;17&nbsp;Z-2 Baubeschreibung, April 1938",
+  "crew": "4",
+  "length": 15.8,
+  "span": 18,
+  "speed": 350,
+  "mach": null,
+  "climb": null,
+  "ceiling": 8200,
+  "gross": null,
+  "maxTO": 8837,
+  "engines": [
+   "2 × Bramo 323P 9-cyl. air-cooled radial piston engines"
+  ],
+  "avionics": "",
+  "guns": "6 × 7.92 mm (0.312 in) MG 15 machine guns in front upper/lower, rear upper/lower and beam positions (all firing from cockpit area)",
+  "missiles": "",
+  "g": null
+ },
+ "ju88": {
+  "article": "Junkers Ju 88",
+  "variant": "The warplanes of the Third Reich.",
+  "crew": "4 (pilot, bombardier/front gunner, radio operator/rear gunner, navigator/ventral gunner)",
+  "length": 14.4,
+  "span": 20,
+  "speed": 470,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Junkers Jumo 211J-1 or 211J-2 V-12 liquid-cooled inverted piston engine 1340 hp"
+  ],
+  "avionics": "",
+  "guns": "; **1 × 7.92 mm MG 81J machine gun on flexible mount in front windscreen, firing forward with 1,000 rounds. **1 × 7.92 mm MG 81J machine gun on flexible mount in lower fuselage nose glazing, firing forward with 1,000 rounds. **2 × 7.92 mm MG 81J machine guns on flexible mount in the rear of the cockpit canopy, firing aft with 1,000 rounds each. **1 × 7.92 mm MG 81Z twin machine gun on flexible mount in the rear ventral Bola position, firing aft with 1,000 rounds.",
+  "missiles": "",
+  "g": null
+ },
+ "bf110": {
+  "article": "Messerschmitt Bf 110",
+  "variant": "The Warplanes of the Third Reich, Die Deutsche Luftrüstung 1933–1945 Vol.3 – Flugzeugtypen Henschel-Messerschmitt",
+  "crew": "two or three",
+  "length": null,
+  "span": null,
+  "speed": 475,
+  "mach": null,
+  "climb": 11,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Daimler-Benz DB 601A-1 V-12 inverted liquid-cooled piston engines 1,050 hp"
+  ],
+  "avionics": "",
+  "guns": "** 2 × 20 mm MG FF/M cannon (180 rpg—3 drums with 60 rpg, cannon were reloaded by rear gunner or radio operator during flight) ** 4 × 7.92 mm MG 17 machine guns (1,000 rpg) ** 1 × 7.92 mm MG 15 machine gun for defence",
+  "missiles": "",
+  "g": null
+ },
+ "ar234": {
+  "article": "Arado Ar 234 Blitz",
+  "variant": "Aircraft of the Third Reich, vol.&nbsp;1.",
+  "crew": "1",
+  "length": 12.64,
+  "span": 14.41,
+  "speed": 742,
+  "mach": null,
+  "climb": 13,
+  "ceiling": 10000,
+  "gross": null,
+  "maxTO": 9800,
+  "engines": [
+   "2 × Junkers Jumo 004B-1 axial-flow turbojet engines (8.83 kN)",
+   "2 × Walter HWK 109-500A-1 liquid-fuelled jettisonable JATO rocket pods (4.905 kN)"
+  ],
+  "avionics": "",
+  "guns": "2 × 20 mm MG 151 cannon in tail firing to the rear (installed in prototypes only; never used in military service)m -->",
+  "missiles": "",
+  "g": null
+ },
+ "g91": {
+  "article": "Fiat G.91",
+  "variant": "Profile Publications",
+  "crew": "1",
+  "length": 10.3,
+  "span": 8.56,
+  "speed": 1075,
+  "mach": null,
+  "climb": 30,
+  "ceiling": 13100,
+  "gross": 5440,
+  "maxTO": 5500,
+  "engines": [
+   "1 × Bristol Siddeley Orpheus 803 turbojet (22.2 kN)"
+  ],
+  "avionics": "",
+  "guns": "; 4× 12.7 mm (0.50 in) M3 Browning machine guns; or; 2× 30 mm (1.18 in) DEFA cannons (Luftwaffe G.91R/3 only)",
+  "missiles": "",
+  "g": null
+ },
+ "tornadoids": {
+  "article": "Panavia Tornado",
+  "variant": "International Warbirds: An Illustrated Guide to World Military Aircraft, 1914–2000,Tornado, Modern Fighting Aircraft",
+  "crew": "2",
+  "length": 16.72,
+  "span": 13.91,
+  "speed": 2400,
+  "mach": 2.2,
+  "climb": null,
+  "ceiling": 15240,
+  "gross": 20410,
+  "maxTO": 27215,
+  "engines": [
+   "2 × Turbo-Union RB199-34R Mk 103 afterburning 3-spool turbofan (43.8 kN), 76.8 kN with afterburner"
+  ],
+  "avionics": "; * RAPTOR aerial reconnaissance pod * Rafael LITENING targeting pod; or * TIALD laser designator pod * GEC Sky Shadow, CERBERUS II/III, and Tornado Self-Protection Jammer (TSPJ) electronic countermeasure pods * BOZ counter-measures pod",
+  "guns": "1 × 27 mm Mauser BK-27 revolver cannon internally mounted under starboard side of fuselage with 180 rounds×, each with 180 rounds in GR.1, GR.1B, and IDS}}",
+  "missiles": "",
+  "g": null
+ },
+ "dh9a": {
+  "article": "Airco DH.9A",
+  "variant": "The British Bomber since 1914",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 198,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Liberty 12A water-cooled V-12 engine 400 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** 1 × forward firing .303 in Vickers machine gun, ** 1 or 2 × .303 in Lewis guns on Scarff ring",
+  "missiles": "",
+  "g": null
+ },
+ "hart": {
+  "article": "Hawker Hart",
+  "variant": "The British Bomber since 1914.",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 298,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "1 × Rolls-Royce Kestrel IB water-cooled V12 engine 525 hp ( kW)"
+  ],
+  "avionics": "",
+  "guns": "1 × synchronised forward firing .303 in (7.7&nbsp;mm) Vickers machine gun, 1 × .303 in (7.7 mm) Lewis Gun on Scarff ring in rear cockpit.",
+  "missiles": "",
+  "g": null
+ },
+ "blenheim": {
+  "article": "Bristol Blenheim",
+  "variant": "British Warplanes of World War II, The Bristol Blenheim I",
+  "crew": "3",
+  "length": null,
+  "span": null,
+  "speed": 428,
+  "mach": null,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Bristol Mercury XV 9-cylinder air-cooled radial piston engines 920 hp"
+  ],
+  "avionics": "* T1082 (transmitter) and R1083 (receiver) radio sets",
+  "guns": "; :* 1 × .303 in Browning machine gun in port wing :* 1 or 2 × .303 in Browning guns rear-firing in under-nose fairing or Nash & Thompson FN.54 turret :* 2 × .303 in Browning guns in dorsal turret",
+  "missiles": "",
+  "g": null
+ },
+ "mosquito": {
+  "article": "De Havilland Mosquito",
+  "variant": "Jane's Fighting Aircraft of World War II, World War II Warbirds",
+  "crew": "Two: pilot, bomb aimer/navigator",
+  "length": null,
+  "span": null,
+  "speed": 668,
+  "mach": null,
+  "climb": 14.5,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce Merlin V-12 liquid-cooled piston engine 1710 hp"
+  ],
+  "avionics": "* GEE radio-navigation",
+  "guns": "4 × 7.7&nbsp;mm Browning machine guns, 4 × 20&nbsp;mm Hispano cannons",
+  "missiles": "",
+  "g": null
+ },
+ "lancaster": {
+  "article": "Avro Lancaster",
+  "variant": "Avro Aircraft since 1908, The Secret Years: Flight Testing at Boscombe Down 1939–1945, The Avro Lancaster I: Aircraft in Profile Number 65",
+  "crew": "7: pilot, flight engineer, navigator, bomb aimer/nose gunner, wireless operator, mid-upper and rear gunners",
+  "length": null,
+  "span": null,
+  "speed": 454,
+  "mach": null,
+  "climb": 3.7,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "4 × Rolls-Royce Merlin XX V-12 liquid-cooled piston engines 1280 hp"
+  ],
+  "avionics": "* H2S radar in later variants * T1154 and R1155 radios * Various other navigational aides and countermeasures",
+  "guns": "Two 0.303-inch (7.7 mm) Browning Mark II machine guns in nose turret, two 0.303-inch Browning Mark II machine guns in upper turret, and four 0.303-inch Browning Mark II machine guns in the rear turret. (Early aircraft had two Brownings in a ventral turret aimed from within the aircraft via a periscope.) *Maximum normal bomb load of 14000 lb of bombs *Maximum specialist bomb load of 22000 lb of bombs",
+  "missiles": "",
+  "g": null
+ },
+ "canberra": {
+  "article": "English Electric Canberra",
+  "variant": "Combat Aircraft Recognition",
+  "crew": "3",
+  "length": null,
+  "span": null,
+  "speed": 933,
+  "mach": 0.88,
+  "climb": 17.3,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce R.A.7 Avon Mk.109 turbojet engines 7400 lbf"
+  ],
+  "avionics": "",
+  "guns": "4 × 20 mm Hispano Mk.V cannon mounted in rear bomb bay (500 rounds/gun), or 2 × 0.30 in (7.62 mm) machine gun pods",
+  "missiles": "A variety of missiles can be carried according to mission requirements, e.g: 2 × AS-30 air-to-surface missiles",
+  "g": null
+ },
+ "buccaneer": {
+  "article": "Blackburn Buccaneer",
+  "variant": "The Observer's Book of Aircraft, Aeroguide 30: Blackburn Buccaneer S Mks. 1 and 2",
+  "crew": "2",
+  "length": null,
+  "span": null,
+  "speed": 1074,
+  "mach": 0.95,
+  "climb": null,
+  "ceiling": null,
+  "gross": null,
+  "maxTO": null,
+  "engines": [
+   "2 × Rolls-Royce Spey Mk.101 turbofan engines 11,000 lbf"
+  ],
+  "avionics": "Blue Parrot ASV search/attack radar",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "tornadogr1": {
+  "article": "Panavia Tornado",
+  "variant": "International Warbirds: An Illustrated Guide to World Military Aircraft, 1914–2000,Tornado, Modern Fighting Aircraft",
+  "crew": "2",
+  "length": 16.72,
+  "span": 13.91,
+  "speed": 2400,
+  "mach": 2.2,
+  "climb": null,
+  "ceiling": 15240,
+  "gross": 20410,
+  "maxTO": 27215,
+  "engines": [
+   "2 × Turbo-Union RB199-34R Mk 103 afterburning 3-spool turbofan (43.8 kN), 76.8 kN with afterburner"
+  ],
+  "avionics": "; * RAPTOR aerial reconnaissance pod * Rafael LITENING targeting pod; or * TIALD laser designator pod * GEC Sky Shadow, CERBERUS II/III, and Tornado Self-Protection Jammer (TSPJ) electronic countermeasure pods * BOZ counter-measures pod",
+  "guns": "1 × 27 mm Mauser BK-27 revolver cannon internally mounted under starboard side of fuselage with 180 rounds×, each with 180 rounds in GR.1, GR.1B, and IDS}}",
+  "missiles": "",
+  "g": null
+ },
+ "muromets": {
+  "article": "Sikorsky Ilya Muromets",
+  "variant": "",
+  "crew": "8",
+  "length": 18.8,
+  "span": null,
+  "speed": 130,
+  "mach": null,
+  "climb": null,
+  "ceiling": 3200,
+  "gross": 7460,
+  "maxTO": null,
+  "engines": [
+   "4 × Renault 12F V-12 water-cooled piston engines"
+  ],
+  "avionics": "",
+  "guns": "8 machine guns",
+  "missiles": "",
+  "g": null
+ },
+ "tb3": {
+  "article": "Tupolev TB-3",
+  "variant": "Shavrov",
+  "crew": "8-10",
+  "length": 24.4,
+  "span": 41.8,
+  "speed": 212,
+  "mach": null,
+  "climb": 1.25,
+  "ceiling": 4800,
+  "gross": 17200,
+  "maxTO": 19300,
+  "engines": [
+   "4 × Mikulin M-17F V-12 liquid-cooled piston engine"
+  ],
+  "avionics": "",
+  "guns": "6–8 × 7.62×54mmR DA machine guns, 100 63-round magazines",
+  "missiles": "",
+  "g": null
+ },
+ "sb2": {
+  "article": "Tupolev SB",
+  "variant": "SB:The Radical Tupolev",
+  "crew": "3",
+  "length": 12.57,
+  "span": 20.33,
+  "speed": 450,
+  "mach": null,
+  "climb": null,
+  "ceiling": 9300,
+  "gross": 6308,
+  "maxTO": 7880,
+  "engines": [
+   "2 × Klimov M-103 V-12 liquid-cooled piston engines (716 kW)"
+  ],
+  "avionics": "",
+  "guns": "4 × 7.62 mm ShKAS machine guns (two in nose, one in dorsal and one in ventral position)",
+  "missiles": "",
+  "g": null
+ },
+ "tu2": {
+  "article": "Tupolev Tu-2",
+  "variant": "Gordon & Rigmant",
+  "crew": "4",
+  "length": 13.8,
+  "span": 18.86,
+  "speed": 528,
+  "mach": null,
+  "climb": 8.2,
+  "ceiling": 9000,
+  "gross": 10538,
+  "maxTO": 11768,
+  "engines": [
+   "2 × Shvetsov ASh-82 14-cylinder air-cooled radial piston engines (1380 kW)"
+  ],
+  "avionics": "",
+  "guns": "; ** 2 × 20 mm (0.79 in) ShVAK cannons fixed forward-firing in the wings ** 3 × 7.62 mm (0.30 in) rear-firing ShKAS machine guns (later replaced by 12.7 mm (0.50 in) Berezin UB machine guns) in the canopy, dorsal and ventral hatches. Some modified to have the Berezin B-20 cannon",
+  "missiles": "",
+  "g": null
+ },
+ "il28": {
+  "article": "Ilyushin Il-28",
+  "variant": "Jane's All The World's Aircraft 1982–83",
+  "crew": "3",
+  "length": 17.65,
+  "span": 21.45,
+  "speed": 902,
+  "mach": null,
+  "climb": 15,
+  "ceiling": 12300,
+  "gross": 18400,
+  "maxTO": 21200,
+  "engines": [
+   "2 × Klimov VK-1A centrifugal-flow turbojet engines (26.5 kN)"
+  ],
+  "avionics": "",
+  "guns": "4 × Nudelman-Rikhter NR-23 cannons (2 in nose and 2 in tail barbette)",
+  "missiles": "",
+  "g": null
+ },
+ "su7b": {
+  "article": "Sukhoi Su-7",
+  "variant": "Green, Sukhoi",
+  "crew": "1",
+  "length": 16.8,
+  "span": 9.31,
+  "speed": 1150,
+  "mach": null,
+  "climb": 160,
+  "ceiling": 17600,
+  "gross": 13570,
+  "maxTO": 15210,
+  "engines": [
+   "1 × Lyulka AL-7F-1 afterburning turbojet (66.6 kN), 94.1 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "2 × 30 mm Nudelman-Rikhter NR-30 autocannons (70 rounds per gun, 140 rounds total)",
+  "missiles": "",
+  "g": null
+ },
+ "su25": {
+  "article": "Sukhoi Su-25",
+  "variant": "Jane's All The World's Aircraft 2003–2004,",
+  "crew": "1",
+  "length": 15.53,
+  "span": 14.36,
+  "speed": 975,
+  "mach": null,
+  "climb": 58,
+  "ceiling": 7000,
+  "gross": 14600,
+  "maxTO": 19300,
+  "engines": [
+   "2 × Soyuz/Tumansky R-195 turbojet engine (44.18 kN)"
+  ],
+  "avionics": "*Phazotron Kopyo radar",
+  "guns": "; **1 × 30 mm Gryazev-Shipunov GSh-30-2 autocannon with 250 rounds **SPPU-22 gun pods for 2 × 23 mm Gryazev-Shipunov GSh-23 autocannons with 260 rounds",
+  "missiles": "",
+  "g": 6.5
+ },
+ "su34": {
+  "article": "Sukhoi Su-34",
+  "variant": "Sukhoi, Gordon and Davison, airforce-technology.com, airwar.ru, ria.ru, deagel.com",
+  "crew": "2 (side by side seating)",
+  "length": 23.34,
+  "span": 14.7,
+  "speed": 1900,
+  "mach": null,
+  "climb": null,
+  "ceiling": 17000,
+  "gross": 39000,
+  "maxTO": 45100,
+  "engines": [
+   "2 × Saturn AL-31FM1 afterburning turbofan engines hp ( kW) lbf ( kN), 132 kN with afterburner"
+  ],
+  "avionics": "*V004 passive electronically scanned array radar *Khibiny electronic countermeasures system *SAP-14 electronic coutermeasures system *SAP-518 electronic coutermeasures system *UKR-RT SIGINT radio surveillance system *L150 Pastel radar warning receiver",
+  "guns": "1 × 30 mm Gryazev-Shipunov GSh-30-1 autocannon with 180 rounds",
+  "missiles": "",
+  "g": 9
+ },
+ "ki21": {
+  "article": "Mitsubishi Ki-21",
+  "variant": "The Concise Guide to Axis Aircraft of World War II",
+  "crew": "5-7",
+  "length": 16,
+  "span": 22.5,
+  "speed": 485,
+  "mach": null,
+  "climb": null,
+  "ceiling": 10000,
+  "gross": 10600,
+  "maxTO": null,
+  "engines": [
+   "2 × Mitsubishi Ha101 14-cylinder air-cooled radial piston engine 1500 hp"
+  ],
+  "avionics": "",
+  "guns": "; ** 5 × 7.7 mm flexible Type 89 machine guns in nose, ventral, beam and tail positions ** 1 × 12.7 mm Ho-103 machine gun in dorsal turret",
+  "missiles": "",
+  "g": null
+ },
+ "d3a": {
+  "article": "Aichi D3A",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "2",
+  "length": 10.195,
+  "span": 14.365,
+  "speed": 430,
+  "mach": null,
+  "climb": null,
+  "ceiling": 10500,
+  "gross": 3800,
+  "maxTO": null,
+  "engines": [
+   "1 × Mitsubishi Kinsei 54 14-cylinder air-cooled radial piston engine 1,300 hp"
+  ],
+  "avionics": "",
+  "guns": "2 × forward-firing 7.7 mm Type 97 aircraft machine guns in the forward fuselage upper decking + 1 × 7.7 mm Type 92 machine gun on a flexible mount in the rear cockpit",
+  "missiles": "",
+  "g": null
+ },
+ "ki45": {
+  "article": "Kawasaki Ki-45",
+  "variant": "Japanese Aircraft of the Pacific War",
+  "crew": "2",
+  "length": 11,
+  "span": 15.02,
+  "speed": 540,
+  "mach": null,
+  "climb": 11.7,
+  "ceiling": 10000,
+  "gross": 8820,
+  "maxTO": null,
+  "engines": [
+   "2 × Mitsubishi Ha-102 14-cylinder air-cooled radial piston engines (783 kW)"
+  ],
+  "avionics": "",
+  "guns": "",
+  "missiles": "",
+  "g": null
+ },
+ "f1j": {
+  "article": "Mitsubishi F-1",
+  "variant": "Mitsubishi's Sabre Successor",
+  "crew": "1",
+  "length": 17.86,
+  "span": 7.88,
+  "speed": 1700,
+  "mach": null,
+  "climb": null,
+  "ceiling": 15240,
+  "gross": null,
+  "maxTO": 13674,
+  "engines": [
+   "2 × Ishikawa-Harima TF40-801A afterburning turbofan engines hp ( kW) (22.8 kN), 35.6 kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "1× 20 mm (0.787 in) JM61A1 Vulcan 6-barreled Gatling cannon",
+  "missiles": "",
+  "g": null
+ },
+ "br14": {
+  "article": "Breguet 14",
+  "variant": "French aircraft of the First World War, Profile #157 :The Breguet 14",
+  "crew": "Two",
+  "length": 8.87,
+  "span": null,
+  "speed": 195,
+  "mach": null,
+  "climb": 4.867,
+  "ceiling": 6200,
+  "gross": 1769,
+  "maxTO": null,
+  "engines": [
+   "1 × Renault 12Fcx V-12 water-cooled piston engine 300 hp"
+  ],
+  "avionics": "",
+  "guns": "1 × fixed 7.7 mm Vickers machine gun + 2 × flexible 7.7 mm Lewis Gun on T.O.3 or T.O.4 mount for the observer",
+  "missiles": "",
+  "g": null
+ },
+ "amiot143": {
+  "article": "Amiot 143",
+  "variant": "",
+  "crew": "Five (pilot, navigator/bombardier, radio operator, nose and dorsal gunners)",
+  "length": 18.24,
+  "span": 24.53,
+  "speed": 295,
+  "mach": null,
+  "climb": null,
+  "ceiling": 7500,
+  "gross": 8611,
+  "maxTO": 10360,
+  "engines": [
+   "2 × Gnome-Rhône 14Kirs/Kjrs 14-cyl. air-cooled radial engines 858 hp"
+  ],
+  "avionics": "",
+  "guns": "4 × 7.5 mm MAC 1934 machine guns (one each in nose and dorsal turrets, forward gondola and rear gondola)",
+  "missiles": "",
+  "g": null
+ },
+ "leo451": {
+  "article": "Lioré et Olivier LeO 45",
+  "variant": "The Lioré et Olivier LeO 45 Series (Aircraft in Profile 173)",
+  "crew": "4",
+  "length": 17.17,
+  "span": 22.52,
+  "speed": 495,
+  "mach": null,
+  "climb": null,
+  "ceiling": 9000,
+  "gross": null,
+  "maxTO": 11398,
+  "engines": [
+   "1 × Gnome-Rhône 14N−48 14-cylinder air-cooled radial piston engine (790 kW)",
+   "1 × Gnome-Rhône 14N−49 14-cylinder air-cooled radial piston engine (790 kW)"
+  ],
+  "avionics": "",
+  "guns": "; ** 1 × 20 mm Hispano-Suiza HS.404 cannon in dorsal turret with 120 rounds ** 1 × 7.5 mm MAC 1934 fixed forward-firing machine gun with 300 rounds ** 1 × 7.5 mm MAC 1934 in \"dustbin\" retractable ventral turret with 500 rounds",
+  "missiles": "",
+  "g": null
+ },
+ "vautour": {
+  "article": "Sud Aviation Vautour",
+  "variant": "Jet Bombers: From the Messerschmitt Me 262 to the Stealth B-2,",
+  "crew": "1",
+  "length": 15.57,
+  "span": 15.1,
+  "speed": 1106,
+  "mach": 0.9,
+  "climb": 60,
+  "ceiling": 15200,
+  "gross": 17500,
+  "maxTO": 21000,
+  "engines": [
+   "2 × SNECMA Atar 101E-3 turbojet engines (34.3 kN), kN with afterburner"
+  ],
+  "avionics": "",
+  "guns": "4 × 30&nbsp;mm DEFA cannon, 100 rounds per gun * Internal weapons bay: Maximum of 2,725&nbsp;kg (6,000 lb) of bombs (typically six 450&nbsp;kg (1,000 lb) bombs), pack of 116 × 68&nbsp;mm (2.7 in) rockets, camera pack, or two 1,500 liter (400 U.S. gal) fuel tanks",
+  "missiles": "",
+  "g": null
+ },
+ "jaguar": {
+  "article": "SEPECAT Jaguar",
+  "variant": "Jane's All The World's Aircraft 1980–81",
+  "crew": "1 (A and S); 2 (B and E)",
+  "length": 16.83,
+  "span": 8.69,
+  "speed": 1350,
+  "mach": null,
+  "climb": null,
+  "ceiling": 14000,
+  "gross": 10954,
+  "maxTO": 15700,
+  "engines": [
+   "2 × Rolls-Royce Turbomeca Adour Mk.102 afterburning turbofan engines 5110 lbf (22.75 kN), 32.5 kN with afterburner"
+  ],
+  "avionics": "*EL/M-2052 AESA radar, as a part of Indian Air Force's DARIN III upgrade program. *ATLIS II laser/electro-optical targeting pod *ECM protection pod *Reconnaissance pod",
+  "guns": "2× 30 mm calibre DEFA cannon with up to 150 rounds/gun",
+  "missiles": "",
+  "g": 8.6
+ }
+}
