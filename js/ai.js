@@ -222,10 +222,18 @@ class BotBrain {
     else if (d < 350 && off < 0.12 && this.burst <= 0 && Math.random() < dt * 3) this.burst = 0.25;
     if (this.burst > 0) { this.burst -= dt; fire = d < range * 1.2; }
     // missiles
+    // fire discipline as real pilots had it: inside the range where the missile can still catch the target (about half
+    // the rated range head-on, a third in a tail chase, where the target runs away from it), a proper lock first (a
+    // second for a heat seeker, two for a radar missile), and not a second missile while one is still on its way
     const st = c.missileStation();
-    if (st && this.missileCd <= 0 && d < st.s.range * 0.75 && d > 400) {
-      const seen = c.seekerTarget(st); if (seen && st.s.seek !== 'ir') seen.wLock = m.time; // our radar on it
-      if (seen === t) { this.lockT += dt * 3; if (this.lockT > 1.2) { c.fireMissile(t); this.missileCd = 6 + Math.random() * 6; this.lockT = 0; } } else this.lockT = 0;
+    if (st && this.missileCd <= 0 && d > 500) {
+      const tf = t.vel.clone().normalize(), aspect = rel.clone().normalize().dot(tf); // +1: we are behind it (tail chase), -1: head-on
+      const nez = st.s.range * (0.55 - 0.125 * (aspect + 1)) * (0.8 + this.skill * 0.25);
+      const busy = m.combat.missiles.some(x => x.owner === c && x.target === t);
+      if (d < nez && !busy) {
+        const seen = c.seekerTarget(st); if (seen && st.s.seek !== 'ir') seen.wLock = m.time; // our radar on it
+        if (seen === t) { this.lockT += dt; if (this.lockT > (st.s.seek === 'ir' ? 1 : 2)) { c.fireMissile(t); this.missileCd = 10 + Math.random() * 10; this.lockT = 0; } } else this.lockT = 0;
+      } else this.lockT = 0;
     }
     // rockets at bombers (R4M-style)
     if (this.rocketCd <= 0 && c.count('r') > 0 && t.def.role === 'bomber' && d < 700 && off < 0.04) { c.fireRockets(); this.rocketCd = 1.5; }

@@ -265,7 +265,12 @@ const HUD = (() => {
     // coming at us. An aircraft without them gets no warning: look out for the smoke trail
     const recent = t => t != null && m.time - t < 0.3;
     const rLaunch = p.def.rwr && recent(p.wLaunch), rLock = p.def.rwr && recent(p.wLock), maws = p.def.maws && recent(p.wMaws);
-    if (rLaunch || maws) { w.push([maws && !rLaunch ? 'MISSILE APPROACH' : 'MISSILE LAUNCH', '#ff3b30', true]); cues.push('missile'); }
+    // which way it comes from (the warner shows it; the eye sees the smoke trail): a clock position, high or low
+    const inc = m.combat.missiles.filter(x => x.target === p && !x.decoy).sort((a, b) => a.p.distanceTo(p.pos) - b.p.distanceTo(p.pos))[0];
+    const clock = inc ? (() => { const r = inc.p.clone().sub(p.pos).applyQuaternion(p.quat.clone().invert()), h = Math.round(((Math.atan2(r.x, -r.z) * 180 / Math.PI + 360) % 360) / 30) || 12; return ` · ${h} o'clock${r.y > r.length() * 0.3 ? ' high' : r.y < -r.length() * 0.3 ? ' low' : ''}`; })() : '';
+    const seenIt = recent(p.wSeen) && !real; // arcade: the smoke trail of a missile you can see coming
+    if (rLaunch || maws) { w.push([(maws && !rLaunch ? 'MISSILE APPROACH' : 'MISSILE LAUNCH') + clock, '#ff3b30', true]); cues.push('missile'); }
+    else if (seenIt) { w.push(['MISSILE (smoke trail)' + clock, '#ff3b30', true]); cues.push('missile'); }
     else if (rLock) { w.push(['RADAR LOCK', '#ffc04d']); if (Math.floor(m.time * 2) % 2 === 0) cues.push('lock'); }
     const ahead = p.pos.clone().addScaledVector(p.vel, 4), agl = p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
     if (ahead.y < m.world.groundAt(ahead.x, ahead.z) + 20 && p.vel.y < -5) { w.push(['PULL UP', '#ff3b30', true]); cues.push('pullup'); }
