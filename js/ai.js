@@ -62,6 +62,12 @@ class BotBrain {
     if (!dir && (Math.abs(c.pos.x) > H || Math.abs(c.pos.z) > H)) { dir = new V3(-c.pos.x, 0, -c.pos.z).normalize(); dir.y = 0.1; }
     // ---- altitude ceiling (keeps bots in the fight)
     if (!dir && c.pos.y > m.ceiling) { dir = fwd.clone(); dir.y = -0.3; dir.normalize(); }
+    // ---- collision avoidance: another aircraft converging within about two seconds: pull away from it (up when level)
+    if (!dir) { let worst = null, wt = 2.2;
+      for (const o of m.crafts) { if (o === c || !o.alive || o.wreck) continue; const rp = o.pos.clone().sub(c.pos), d = rp.length(); if (d > 400) continue;
+        const rv = o.vel.clone().sub(c.vel), tc = -rp.dot(rv) / Math.max(1, rv.lengthSq()); if (tc < 0 || tc > wt) continue;
+        const miss = rp.clone().addScaledVector(rv, tc).length(); if (miss < (c.dm.radius + o.dm.radius) * 1.4 + 10) { worst = o; wt = tc; } }
+      if (worst) { const away = c.pos.clone().sub(worst.pos).normalize(); away.y += 0.5; dir = fwd.clone().add(away.multiplyScalar(1.5)).normalize(); keepBank = true; } }
     // ---- missile evasion
     if (!dir && c.missileWarn > 0.5 && this.skill > 0.3) {
       const ms = m.combat.missiles.find(x => x.target === c && !x.decoy);

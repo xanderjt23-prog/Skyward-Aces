@@ -291,6 +291,7 @@ class Match {
         else if (c.everSpawned && c.isBot && c.respawnAt && this.time >= c.respawnAt && this.canRespawn(c)) this.spawnCraft(c);
       } else c.remoteUpdate(dt);
     }
+    if (this.cfg.realistic) this.collisions();
     this.updateWrecks(dt);
     this.world.update(dt, this.cameraPos);
     this.vehicles.update(dt);
@@ -327,6 +328,33 @@ class Match {
     if (att === this.player) this.hitMarker = this.time;
     if (c.local) this.applyHits(c, hits, Object.assign({}, info, { attacker: aid }));
     else this.send({ t: 'hit', to: c.id, h: hits.map(x => [x.ci, Math.round(x.dmg * 10) / 10]), a: aid, f: info.fire, p: info.pen, c: info.cal, b: info.fromBehind ? 1 : 0, k: info.kind }, c);
+  }
+  // mid-air collisions (Realistic mode): the hit boxes of two aircraft that touch are damaged by the impact, more the
+  // faster they closed: a brush clips a wing tip or a tail, a real impact destroys both. Every machine damages only its
+  // own aircraft (the other machine does the same for its own), so nothing is counted twice.
+  collisions() {
+    const cs = this.crafts.filter(c => c.alive && c.dm && !c.dm.destroyed), iq = new THREE.Quaternion(), a = new V3(), b = new V3(), boxB = new THREE.Box3(), boxA = new THREE.Box3();
+    for (const A of cs) {
+      if (!A.local || A.wreck) continue;
+      for (const B of cs) {
+        if (B === A || (A.onGround && B.onGround)) continue;
+        if (B.team === A.team && (this.time - (A.spawnT || 0) < 25 || this.time - (B.spawnT || 0) < 25)) continue; // a squadron taking off / forming up keeps its spacing
+        const d = A.pos.distanceTo(B.pos); if (d > A.dm.radius + B.dm.radius) continue;
+        A.collT = A.collT || {}; if (this.time - (A.collT[B.id] || -9) < 1) continue;
+        // B's hit boxes in A's frame, against A's
+        iq.copy(A.quat).invert(); const hitsA = new Map();
+        for (const cb of B.dm.comps) { const pts = []; for (let k = 0; k < 8; k++) pts.push(new V3(k & 1 ? cb.hi.x : cb.lo.x, k & 2 ? cb.hi.y : cb.lo.y, k & 4 ? cb.hi.z : cb.lo.z).applyQuaternion(B.quat).add(B.pos).sub(A.pos).applyQuaternion(iq));
+          boxB.setFromPoints(pts); // the part's own corners, turned into A's frame
+          A.dm.comps.forEach((ca, i) => { boxA.set(ca.lo, ca.hi); if (boxA.intersectsBox(boxB)) hitsA.set(i, (hitsA.get(i) || 0) + 1); }); }
+        if (!hitsA.size) continue;
+        A.collT[B.id] = this.time;
+        const vrel = A.vel.distanceTo(B.vel), dmg = Math.min(5000, vrel * vrel * 0.45 + 30);
+        const hits = [...hitsA.keys()].map(ci => ({ ci, dmg }));
+        this.applyHits(A, hits, { attacker: B.team !== A.team ? B.id : null, fire: 0.5, pen: 1, cal: 40, kind: 'collision' }); this.collLog = (this.collLog || 0) + 1; if (B.team === A.team) this.collSame = (this.collSame || 0) + 1;
+        if (A === this.player || B === this.player) this.events.push({ t: this.time, e: 'msg', text: `Mid-air collision with ${B === this.player ? A.name : B.name} (${Math.round(vrel * 3.6)} km/h)` });
+        Sound.boom && Sound.boom(Math.min(2, vrel / 60), A.pos);
+      }
+    }
   }
   applyHits(c, hits, info) {
     if (!c.alive || !c.dm) return;
