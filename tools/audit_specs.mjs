@@ -169,7 +169,7 @@ for (const pl of PLANE_LIST) {
     // everything aft of the exhaust plane must still be carried: a central fin root by the fairing above the jets, fuselage tailplanes by side strakes
     if (e.fuselageArchitecture === 'SINGLE_TUBE' && sp.engines.some(g => g.kind === 'fus')) {
       for (const f of sp.fins) if (Math.abs(f.x) < 0.5 && f.zLE + f.rc > sp.nozzleZ + 0.15 && !(sp.boom && sp.boomEnd >= f.zLE + f.rc)) flag(id, 'fin root overhangs the exhausts with nothing under it');
-      if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > sp.nozzleZ && !sp.strakes) flag(id, 'tailplane root aft of the exhaust plane with nothing to carry it');
+      if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > sp.nozzleZ && !sp.strakes && !(sp.boom && sp.stab.zLE + sp.stab.rc * 0.5 < sp.boomEnd)) flag(id, 'tailplane root aft of the exhaust plane with nothing to carry it');
       if (sp.nozzleZ + Math.max(...fj.map(g => g.nl || 0)) > pl.len / 2 + 0.05) flag(id, 'nozzles stick out past the published overall length'); }
   }
   // dual-surface layout: the tailplane is a separate surface, clear of the main wing's trailing edge over their common span

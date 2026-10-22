@@ -407,8 +407,9 @@
         body.add(latheRing([[0.001, zf - e.r * 0.2], [e.r * 0.3, zf + e.r * 0.2], [0.001, zf + e.r * 0.2]], 14, 'fan hub', e.x, e.y), e.kind === 'pod' ? 0x8a8a8a : metal);
         nozzle({ r: e.r * 0.72 }, e.x, e.y, e.z + e.len / 2);
         if (e.kind === 'underwing') { const wa = sp.wingAt(sp.wingF(e.x)); body.add(box(0.12, Math.max(0.1, wa.y - e.y - e.r * 0.6), e.len * 0.45), camo, [e.x, (wa.y + e.y + e.r * 0.6) / 2, e.z - e.len * 0.05]); }
-        if (e.kind === 'pod') { const ft = sp.topAt(e.z, e.x * 0.4), side = Math.sign(e.x); // pylon from the upper rear fuselage
-          const py = box(0.18, Math.max(0.2, e.y - e.r * 0.7 - ft + 0.25), e.len * 0.42); py.rotateZ(side * 0.5); body.add(py, camo, [e.x * 0.72, (e.y - e.r * 0.7 + ft) / 2, e.z]); }
+        if (e.kind === 'pod') { const side = Math.sign(e.x); // pylon from the upper rear fuselage into the underside of the pod
+          const ax = e.x * 0.4, ay = sp.topAt(e.z, ax) - 0.15, bx = e.x - side * e.r * 0.35, by = e.y - e.r * 0.55, len = Math.hypot(bx - ax, by - ay);
+          const py = box(0.18, len, e.len * 0.42); py.rotateZ(-Math.atan2(bx - ax, by - ay)); body.add(py, camo, [(ax + bx) / 2, (ay + by) / 2, e.z]); }
       } else if (e.kind === 'sidenac' || e.kind === 'nacelle') { // jet nacelles
         nacelle(e, [[0, 0.88, 0.92], [0.06, 0.98, 1], [0.5, 1, 1], [0.85, 0.96, 0.94], [1, 0.84, 0.82]], e.kind);
         nozzle({ r: e.r * 0.84, style: e.style, nl: e.style ? e.r * 0.5 : undefined }, e.x, e.y, e.z + e.len / 2);
@@ -548,7 +549,10 @@
         const tank = [0, 0.1, 0.3, 0.7, 0.9, 1].map((t, k) => ({ z: tip.le + tip.c * 0.4 - tl * 0.5 + t * tl, w: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], h: tr * [0.05, 0.7, 1, 1, 0.7, 0.05][k], y: tip.y, x: tip.x + tr * 0.2 }));
         const tg = loftBody(tank, 16, 2, 'tip tank'); wr.add(tg, camo); wl.add(mirrorX(tg), camo); }
       if (rule(g.fences && i === 0, 'wing fences')) for (let k = 0; k < g.fences; k++) { const w = sp.wingAt(0.3 + k * 0.22, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(box(0.03, g.t * w.c + 0.12, w.c * 0.9), shade(pt.top, 0.92), [s * w.x, w.y + 0.05, w.le + w.c * 0.47]); }
-      if (rule(g.tiprail && i === 0, 'wing-tip missile rails')) { const tip = sp.wingAt(1, g); for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(cyl(0.08, 0.08, tip.c * 1.6, 8), metal, [s * (tip.x + 0.05), tip.y, tip.le + tip.c * 0.4], [Math.PI / 2, 0, 0]); }
+      if (rule(g.tiprail && i === 0, 'wing-tip missile rails')) { // along the tip chord of the wing as built, its nose a little ahead of the leading edge
+        const pa = geo.attributes.position; let mx = 0; for (let k = 0; k < pa.count; k++) mx = Math.max(mx, pa.getX(k));
+        let z0 = 1e9, z1 = -1e9, ys = 0, n = 0; for (let k = 0; k < pa.count; k++) if (pa.getX(k) > mx - 0.06) { z0 = Math.min(z0, pa.getZ(k)); z1 = Math.max(z1, pa.getZ(k)); ys += pa.getY(k); n++; }
+        const len = (z1 - z0) + 0.5; for (const [b, s] of [[wr, 1], [wl, -1]]) b.add(cyl(0.08, 0.08, len, 8), metal, [s * (mx + 0.04), ys / n, z0 - 0.4 + len / 2], [Math.PI / 2, 0, 0]); }
     });
     if (sp.arch === 'TWIN_NACELLE_DECK' && rule(sp.extra.lerx, 'lexPresence: flat, sharp LEX shelf from the wing root forward along the cockpit')) {
       const w0 = sp.wingAt(0), zA = Math.max(sp.tunnel.zA - 0.3, cp.z + cp.len * 0.2), q = sp.tunnel.at(w0.le), y = q.y + q.h + 0.03;
@@ -604,7 +608,7 @@
     } else if (rule(has('fixedGear'), 'fixed undercarriage')) for (const s of [-1, 1]) {
       const gx = s * S * 0.15, w = wingGunAt(gx), gy = w.y - R * 1.2, gz = w.le + w.c * 0.3;
       body.add(loftSurface([{ x: 0, le: -0.2, c: has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }, { x: w.y - gy, le: -0.2, c: has('spats') ? 0.42 : 0.25, y: 0, t: 0.3 }], 6, 'gear leg').rotateZ(-Math.PI / 2), camo, [gx, w.y + 0.05, gz]);
-      if (rule(has('spats'), 'streamlined wheel spats')) body.add(loftBody([0, 0.15, 0.45, 0.8, 1].map((t, k) => ({ z: gz - 0.55 + t * 1.15, w: 0.17 * [0.2, 0.8, 1, 0.75, 0.15][k], h: 0.36 * [0.25, 0.85, 1, 0.8, 0.2][k], y: gy })), 14, 2, 'spat'), camo);
+      if (rule(has('spats'), 'streamlined wheel spats')) body.add(loftBody([0, 0.15, 0.45, 0.8, 1].map((t, k) => ({ z: gz - 0.55 + t * 1.15, w: 0.17 * [0.2, 0.8, 1, 0.75, 0.15][k], h: 0.36 * [0.25, 0.85, 1, 0.8, 0.2][k], y: gy, x: gx })), 14, 2, 'spat'), camo);
       else { const wh = latheRing([[0.1, -0.07], [0.3, -0.07], [0.3, 0.07], [0.1, 0.07]], 16, 'wheel'); wh.rotateY(Math.PI / 2); body.add(wh, dark, [gx, gy, gz]); }
     }
     if (rule(has('bracingWires') && !sp.bi, 'monoplane wing bracing wires')) for (const s of [-1, 1]) { const w = wingGunAt(s * S * 0.3); for (const yy of [sp.topAt(cz - 0.5) - 0.02, sp.botAt(cz - 0.5) + 0.05]) (s < 0 ? wl : wr).add(tube([new V(s * sp.at(cz - 0.5).w * 0.7, yy, cz - 0.5), new V(s * w.x, w.y, w.le + w.c * 0.4)], 0.012), 0x9a9a9a); }

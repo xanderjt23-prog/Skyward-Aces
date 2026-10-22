@@ -1391,7 +1391,7 @@ const Airframe = (() => {
     const mkFin = (x, base, cant, h) => sp.fins.push({ x, base, cant: cant * D, h, below: 0, zLE: finZ, rc: tl.finChord, tc: tl.finChord * tl.finTaper, sw: finSw, t: jet ? 0.05 : 0.1, round: !jet });
     switch (e.tailConfiguration) {
       case 'twin_endplate': { const tipY = sp.stab.y + Math.tan(sp.stab.dih) * (sp.stab.b - sp.stab.x0), up = Math.max(0.5, yTopFin - tipY), hh = up / (1 - tl.finBelow);
-        for (const s of [-1, 1]) mkFin(s * sp.stab.b, tipY - hh * tl.finBelow, 0, hh); break; }
+        for (const s of [-1, 1]) mkFin(s * (sp.stab.b - 0.12), tipY - hh * tl.finBelow, 0, hh); break; } // (on the tip itself: the rounded tip ends just inside b)
       case 'twin_boom': { const up = Math.max(0.5, yTopFin - sp.stab.y), hh = up / (1 - tl.finBelow); for (const s of [-1, 1]) mkFin(s * sp.stab.b, sp.stab.y - hh * tl.finBelow, 0, hh); break; }
       case 'twin_vertical_straight': case 'twin_vertical_canted': {
         const cant = e.tailConfiguration === 'twin_vertical_canted' ? e.finCantDeg : 0;
@@ -1430,7 +1430,11 @@ const Airframe = (() => {
           const top = top0 - (top0 - bot - 0.06) * Math.pow(u, 3); // closes down over its last part
           return { w: Math.max(0.12, Math.min(s.w, (top0 - bot) * 0.9)) * (1 - 0.6 * Math.pow(u, 2)), h: Math.max(0.03, (top - bot) / 2), y: (top + bot) / 2 }; };
         sp.boomEnd = bEnd; note('fairing above the exhausts carries the fin root to ' + (bEnd - z0).toFixed(2) + ' m'); }
-      if (sp.stab && e.horizontalTail === 'fuselage' && sp.stab.zLE + sp.stab.rc * 0.5 > zS - 0.1) {
+      const zMidS = sp.stab ? sp.stab.zLE + sp.stab.rc * 0.5 : 0;
+      if (sp.stab && e.horizontalTail === 'fuselage' && sp.boom && sp.stab.y >= floor - 0.05 && zMidS < sp.boomEnd) {
+        // F-4: the stabilators pivot on the tail cone above the exhausts, so their roots sit on the cone's sides
+        const bw = sp.boom(zMidS); sp.stab.x0 = Math.max(0.05, bw.w * 0.92); note('tailplanes on the tail cone above the exhausts, from ' + sp.stab.x0.toFixed(2) + ' m');
+      } else if (sp.stab && e.horizontalTail === 'fuselage' && zMidS > zS - 0.1) {
         const ox = Math.max(...fus.map(g => Math.abs(g.x) + g.r * g.sx)) + 0.06;
         sp.strakes = { x: ox, y: sp.stab.y, z0: zS - 0.6, z1: sp.stab.zLE + sp.stab.rc + 0.05, w: 0.1, h: 0.09 };
         sp.stab.x0 = Math.max(sp.stab.x0, ox); note('tailplanes on side strakes beside the nozzle, from ' + (ox).toFixed(2) + ' m');
