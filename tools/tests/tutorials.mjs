@@ -23,6 +23,7 @@ export default async function (t) {
       if (/Release|release/.test(st.text({ m, p, T })) && !/Keep dropping|more passes/.test(st.text({ m, p, T }))) { if (id === 'divebomb') p.pos.y = gy(p.pos.x, p.pos.z) + 800; p.dropBomb(); }
       if (/Pull out/.test(st.text({ m, p, T }))) { p.vel.set(0, 30, -90); p.pos.y = gy(p.pos.x, p.pos.z) + 400; }
       if (/destroyed/.test(st.text({ m, p, T }))) { tb.hp = 0; tb.dead = true; } }
+    if (id === 'ccip') { if (i === 0) { p.pos.x = tb.pos.x; p.pos.z = tb.pos.z + 4000; p.vel.set(0, 0, -230); } if (i === 1) p.vel.set(0, -90, -210); if (i === 2) { p.pos.y = gy(p.pos.x, p.pos.z) + 900; p.dropBomb(); } if (i === 3) { tb.hp = 0; tb.dead = true; } }
     if (id === 'rockets') { const v = m.vehicles.list.find(v => !v.dead); if (i === 0) { p.pos.copy(v.pos).add(new V(0, 400, 900)); p.vel.set(0, -40, -120); } if (i === 1) p.fireRockets(); if (i === 2) m.vehicles.list.slice(0, 2).forEach(v => { v.hp = 0; v.dead = true; }); }
     if (id === 'missiles') { if (i === 0) { Game.locked = true; } if (i === 1 || i === 2) kill(m.crafts.find(c => c.team === 1 && c.alive)); if (i === 3) kill(m.crafts.find(c => c.team === 1 && c.alive)); }
     if (id === 'flares') { T.survived = i + 1; }

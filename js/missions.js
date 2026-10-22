@@ -153,7 +153,7 @@ const ACHIEVEMENTS = [
   { id: 'massive', tier: 1, name: 'Wide Open Skies', desc: 'Fly a whole battle on a Massive map.', icon: '🗺️', stat: 'massiveBattles', goal: 1 },
   { id: 'eras7', tier: 3, name: 'Through the Ages', desc: 'Fly battles in aircraft from all 7 eras.', icon: '⏳', stat: 'erasFlown', goal: 7 },
   { id: 'tut_man', tier: 1, name: 'Aerobat', desc: 'Complete every Basic Flight Maneuvers tutorial.', icon: '🔄', stat: 'maneuverTuts', goal: 5 },
-  { id: 'tut_all', tier: 2, name: 'Flight School Graduate', desc: 'Complete every tutorial.', icon: '🎓', stat: 'tutorials', goal: 12 },
+  { id: 'tut_all', tier: 2, name: 'Flight School Graduate', desc: 'Complete every tutorial.', icon: '🎓', stat: 'tutorials', goal: 13 },
   { id: 'mp10', tier: 2, name: 'Wingman', desc: 'Fly 10 multiplayer battles.', icon: '🤝', stat: 'mpBattles', goal: 10 },
   { id: 'mpwin10', tier: 3, name: 'Squadron Leader', desc: 'Win 10 multiplayer battles.', icon: '🏅', stat: 'mpWins', goal: 10 },
   { id: 'mpk25', tier: 3, name: 'Online Ace', desc: 'Shoot down 25 aircraft in multiplayer battles.', icon: '🛰', stat: 'mpKills', goal: 25 },

@@ -118,7 +118,7 @@ const Profile = (() => {
     p.stats.owned = owned.length; p.stats.jets = owned.filter(x => x.kind === 'jet').length; p.stats.modern = owned.filter(x => x.era === 7).length;
     p.stats.level = levelInfo().level; p.stats.nationsWon = Object.keys(p.stats.nationWins || {}).length;
     p.stats.erasFlown = new Set(Object.keys(p.stats.planeUse || {}).map(id => PLANES[id] && PLANES[id].era).filter(Boolean)).size;
-    if (typeof Tutorial !== 'undefined') { const t = p.tut || {}; p.stats.tutorials = Tutorial.LIST.filter(x => t[x.id]).length; p.stats.maneuverTuts = Tutorial.LIST.filter(x => x.cat === 'man' && t[x.id]).length; }
+    if (typeof Tutorial !== 'undefined') { const t = p.tut || {}; for (const a of ACHIEVEMENTS) { if (a.id === 'tut_all') a.goal = Tutorial.LIST.length; if (a.id === 'tut_man') a.goal = Tutorial.LIST.filter(x => x.cat === 'man').length; } p.stats.tutorials = Tutorial.LIST.filter(x => t[x.id]).length; p.stats.maneuverTuts = Tutorial.LIST.filter(x => x.cat === 'man' && t[x.id]).length; }
   }
   // unlocking pays the achievement's reward (coins and XP); achievements unlocked before rewards existed are paid once
   function pay(a) { if (p.achPaid[a.id]) return; const r = ACH_REWARD[a.tier || 1]; p.coins += r.coins; p.xp += r.xp; p.totalXp += r.xp; p.achPaid[a.id] = Date.now(); }

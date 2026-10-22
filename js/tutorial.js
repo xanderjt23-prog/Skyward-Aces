@@ -121,6 +121,14 @@ const Tutorial = (() => {
         { text: () => `Pull out! Let go of the brakes and climb away.`, done: c => c.p.vel.y > 0 && agl(c.m, c.p) > 150 },
         { text: () => `Did it hit? Make more passes until the camp is destroyed (bombs are reloaded when you run out).`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
       ] },
+    { id: 'ccip', cat: 'mech', fits: pl => pl.kind === 'jet' && carries(pl, s => s.kind === 'b'), name: 'Jet bombing with CCIP', icon: '🎯', plane: 'f16c', desc: 'The F-16C with Mk 82 bombs: the head-up display computes the impact point continuously (CCIP). Dive at the target, fly the pipper onto it and release.',
+      start: { alt: 2500, z: 6000 }, lo: pl => loadout(pl, 'b', ['mk82']), target: { size: 'small', kind: 'camp', x: 0, z: -1500 },
+      steps: [
+        { text: () => `A camp is ahead. Fly towards it and line it up straight ahead of you.`, done: c => c.onCourse(250) && c.hdist(enemyBase(c.m).pos) < 6500 },
+        { text: () => `Push over into a 20-30° dive towards it (mouse, or ${K('pitchDown')}). The circle on the line below the flight-path marker is the CCIP pipper: where a bomb released now would hit.`, done: c => diveDeg(c.p) < -15 },
+        { text: () => `Fly the pipper onto the camp. When it turns red and reads RELEASE, drop with ${WK(s => s.kind === 'b')}.`, done: c => c.p.count('b') < c.full },
+        { text: () => `Pull out and climb away. Make more passes until the camp is destroyed (bombs are reloaded when you run out).`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
+      ] },
     { id: 'rockets', cat: 'mech', fits: pl => carries(pl, s => s.kind === 'r'), name: 'Ground attack with rockets', icon: '🚀', plane: 'p47d', desc: 'The P-47D with 5-inch HVAR rockets against a column of tanks: a shallow dive, aim ahead of the target, fire in pairs.',
       start: { alt: 1200, z: 3500 }, lo: pl => loadout(pl, 'r'), tanks: 4,
       steps: [
