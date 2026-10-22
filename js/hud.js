@@ -240,7 +240,7 @@ const HUD = (() => {
   }
   // ---- radar (heading up)
   function radar(game, p) {
-    const m = game.match, R = 80, cx = W - R - 22, cy = H - R - 22, range = Math.max(4000, m.half * 0.6);
+    const m = game.match, R = 80, cx = W - R - 22, cy = H - R - 22, range = Math.max(4000, Math.min(m.half, m.spread * 1.5) * 0.6);
     g.fillStyle = 'rgba(8,14,22,0.55)'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill(); ring(cx, cy, R, 'rgba(255,255,255,0.25)', 1); ring(cx, cy, R / 2, 'rgba(255,255,255,0.12)', 1);
     const f = new THREE.Vector3(0, 0, -1).applyQuaternion(p.quat), hd = Math.atan2(f.x, -f.z);
     const pt = (pos) => { const dx = pos.x - p.pos.x, dz = pos.z - p.pos.z, c = Math.cos(-hd), s = Math.sin(-hd); const x = dx * c - dz * s, z = dx * s + dz * c, d = Math.hypot(x, z) / range * R; const a = Math.atan2(x, z); const r = Math.min(R - 3, d); return [cx + Math.sin(a) * r, cy + Math.cos(a) * r, d > R]; };

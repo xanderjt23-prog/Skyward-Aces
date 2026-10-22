@@ -59,7 +59,10 @@ const Plan = {
     const era = mission ? Math.max(1, Math.min(7, Math.round((eraAvg + mission.era) / 2))) : eraAvg;
     const map = mission ? mission.map : settings.map || Plan.pick(Object.keys(World.MAPS));
     const sizeMul = (World.SIZES[settings.size] || World.SIZES.medium).mul;
-    const half = MAP_HALF[era] * sizeMul * (mode === 'destroy' && Math.max(...settings.teamSize) > 20 ? 1.3 : 1);
+    // `half`: where the bases, spawns and objectives spread (up to the Large size); `worldHalf`: the whole map you can fly
+    // over (Massive: four times the area of the battle in each direction)
+    const crowd = mode === 'destroy' && Math.max(...settings.teamSize) > 20 ? 1.3 : 1;
+    const half = MAP_HALF[era] * Math.min(sizeMul, 1.5) * crowd, worldHalf = MAP_HALF[era] * sizeMul * crowd;
     const weather = settings.weather && settings.weather !== 'random' ? settings.weather : Plan.pick(['clear', 'scattered', 'scattered', 'overcast', 'rain', 'fog']);
     const roster = []; let nid = 1;
     const hum = humans.map(h => Object.assign({}, h, { id: nid++, bot: false }));
@@ -144,14 +147,14 @@ const Plan = {
       if (!homes.length) homes = [place(t, 'medium', 'airfield', 0.55, 0.8)];
       homes.forEach(b => b.home = true);
     }
-    return { mode, seed, era, map, half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid, realistic: !!settings.realistic, homeTeams, vehicles, weather, night: !!settings.night, size: settings.size || 'medium' };
+    return { mode, seed, era, map, half: worldHalf, spread: half, roster, bases, mission: mission ? mission.id : null, time: mode === 'missions' ? 15 * 60 : settings.time || 0, respawns, nid, realistic: !!settings.realistic, homeTeams, vehicles, weather, night: !!settings.night, size: settings.size || 'medium' };
   },
 };
 
 class Match {
   constructor(cfg, opt) {
     this.cfg = cfg; this.mode = cfg.mode; this.scene = opt.scene; this.isHost = opt.isHost !== false; this.net = !!opt.net; this.myPeer = opt.myPeer || 'H';
-    this.time = 0; this.era = cfg.era; this.half = cfg.half; this.over = false; this.result = null;
+    this.time = 0; this.era = cfg.era; this.half = cfg.half; this.spread = cfg.spread || cfg.half; this.over = false; this.result = null;
     this.mission = cfg.mission ? MISSIONS.find(m => m.id === cfg.mission) : null;
     this.spawnAlt = SPAWN_ALT[this.era]; this.patrolAlt = this.spawnAlt; this.ceiling = this.spawnAlt * 2.6 + 1500;
     this.scores = [0, 0]; this.feed = []; this.events = []; this.wave = 0; this.waveT = 6; this.debris = [];
@@ -222,7 +225,7 @@ class Match {
   // ---- spawning
   spawnPoint(team, i) {
     const s = team === 0 ? 1 : -1, row = Math.floor(i / 8), col = i % 8;
-    const pos = new V3((col - 3.5) * 140 + (Math.random() - 0.5) * 40, this.spawnAlt + (col % 3) * 60 + row * 30, s * this.half * 0.7 + s * row * 160);
+    const pos = new V3((col - 3.5) * 140 + (Math.random() - 0.5) * 40, this.spawnAlt + (col % 3) * 60 + row * 30, s * this.spread * 0.7 + s * row * 160);
     // never inside a mountain: clear the terrain here and for the first ~2 km ahead
     let top = 0; for (let d = 0; d <= 2000; d += 250) top = Math.max(top, this.world.groundAt(pos.x, pos.z - s * d));
     pos.y = Math.max(pos.y, top + 450 + (col % 3) * 60);
@@ -247,11 +250,11 @@ class Match {
     // (mission bomber raids still arrive in the air)
     if (this.groundTeam(c.team) && !(this.mode === 'missions' && c.spec.task === 'bomb') && this.spawnOnRunway(c, i)) return;
     const sp = this.spawnPoint(c.team, i);
-    if (this.mission && this.mission.type === 'intercept' && c.team === 0) { sp.pos.z = this.half * 0.25 + Math.floor(i / 8) * 160; sp.pos.y = this.spawnAlt * 1.2 + (i % 3) * 60; }
+    if (this.mission && this.mission.type === 'intercept' && c.team === 0) { sp.pos.z = this.spread * 0.25 + Math.floor(i / 8) * 160; sp.pos.y = this.spawnAlt * 1.2 + (i % 3) * 60; }
     if (c.def.role === 'bomber' || c.spec.task === 'bomb') {
       sp.pos.y = Math.max(sp.pos.y, this.spawnAlt * 1.3 + (i % 4) * 40);
       // raids start far out, giving the defenders time to climb and intercept
-      if (first) sp.pos.z = (c.team === 0 ? 1 : -1) * this.half * (this.mode === 'missions' ? 1.6 : 1.0) + (c.team === 0 ? 1 : -1) * Math.floor(i / 8) * 160;
+      if (first) sp.pos.z = (c.team === 0 ? 1 : -1) * Math.min(this.half * 0.97, this.spread * (this.mode === 'missions' ? 1.6 : 1.0)) + (c.team === 0 ? 1 : -1) * Math.floor(i / 8) * 160;
     }
     c.spawn(sp.pos, sp.heading, c.perf ? c.perf.vmax * 0.7 : PLANES[c.def.id].spd / 3.6 * 0.7);
     c.vel.setLength(c.perf.vmax * 0.72);

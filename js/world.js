@@ -16,7 +16,7 @@ const World = (() => {
     arctic:  { name: 'Arctic Sea', sea: 0.85, low: 0xe8eff3, mid: 0xd6e2ea, high: 0xb8c4cc, peak: 0xf8fbfc, sand: 0xc8d4da, sky: [0x8fb0d0, 0xe4ecf2], trees: 0, seaCol: 0x2f4f66 },
   };
   // map sizes: multiplier on the era's battle area
-  const SIZES = { small: { name: 'Small', mul: 0.7 }, medium: { name: 'Medium', mul: 1 }, large: { name: 'Large', mul: 1.5 } };
+  const SIZES = { small: { name: 'Small', mul: 0.7 }, medium: { name: 'Medium', mul: 1 }, large: { name: 'Large', mul: 1.5 }, massive: { name: 'Massive (4x)', mul: 4 } };
   // weather: cloud cover, visibility (fog as a fraction of the map), light, precipitation, turbulence
   const WEATHER = {
     clear:     { name: 'Clear', clouds: 20, cloudOp: 0.7, cloudCol: 0xffffff, fog: [0.5, 2.6], light: 1, skyMul: 1, precip: null, turb: 0 },
@@ -37,9 +37,11 @@ const World = (() => {
   function fbm(x, z, s, oct) { let t = 0, amp = 1, f = 1, n = 0; for (let i = 0; i < oct; i++) { t += vnoise(x * f, z * f, s + i * 17) * amp; n += amp; amp *= 0.5; f *= 2.03; } return t / n; }
 
   let W = null; // current world
+  const CH = 64; // terrain chunk size in cells
   function create(scene, opt) {
     const map = MAPS[opt.map] || MAPS.land, half = opt.half, seed = opt.seed || 1, sites = opt.sites || [];
-    const N = 256, cell = (half * 2.6) / N, origin = -half * 1.3; // terrain covers 1.3x the play area
+    // terrain covers 1.3x the play area, at least 256 cells across and no coarser than ~140 m a cell (big maps get more)
+    const N = Math.max(256, Math.ceil(half * 2.6 / 140 / CH) * CH), cell = (half * 2.6) / N, origin = -half * 1.3;
     const H = new Float32Array((N + 1) * (N + 1));
     const raw = (x, z) => {
       const nx = x / 4200, nz = z / 4200;
@@ -77,20 +79,42 @@ const World = (() => {
       return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
     }
     const groundAt = (x, z) => Math.max(0, heightAt(x, z)); // the sea surface is solid ground for aircraft
-    // ---- terrain mesh
-    const geo = new THREE.PlaneGeometry(half * 2.6, half * 2.6, N, N); geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), c = new THREE.Color(), cs = { low: new THREE.Color(map.low), mid: new THREE.Color(map.mid), high: new THREE.Color(map.high), peak: new THREE.Color(map.peak), sand: new THREE.Color(map.sand) };
-    for (let k = 0; k < pos.count; k++) {
-      const x = pos.getX(k), z = pos.getZ(k), i = Math.round((x - origin) / cell), j = Math.round((z - origin) / cell), h = H[j * (N + 1) + i];
-      pos.setY(k, h);
-      const n = hash(i, j, 3) * 0.08;
-      const hs = h * 600 / (map.snowLine || 600);
+    // ---- terrain mesh: chunks of 64 x 64 cells, each with three levels of detail (every cell near the camera, every 4th
+    // and 16th further out); a skirt hangs from every chunk's edge so the joins between levels never show a gap.
+    // Normals come from the heightfield itself, so the shading runs on smoothly across chunks.
+    const cs = { low: new THREE.Color(map.low), mid: new THREE.Color(map.mid), high: new THREE.Color(map.high), peak: new THREE.Color(map.peak), sand: new THREE.Color(map.sand) }, c = new THREE.Color();
+    const Hc = (i, j) => H[Math.max(0, Math.min(N, j)) * (N + 1) + Math.max(0, Math.min(N, i))];
+    const colour = (i, j, out, k) => {
+      const h = Hc(i, j), x = origin + i * cell, z = origin + j * cell, n = hash(i, j, 3) * 0.08, hs = h * 600 / (map.snowLine || 600);
       if (h < 8) c.copy(cs.sand); else if (hs < 200) c.copy(cs.low).lerp(cs.mid, hs / 200); else if (hs < 600) c.copy(cs.mid).lerp(cs.high, (hs - 200) / 400); else c.copy(cs.high).lerp(cs.peak, Math.min(1, (hs - 600) / 300));
       if (map.fields && h > 8 && h < 300) { const fx = Math.floor(x / 380 + fbm(x / 3000, z / 3000, seed, 1)), fz = Math.floor(z / 260); const fh = hash(fx, fz, 7); c.offsetHSL((fh - 0.5) * 0.06, (fh - 0.5) * 0.25, (hash(fx, fz, 9) - 0.5) * 0.12); }
-      c.offsetHSL(0, 0, n - 0.04); cols[k * 3] = c.r; cols[k * 3 + 1] = c.g; cols[k * 3 + 2] = c.b;
+      c.offsetHSL(0, 0, n - 0.04); out[k] = c.r; out[k + 1] = c.g; out[k + 2] = c.b;
+    };
+    const tmat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    function chunk(ci, cj, step) {
+      const n = CH / step + 1, i0 = ci * CH, j0 = cj * CH, cnt = n * n + 4 * n;
+      const P = new Float32Array(cnt * 3), Nn = new Float32Array(cnt * 3), C = new Float32Array(cnt * 3), idx = [];
+      const put = (k, i, j, drop) => { P[k * 3] = origin + i * cell; P[k * 3 + 1] = Hc(i, j) - drop; P[k * 3 + 2] = origin + j * cell;
+        const dx = (Hc(i + step, j) - Hc(i - step, j)) / (2 * step * cell), dz = (Hc(i, j + step) - Hc(i, j - step)) / (2 * step * cell), l = Math.hypot(dx, 1, dz);
+        Nn[k * 3] = -dx / l; Nn[k * 3 + 1] = 1 / l; Nn[k * 3 + 2] = -dz / l; colour(i, j, C, k * 3); };
+      for (let b = 0; b < n; b++) for (let a = 0; a < n; a++) put(b * n + a, i0 + a * step, j0 + b * step, 0);
+      for (let b = 0; b < n - 1; b++) for (let a = 0; a < n - 1; a++) { const q = b * n + a; idx.push(q, q + n, q + 1, q + 1, q + n, q + n + 1); }
+      // skirts: along the four edges, a strip 60 m (plus the level's coarseness) down
+      const drop = 60 + step * cell * 0.15, edges = [[a => a, () => 0], [a => a, () => n - 1], [() => 0, b => b], [() => n - 1, b => b]];
+      edges.forEach(([fa, fb], e) => { const base = n * n + e * n;
+        for (let t = 0; t < n; t++) { const a = fa(t), b = fb(t); put(base + t, i0 + a * step, j0 + b * step, drop); }
+        for (let t = 0; t < n - 1; t++) { const top0 = fb(t) * n + fa(t), top1 = fb(t + 1) * n + fa(t + 1), s0 = base + t, s1 = base + t + 1; idx.push(top0, s0, top1, top1, s0, s1, top0, top1, s0, top1, s1, s0); } });
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(Nn, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+      g.setIndex(idx); g.computeBoundingSphere(); return new THREE.Mesh(g, tmat);
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3)); geo.computeVertexNormals();
-    const terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const terrain = new THREE.Group(), span = CH * cell;
+    for (let cj = 0; cj < N / CH; cj++) for (let ci = 0; ci < N / CH; ci++) {
+      const lod = new THREE.LOD(); lod.position.set(0, 0, 0);
+      lod.addLevel(chunk(ci, cj, 1), 0); lod.addLevel(chunk(ci, cj, 4), span * 1.6); lod.addLevel(chunk(ci, cj, 16), span * 5);
+      // LOD distances are measured to the LOD object's position: put it at the chunk centre (geometry stays in world space)
+      const cx0 = origin + (ci + 0.5) * span, cz0 = origin + (cj + 0.5) * span; lod.position.set(cx0, 0, cz0); for (const l of lod.levels) l.object.position.set(-cx0, 0, -cz0);
+      terrain.add(lod);
+    }
     const group = new THREE.Group(); group.add(terrain);
     // ---- sea
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(half * 12, half * 12), new THREE.MeshPhongMaterial({ color: map.seaCol || (opt.map === 'islands' ? 0x1f6f95 : opt.map === 'jungle' ? 0x3d5a3a : 0x2a5a78), shininess: 80, specular: 0x557788 }));
@@ -101,7 +125,7 @@ const World = (() => {
     if (wx.gray) { skyTop.lerp(grey, wx.gray); skyHor.lerp(grey.clone().offsetHSL(0, 0, 0.08), wx.gray * 0.8); }
     skyTop.multiplyScalar(wx.skyMul); skyHor.multiplyScalar(Math.min(1, wx.skyMul + 0.15));
     if (night) { skyTop.setHex(0x050a18).multiplyScalar(wx.gray ? 0.6 : 1); skyHor.setHex(0x101a2e).multiplyScalar(wx.gray ? 0.7 : 1); }
-    const skyGeo = new THREE.SphereGeometry(half * 5, 24, 12);
+    const skyGeo = new THREE.SphereGeometry(Math.min(half * 5, 100000), 24, 12); // inside the camera's far plane
     const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
       uniforms: { top: { value: skyTop }, hor: { value: skyHor } },
       vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
@@ -112,7 +136,7 @@ const World = (() => {
     const gr = cx.createRadialGradient(64, 64, 4, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.5, 'rgba(250,250,252,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
     cx.fillStyle = gr; cx.fillRect(0, 0, 128, 128);
     const ctex = new THREE.CanvasTexture(cc);
-    const cloudN = Math.round(wx.clouds * Math.max(0.6, half / 6000)), cp = [], rnd = Models.mulberry(seed * 31 + 7);
+    const cloudN = Math.round(wx.clouds * Math.max(0.6, half / 6000) * Math.min(4, Math.max(1, half / 14000))), cp = [], rnd = Models.mulberry(seed * 31 + 7);
     for (let i = 0; i < cloudN; i++) { const x = (rnd() - 0.5) * half * 2.4, z = (rnd() - 0.5) * half * 2.4, y = (wx.low ? 550 : 900) + rnd() * (wx.low ? 900 : 1600); const n = 5 + Math.floor(rnd() * 6);
       for (let k = 0; k < n; k++) cp.push(x + (rnd() - 0.5) * 500, y + (rnd() - 0.5) * 90, z + (rnd() - 0.5) * 500); }
     const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
@@ -122,7 +146,7 @@ const World = (() => {
     // ---- trees (instanced cones)
     if (map.trees) {
       const tg = new THREE.ConeGeometry(4, 14, 5); tg.translate(0, 7, 0);
-      const tm = new THREE.MeshLambertMaterial({ color: map.trees }), count = 3500;
+      const tm = new THREE.MeshLambertMaterial({ color: map.trees }), count = Math.round(Math.min(30000, 3500 * Math.max(1, (half / 14000) ** 2)));
       const inst = new THREE.InstancedMesh(tg, tm, count); const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
       let n = 0;
       for (let t = 0; t < count * 4 && n < count; t++) {
@@ -136,7 +160,7 @@ const World = (() => {
     }
     // stars on clear-ish nights
     if (night && !wx.precip && wx.clouds < 100) {
-      const sp = []; for (let i = 0; i < 1800; i++) { const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = half * 4.5, y = Math.abs(u); const k = Math.sqrt(1 - y * y); sp.push(Math.cos(th) * k * r, y * r * 0.9 + 200, Math.sin(th) * k * r); }
+      const sp = []; for (let i = 0; i < 1800; i++) { const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.min(half * 4.5, 90000), y = Math.abs(u); const k = Math.sqrt(1 - y * y); sp.push(Math.cos(th) * k * r, y * r * 0.9 + 200, Math.sin(th) * k * r); }
       const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
       group.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false, depthTest: false, transparent: true, opacity: 0.85 })));
     }
@@ -161,7 +185,8 @@ const World = (() => {
       L.hemi.color.setHex(night ? 0x8090c0 : 0xdfeeff); L.sun.color.setHex(night ? 0xa8b8e8 : wx.gray ? 0xe0e4ea : 0xfff4e0);
     }
     scene.add(group);
-    scene.fog = new THREE.Fog(skyHor.clone(), half * wx.fog[0], half * wx.fog[1] * (night ? 0.8 : 1));
+    const vis = Math.min(half, 16000); // what the fog scales with: the battle area, but never beyond ~40 km of clear-day visibility
+    scene.fog = new THREE.Fog(skyHor.clone(), vis * wx.fog[0], vis * wx.fog[1] * (night ? 0.8 : 1));
     let t = 0, nextFlash = 6 + Math.random() * 10, flash = 0, gustT = 0;
     const gust = new THREE.Vector3();
     W = { group, heightAt, groundAt, half, map, mapId: opt.map, sky, clouds, weather: wx, night, turb: wx.turb, gust,

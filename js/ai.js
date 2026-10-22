@@ -87,7 +87,7 @@ class BotBrain {
         throttle = d > 800 ? 1.05 : Math.max(0.35, Math.min(1, b.speed / c.perf.vmax + (d - 200) / 1500));
       }
       else { // patrol towards the enemy side at a sensible altitude
-        const goal = this.patrolPoint || (this.patrolPoint = new V3((Math.random() - 0.5) * m.half, 0, (c.team === 0 ? -1 : 1) * m.half * 0.2));
+        const goal = this.patrolPoint || (this.patrolPoint = new V3((Math.random() - 0.5) * m.spread, 0, (c.team === 0 ? -1 : 1) * m.spread * 0.2));
         dir = goal.clone().sub(c.pos); dir.y = (m.patrolAlt - c.pos.y) * 0.4; dir.normalize(); throttle = 0.9;
         if (Math.hypot(goal.x - c.pos.x, goal.z - c.pos.z) < 600) this.patrolPoint = null;
       }
@@ -253,7 +253,7 @@ class BotBrain {
     const c = this.c, m = c.match, b = this.ground;
     const fwd = new V3(0, 0, -1).applyQuaternion(c.quat);
     if (!b || b.dead || c.count('b') === 0) {
-      const home = new V3(c.pos.x, 0, (c.team === 0 ? 1 : -1) * m.half);
+      const home = new V3(c.pos.x, 0, (c.team === 0 ? 1 : -1) * m.spread);
       if (m.mode === 'destroy' && Math.abs(home.z - c.pos.z) < 1500 && !c.human) { m.recycle(c); return { dir: new V3(0, 0, -1).applyQuaternion(c.quat), throttle: 0.9 }; }
       const dir = home.sub(c.pos); dir.y = 0; return { dir: dir.normalize(), throttle: 0.9 }; }
     const impact = BotBrain.impact(c, b.pos.y), miss = Math.hypot(impact.x - b.pos.x, impact.z - b.pos.z);
