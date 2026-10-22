@@ -8,7 +8,7 @@ const Profile = (() => {
   let p = null;
   function fresh() {
     const owned = {}; for (const pl of PLANE_LIST) if (pl.starter) owned[pl.id] = true;
-    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, achPaid: {}, tut: {}, created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
+    return { v: 1, name: 'Pilot' + Math.floor(1000 + Math.random() * 9000), totalXp: 0, xp: 0, coins: 2500, owned, selected: 'camel', mods: {}, stats: {}, ach: {}, achPaid: {}, tut: {}, board: {}, pilotId: newId(), created: Date.now(), settings: { sens: 1, invert: false, volume: 0.7, quality: 1, cross: '#ffffff', binds: {}, assist: true, assistRange: 1 } };
   }
   function load() {
     try { const s = localStorage.getItem(KEY); if (s) p = JSON.parse(s); } catch (e) { p = null; }
@@ -17,8 +17,27 @@ const Profile = (() => {
     for (const k in f.settings) if (p.settings[k] === undefined) p.settings[k] = f.settings[k];
     for (const pl of PLANE_LIST) if (pl.starter) p.owned[pl.id] = true;
     if (!PLANES[p.selected] || !p.owned[p.selected]) p.selected = 'camel';
-    if (!p.achPaid) p.achPaid = {}; if (!p.tut) p.tut = {};
+    if (!p.achPaid) p.achPaid = {}; if (!p.tut) p.tut = {}; if (!p.board) p.board = {}; if (!p.pilotId) p.pilotId = newId();
     return p;
+  }
+  function newId() { return Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join(''); }
+  // ---- leaderboard without a server: every pilot carries a card (name, level, multiplayer record). Cards are swapped in
+  // multiplayer lobbies, together with the cards each player already knows, so the board spreads from player to player.
+  // A card is only as honest as the game that sent it.
+  const num = v => Math.max(0, Math.min(1e7, Math.floor(+v || 0)));
+  function myCard() { const s = p.stats; return { id: p.pilotId, name: p.name, level: levelInfo().level, mpBattles: s.mpBattles || 0, mpWins: s.mpWins || 0, mpKills: s.mpKills || 0, mpDeaths: s.mpDeaths || 0, updated: Date.now() }; }
+  function shareCards() { return [myCard()].concat(Object.values(p.board).sort((a, b) => b.updated - a.updated).slice(0, 100).map(c => { const o = Object.assign({}, c); delete o.met; return o; })); }
+  // merge received cards (the newest card of each pilot wins); `metId`: the pilot who sent them, met in person
+  function mergeCards(cards, metId) {
+    if (!Array.isArray(cards)) return 0; let n = 0;
+    for (const c of cards.slice(0, 101)) {
+      if (!c || typeof c.id !== 'string' || !/^[a-z0-9]{8,32}$/.test(c.id) || c.id === p.pilotId) continue;
+      const card = { id: c.id, name: String(c.name || 'Pilot').slice(0, 18), level: Math.min(999, num(c.level)), mpBattles: num(c.mpBattles), mpWins: Math.min(num(c.mpWins), num(c.mpBattles)), mpKills: num(c.mpKills), mpDeaths: num(c.mpDeaths), updated: Math.min(Date.now(), Math.max(0, Math.floor(+c.updated || 0))) };
+      const old = p.board[c.id]; if (old && old.updated >= card.updated) { if (c.id === metId) old.met = Date.now(); continue; }
+      if (old && old.met) card.met = old.met; if (c.id === metId) card.met = Date.now(); p.board[c.id] = card; n++;
+    }
+    const ids = Object.keys(p.board); if (ids.length > 300) ids.sort((a, b) => p.board[a].updated - p.board[b].updated).slice(0, ids.length - 300).forEach(id => delete p.board[id]);
+    save(); return n;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
   function tutorialDone(id) { if (!p.tut[id]) { p.tut[id] = Date.now(); save(); } return checkAchievements(); }
@@ -166,6 +185,6 @@ const Profile = (() => {
   return {
     get: () => p, save, load, reset, levelInfo, need, maxEra, canResearch, research, modsOf, gunsOf,
     buyBelt, hasBelt, selectBelt, buyStore, setStation, setSlot, buyLivery, setLivery, loadoutMass, buyUpgrade, toggleUpgrade, upgradesFor, loadoutFor,
-    bump, checkAchievements, progress, rewards, applyBattle, tutorialDone,
+    bump, checkAchievements, progress, rewards, applyBattle, tutorialDone, myCard, shareCards, mergeCards,
   };
 })();

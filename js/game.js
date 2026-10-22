@@ -275,6 +275,8 @@ const Game = (() => {
       basesDestroyed: s.basesDestroyed, bigBases: s.bigBases, crewKills: s.crewKills, wingKills: s.wingKills, fires: s.fires, crashKills: s.crashKills, missileKills: s.missileKills, giantKills: s.giantKills,
       online: !!m.net, night: !!m.cfg.night, weather: m.cfg.weather, size: m.cfg.size, evadedIR: s.evadedIR, evadedRadar: s.evadedRadar, bombKg: s.bombKg,
       oldSchool: p.def.era >= 6 && p.def.kind === 'jet' && s.kills - s.missileKills - s.crashKills >= 3 });
+    // multiplayer: tell the others our updated pilot card for their leaderboards
+    if (m.net) { const msg = { t: 'cards', cards: Profile.shareCards() }; if (m.isHost) Net.broadcast(msg); else Net.send(msg); }
     document.exitPointerLock && document.exitPointerLock();
     Sound.stopAll();
     UI.showResults(m, { won, left, reward, reason: r.reason });

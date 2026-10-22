@@ -54,7 +54,7 @@ const UI = (() => {
     panel = name; $('#panel').classList.remove('hidden');
     $('#side').classList.add('hidden'); $('#panel').classList.remove('narrow'); Game.menuView = 'default';
     $$('#mainmenu button').forEach(b => b.classList.toggle('sel', b.dataset.panel === name));
-    ({ play: renderPlay, hangar: renderHangar, achievements: renderAch, mods: renderMods, research: renderResearch, profile: renderProfile })[name]();
+    ({ play: renderPlay, hangar: renderHangar, achievements: renderAch, mods: renderMods, research: renderResearch, profile: renderProfile, board: renderBoard })[name]();
   }
   function close() { panel = null; $('#panel').classList.add('hidden'); $('#side').classList.add('hidden'); $('#panel').classList.remove('narrow'); Game.menuView = 'default'; $$('#mainmenu button').forEach(b => b.classList.remove('sel')); Game.showPlane(P().selected); }
   const body = html => { $('#panel-body').innerHTML = html; };
@@ -226,6 +226,22 @@ const UI = (() => {
       h += `<div class="card ach ${got ? 'done' : ''}"><div class="ic">${a.icon}</div><div style="flex:1"><div class="t">${a.name}</div><div class="small muted">${a.desc}</div><div class="bar"><i style="width:${pr * 100}%"></i></div><div class="small muted">${got ? 'Unlocked ' + new Date(p.ach[a.id]).toLocaleDateString() : fmt(val) + ' / ' + fmt(a.goal)} · reward ${fmt(ACH_REWARD[a.tier || 1].coins)} coins, ${fmt(ACH_REWARD[a.tier || 1].xp)} XP</div></div></div>`; }
     body(h + '</div>');
   }
+  // ---- leaderboard: you and every pilot whose card reached you through multiplayer lobbies (no server needed)
+  let boardSort = 'mpWins';
+  function renderBoard() {
+    const p = P(), me = Object.assign(Profile.myCard(), { you: true }), rows = Object.values(p.board || {}).concat([me]);
+    const kd = r => r.mpKills / Math.max(1, r.mpDeaths), wr = r => r.mpBattles ? r.mpWins / r.mpBattles : 0;
+    const key = { mpWins: r => r.mpWins, mpKills: r => r.mpKills, kd: r => r.mpBattles >= 5 ? kd(r) : -1, wr: r => r.mpBattles >= 5 ? wr(r) : -1, level: r => r.level }[boardSort];
+    rows.sort((a, b) => key(b) - key(a) || b.level - a.level);
+    const opts = [['mpWins', 'Multiplayer wins'], ['mpKills', 'Multiplayer kills'], ['kd', 'K/D (5+ battles)'], ['wr', 'Win rate (5+ battles)'], ['level', 'Level']];
+    body(`<h2>Leaderboard</h2><p class="muted">Built without a server: when you join a multiplayer game, your game and the others swap pilot cards, including every card they already know, so the board grows with each player you meet. Only multiplayer battles count. Each card shows what that player's own game reports.</p>
+      <div class="row" style="margin-bottom:10px"><label class="small">Rank by</label><select id="lb-sort">${opts.map(([k, n]) => `<option value="${k}" ${k === boardSort ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">${rows.length - 1} other pilot${rows.length === 2 ? '' : 's'} known</span></div>
+      <table class="board"><tr><th>#</th><th>Pilot</th><th>Level</th><th>Battles</th><th>Wins</th><th>Win rate</th><th>Kills</th><th>K/D</th><th></th></tr>
+      ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' <span class="pill">you</span>' : ''}</td><td>${r.level}</td><td>${fmt(r.mpBattles)}</td><td>${fmt(r.mpWins)}</td><td>${r.mpBattles ? Math.round(wr(r) * 100) + '%' : '—'}</td><td>${fmt(r.mpKills)}</td><td>${r.mpBattles ? kd(r).toFixed(2) : '—'}</td>
+        <td class="small muted">${r.you ? '' : r.met ? 'met ' + new Date(r.met).toLocaleDateString() : 'via other pilots'}</td></tr>`).join('')}</table>
+      ${rows.length === 1 ? '<p class="muted" style="margin-top:12px">Nobody else yet: play a multiplayer game and the pilots you meet (and the ones they have met) appear here.</p>' : ''}`);
+    $('#lb-sort').onchange = e => { boardSort = e.target.value; renderBoard(); };
+  }
   function renderProfile() {
     const p = P(), s = p.stats, li = Profile.levelInfo();
     // K/D and win rate count multiplayer battles only; singleplayer has its own lines
@@ -355,7 +371,7 @@ const UI = (() => {
     if (play.step === 'mp') {
       h += `<div class="grid c2"><div class="card"><h3>Host a game</h3><p class="small muted">You choose the mode and settings, and get a join code to give to the other players.</p><button class="primary" id="mp-host">Generate join code</button></div>
         <div class="card"><h3>Join a game</h3><p class="small muted">Enter the code the host gave you.</p><div class="row"><input id="join-code" placeholder="e.g. K7Q2XM" maxlength="9" style="text-transform:uppercase;width:160px"><button class="primary" id="mp-join">Join</button></div></div></div>
-        <p class="small muted" style="margin-top:12px">Online play connects the players' browsers directly (WebRTC). Some networks (mobile data, school or office networks) block direct connections; see <code>js/netconfig.js</code> to add a relay server.</p>
+        <p class="small muted" style="margin-top:12px">Online play connects the players' browsers directly (WebRTC). Some networks (mobile data, school or office networks) block direct connections; then a relay (TURN) server is needed, ${Net.relayConfigured() ? 'and one is set up' : 'which can be added for free in <code>js/netconfig.js</code>'}. The game traffic is encrypted end to end either way: a relay only passes it on.</p>
         <button id="p-back">← Back</button>`;
       body(h); $('#p-back').onclick = () => { play.step = 'type'; renderPlay(); };
       $('#mp-host').onclick = hostGame; $('#mp-join').onclick = () => joinGame($('#join-code').value); return;
@@ -394,9 +410,9 @@ const UI = (() => {
     if (!Net.available()) return toastMenu('The networking library could not load (offline?).');
     code = Net.cleanCode(code); if (code.length < 4) return toastMenu('Enter the join code');
     lobby = { host: false, code, settings: null, players: [], started: false, connecting: true }; renderLobby();
-    Net.join(code, () => { lobby.connecting = false; Net.send(Object.assign({ t: 'hello' }, me())); renderLobby(); });
+    Net.join(code, () => { lobby.connecting = false; Net.send(Object.assign({ t: 'hello', cards: Profile.shareCards() }, me())); renderLobby(); });
   }
-  function lobbySync() { if (!lobby || !lobby.host) return; Net.broadcast({ t: 'lobby', settings: lobby.settings, players: lobby.players, hostPlane: P().selected }); }
+  function lobbySync() { if (!lobby || !lobby.host) return; Net.broadcast({ t: 'lobby', settings: lobby.settings, players: lobby.players, hostPlane: P().selected, cards: Profile.shareCards() }); }
   function renderLobby() {
     if (panel !== 'play') return;
     const L = lobby, s = L.settings;
@@ -441,10 +457,13 @@ const UI = (() => {
     launch(cfg, { playerId: cfg.roster.find(r => r.owner === 'H' && !r.bot).id, isHost: true, net: true, myPeer: 'H' });
   }
   function onNet(from, msg) {
+    // updated pilot cards after a battle: merge them; the host passes on what was new to everyone
+    if (msg.t === 'cards') { const n = Profile.mergeCards(msg.cards, msg.cards && msg.cards[0] && msg.cards[0].id); if (n && Net.role === 'host') Net.broadcast({ t: 'cards', cards: Profile.shareCards() }); return; }
     if (Game.match && Game.running) { Game.match.onNet(from, msg); return; }
     const L = lobby; if (!L) return;
     if (L.host) {
       if (msg.t === 'hello') {
+        if (msg.cards) Profile.mergeCards(msg.cards, msg.cards[0] && msg.cards[0].id);
         let p = L.players.find(x => x.peer === from);
         const valid = PLANES[msg.plane] && !PLANES[msg.plane].aiOnly;
         if (!p) { const t0 = L.players.filter(x => x.team === 0).length, t1 = L.players.length - t0; p = { peer: from, team: t1 < t0 ? 1 : 0 }; L.players.push(p); toastMenu(`${msg.name} joined`); }
@@ -453,7 +472,7 @@ const UI = (() => {
       }
       if (msg.t === 'team') { const p = L.players.find(x => x.peer === from); if (p) { p.team = 1 - p.team; lobbySync(); renderLobby(); } }
     } else {
-      if (msg.t === 'lobby') { L.settings = msg.settings; L.players = msg.players; L.hostPlane = msg.hostPlane; renderLobby(); }
+      if (msg.t === 'lobby') { L.settings = msg.settings; L.players = msg.players; L.hostPlane = msg.hostPlane; if (msg.cards && !L.gotCards) { Profile.mergeCards(msg.cards, msg.cards[0] && msg.cards[0].id); L.gotCards = true; } renderLobby(); }
       if (msg.t === 'start') { L.started = true; const mine = msg.cfg.roster.find(r => r.owner === Net.myId); if (!mine) return toastMenu('The host did not include you'); launch(msg.cfg, { playerId: mine.id, isHost: false, net: true, myPeer: Net.myId }); }
     }
   }

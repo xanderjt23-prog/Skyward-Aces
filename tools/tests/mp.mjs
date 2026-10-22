@@ -27,6 +27,8 @@ for (const [T, plane, name] of [[A, 'p51d', 'HostPilot'], [B, 'bf109g', 'GuestPi
 for (const T of [A, B]) await T.ev("setInterval(() => { if (Game.running && Game.match) { Game.update(0.05); } }, 50); 1");
 await A.ev("UI.open('play'); document.querySelector('#p-mp').click(); document.querySelector('#mp-host').click(); 1");
 let code = null; for (let i = 0; i < 40 && !code; i++) { await sleep(500); code = await A.ev("(UI.lobby && UI.lobby.code) || null"); }
+// the host already knows a third pilot: their card should reach the guest too (passed on, not met)
+await A.ev("Profile.mergeCards([{ id: 'ghostpilot01', name: 'Ghost', level: 7, mpBattles: 12, mpWins: 7, mpKills: 30, mpDeaths: 9, updated: Date.now() - 5000 }]); 1");
 console.log('code', code);
 await B.ev(`UI.open('play'); document.querySelector('#p-mp').click(); document.querySelector('#join-code').value = '${code}'; document.querySelector('#mp-join').click(); 1`);
 let joined = false; for (let i = 0; i < 60 && !joined; i++) { await sleep(500); joined = await A.ev("UI.lobby.players.length >= 2"); }
@@ -35,6 +37,8 @@ console.log('joined', joined, 'client sees players:', await B.ev("UI.lobby && UI
 await A.ev("UI.lobby.settings.teamSize = [4, 4]; UI.lobby.players.forEach(p => p.team = p.peer === 'H' ? 0 : 1); 1");
 await sleep(800);
 console.log('client lobby:', await B.ev("UI.lobby.settings.mode + ' ' + UI.lobby.settings.teamSize + ' ' + UI.lobby.players.map(p => p.name + '/' + p.team).join(',')"));
+const brd = T => T.ev("Object.values(Profile.get().board).map(c => c.name + (c.met ? '(met)' : '(via)') + ' w' + c.mpWins).join(', ')");
+console.log('leaderboard cards: host knows', await brd(A), '| guest knows', await brd(B));
 await A.ev("document.querySelector('#lobby-start').click(); 1");
 await sleep(3000);
 console.log('host in battle', await A.ev("Game.running && Game.match.crafts.length"), 'client in battle', await B.ev("Game.running && Game.match && Game.match.crafts.length"));
@@ -50,5 +54,8 @@ await A.shot('mp-host'); await B.shot('mp-client');
 // end: host leaves -> both see results
 await A.ev("Game.match.end(0, 'test end'); 1"); await sleep(4000);
 console.log('host results', await A.ev("document.querySelector('#results .big-result') && document.querySelector('#results .big-result').textContent"), 'client results', await B.ev("document.querySelector('#results .big-result') && document.querySelector('#results .big-result').textContent"));
+await A.ev("document.querySelector('#res-ok') && document.querySelector('#res-ok').click(); 1"); await B.ev("document.querySelector('#res-ok') && document.querySelector('#res-ok').click(); 1");
+console.log('multiplayer stats: host', await A.ev("JSON.stringify([Profile.get().stats.mpBattles, Profile.get().stats.spBattles || 0])"), 'guest', await B.ev("JSON.stringify([Profile.get().stats.mpBattles, Profile.get().stats.spBattles || 0])"));
+console.log('after battle: guest knows', await brd(B), '| host card', await A.ev('JSON.stringify(Profile.myCard())'), '| host net', await A.ev("Net.role + ' ' + Net.peers().length"), '| guest net', await B.ev('Net.role')); await B.ev("UI.open('board'); 1"); await B.shot('leaderboard');
 console.log('A logs', A.logs.slice(0, 10)); console.log('B logs', B.logs.slice(0, 10));
 proc.kill(); process.exit(0);

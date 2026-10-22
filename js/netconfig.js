@@ -14,6 +14,9 @@
 //    and put its credentials URL (with your API key) in `meteredUrl`, e.g.
 //      meteredUrl: 'https://yourapp.metered.live/api/v1/turn/credentials?apiKey=...',
 //
+// WebRTC encrypts the game traffic end to end (DTLS), so a relay only forwards encrypted packets: it can see that
+// two addresses are talking and how much, not what is said.
+//
 // These credentials end up in the page anyone can open, which is normal for a
 // browser game's relay; if your free quota is ever abused, make new ones.
 // ============================================================================

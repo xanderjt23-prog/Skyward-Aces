@@ -3,13 +3,13 @@
 A 3D browser dogfighting game, from WW1 biplanes to modern fighter jets. It uses three.js with no build step: open `index.html` in Chrome, Edge or Firefox.
 
 ## Menus
-- **Top bar**: research XP, coins, and the pilot profile (level, XP to the next level, K/D ratio, other stats and settings). Each level needs 1.1× the XP of the one before it.
+- **Top bar**: research XP, coins, and the pilot profile (level, XP to the next level, K/D ratio and win rate from multiplayer battles only, singleplayer stats shown separately, settings). Each level needs 1.1× the XP of the one before it.
 - **Play**: Singleplayer, Multiplayer or Tutorials. Singleplayer and Multiplayer offer four modes:
   - **Destroy**: two teams of 1–60 (some bots fly bombers and attack aircraft). Kills 3, bases 2/3/5, tanks 0.5. Most points at the end wins, or win early by destroying every enemy base, or by destroying the enemy's airfields (they can no longer respawn) and shooting down every enemy aircraft. Kills score 3; small, medium and big bases score 2, 3 and 5. The host sets the match length. The team with the most points wins.
   - **Dogfight**: 1v1 up to 8v8, with 0–12 respawns each. The last team flying wins.
   - **Missions**: historical missions for the nation of your aircraft, closest era first. Mission types are fighter sweeps, bomber intercepts, ground strikes and bomber escorts.
   - **Survival**: co-op waves of enemy fighters, with bombers every third wave.
-- **Tutorials** (`js/tutorial.js`): nine guided lessons, listed with their descriptions: flight basics, take-off, landing, air gunnery, level bombing with the Norden bombsight (B-17G), dive bombing (Ju 87), rockets (P-47D), air-to-air missiles (F-16C) and missile defence with flares. Each lesson puts you in an aircraft suited to it, whether you own it or not, with its own scene (runway, approach, unarmed target aircraft, tanks). An instruction panel moves through the steps as you complete them. There are no rewards.
+- **Tutorials** (`js/tutorial.js`): thirteen guided lessons in two groups. **Basic Game Mechanics**: flight basics, air gunnery, level bombing with the Norden bombsight (B-17G), dive bombing (Ju 87), jet bombing with CCIP (F-16C), rockets (P-47D), air-to-air missiles (F-16C, each missile type on its own key) and missile defence (Typhoon: flares and a hard turn against heat seekers, notching and chaff against a radar missile). **Basic Flight Maneuvers**: take-off, landing, turns (level turn, break turn, chandelle), rolls and the loop, the Immelmann and the split-S. Each lesson gives you a suitable aircraft, whether you own it or not; once completed, it can be flown again with any aircraft you own that can do it. There are no rewards, apart from the tutorial achievements.
 - **Multiplayer**: the host clicks *Generate join code* and shares the code; other players enter it under *Join*. The host picks the mode and settings, can move players between teams, and chooses whether empty slots are filled with bots. Bots fly the average era of the human players. If a player drops out mid-battle, a bot takes over their aircraft.
 - **Hangar**: a tab for each nation (with its flag), aircraft grouped by era with a picture and type (fighter, heavy fighter, dive bomber, heavy bomber, strike aircraft...), full stats and a 3D preview.
 - **Modifications**: ammunition belts per gun; ordnance per pylon; airframe upgrades. Everything bought can be fitted and removed freely.
@@ -17,11 +17,12 @@ A 3D browser dogfighting game, from WW1 biplanes to modern fighter jets. It uses
   - **Paint schemes** (`js/liveries.js`): 36 alternative schemes that the types really wore, each bought once per aircraft with coins and switched freely. Other players see them. Examples: USAAF natural metal, US Navy tri-colour and Glossy Sea Blue, RAF desert and Special Night, Luftwaffe RLM 70/71, tropical RLM 79/78, winter whitewash and RLM 81/82, Richthofen's red, the A6M2's amber grey, Soviet winter white and AMT-4/6, Black Arrows black, Hill Gray II, European I, JASDF aggressor blue and Operation Daguet sand.
   - **Ordnance by real designation:** bombs include the P.u.W., Gros-Andreau, AN-M30 to AN-M66, SC 50 to SC 1800 "Satan", the 4000 lb "Cookie", the FAB and Type 98/99 series, Mk 81-84, Snakeye, CBU-87, BL755, Belouga, Paveway, JDAM, KAB-500 and AASM. Rockets include Tiny Tim, HVAR, RP-3, R4M, WGr 21, S-5/S-8/S-13/S-24, SNEB and CRV7. Missiles run from the AIM-4 and AIM-9B to the AIM-120D, AIM-54 Phoenix, R-40, R-27, R-77-1, Magic, MICA, ASRAAM and Meteor.
 - **Research**: spend XP on aircraft — fighters, bombers and attack aircraft (140 in all). In each nation you can research up to one era above the newest era you own in that nation. Every nation starts with one WW1 aircraft.
-- **Achievements**: 30 achievements with progress bars.
+- **Achievements**: 51 achievements with progress bars, in four tiers that pay 2,500 / 8,000 / 25,000 / 75,000 coins and 500 / 2,000 / 6,000 / 20,000 XP when unlocked.
+- **Leaderboard**: built without a server. In a multiplayer lobby (and again after the battle) the games swap pilot cards (name, level, multiplayer battles, wins, kills, deaths), each passing on the cards it already knows, so the board grows with every player you meet. A card shows what that player's own game reports.
 - **Rewards**: XP and coins for kills, assists, damage, bases and winning. Assists add to your own score but never to the team score. Leaving a battle early forfeits the participation reward: you keep only what you earned.
 
 ## Maps, weather and time of day
-Every mode lets the host pick the map (Countryside, Coastline, Pacific Islands, Desert, Winter, Alpine Valleys, Canyonlands, Farmland, Jungle Rivers, Arctic Sea, or random), its size (small / medium / large), the weather (clear, scattered clouds, overcast, rain, thunderstorm with lightning, snowfall, fog, or random) and night. Bad weather lowers visibility and brings turbulence; at night the bases and runways are lit.
+Every mode lets the host pick the map (Countryside, Coastline, Pacific Islands, Desert, Winter, Alpine Valleys, Canyonlands, Farmland, Jungle Rivers, Arctic Sea, or random), its size (small / medium / large / massive: four times the battle area each way, about 100 km across for modern jets, with the bases and spawns still in the battle area), the weather (clear, scattered clouds, overcast, rain, thunderstorm with lightning, snowfall, fog, or random) and night. Bad weather lowers visibility and brings turbulence; at night the bases and runways are lit.
 
 ## Tanks
 Destroy battles have tanks from each team driving around their territory (era-appropriate models). Rifle-calibre rounds barely scratch them; heavy machine guns, cannon (best with AP rounds), rockets and bombs kill them. Each tank is worth 0.5 points.
@@ -48,11 +49,8 @@ All controls can be rebound in **Profile → Controls** (keys or mouse buttons).
 | A / D | roll (ramps in smoothly; let go and the aircraft holds that bank in a level turn until you move the mouse) |
 | Q / E | rudder |
 | Arrow down / up | manual pull / push: bypasses the autopilot's stall and G protection (stalls, spins, cobra) |
-| 1 | drop bombs (outboard pylons first, in mirrored pairs; the CCIP pipper shows where they will hit, except in Realistic Mode) |
-| 2 | fire rockets |
-| 3 | fire missile (wait for the lock tone) |
-| 4 | flares |
-| 5 | switch missile type (e.g. Sidewinder / AMRAAM) |
+| 1-8 | weapons: every type carried has its own key, in the order of the weapons line (heat-seeking missiles, radar missiles, bombs, rockets), e.g. 1 = AIM-9, 2 = AIM-120, 3 = Mk 82. Missiles fire at their own seeker's lock; bombs drop from the outboard pylons first, in mirrored pairs |
+| X | countermeasures: flares, plus chaff on Cold War and later jets |
 | B | bombsight view (level bombers with a bomb aimer) |
 | Z / H | flaps down / up a notch (combat, take-off, landing; too fast and they tear off) |
 | Space | air brake in flight (jets, dive bombers), wheel brakes on the ground |
@@ -88,10 +86,12 @@ Real recordings, listed with author and licence in `assets/sounds/CREDITS.md` an
 - **Damage** (`js/damage.js`): there are no health bars. Each aircraft has hit boxes for engines, fuel tanks, crew, ammunition, wings, tailplane, fin and fuselage. Damaged engines lose power, smoke, seize or catch fire. Fuel tanks leak (self-sealing tanks close the holes) and can burn or explode. Wings lose lift, which makes the aircraft roll, and can snap off. A dead pilot means a dead aircraft. High-explosive shells spread fragments to neighbouring parts; armour plate stops small rounds from behind. The aircraft-condition panel shows the hit boxes coloured by state.
 - **Aircraft condition panel:** the aircraft's own plan view, drawn from its airframe spec: fuselage, wings, tailplanes, fins, nacelles and booms. Each part is coloured by the state of its damage component, and engines, fuel tanks, ammunition and crew are marked where they sit.
 - **Kill credit** (`Match.resolveKill`): when an aircraft is shot down (crew killed, or the aircraft explodes or breaks up), the enemy that did the most damage gets the kill. When it crashes with ≥10% damage, the top damage dealer gets it. Below 10%, credit goes to an enemy that hit it in the last 20 s, otherwise to the enemy aircraft closest to the crash.
+- **Missiles** (`js/combat.js`): each type has its real length, diameter, motor burn time (boost and sustainer or ramjet) and active-seeker range (`MISSILE_PHYS` in `js/data.js`). Drag comes from the airframe and the air density, the fins can only pull as much G as the speed and height allow, and turning costs energy; guidance is proportional navigation. Heat seekers can be decoyed by flares (better seekers less often) and older ones only see the tailpipe. Semi-active radar missiles need the launching aircraft's radar to keep the target within its scan; active radar missiles fly on datalink updates (or inertially) until their own radar switches on near the target. A target flying across the radar beam close to the ground clutter (a notch) can break the lock, and chaff helps a lot then. Warnings only come from equipment the aircraft has: a radar warning receiver (Cold War and later jets) hears radar locks and radar-guided missiles, while a missile approach warner (F-22, F-35, Typhoon, Rafale, Su-35S, Su-57) sees motor plumes, so it also warns of heat seekers.
+- **Bombs** fall with drag from their real diameter and mass (rising near the speed of sound); Snakeyes open retarding fins. The CCIP pipper, the bots and the bombs use the same fall model.
 - **Bases** have AA matching the era: machine guns and "Archie" in WW1, light and heavy flak in WW2, radar guns and SAMs later. Their health bar appears when you get close.
 
 ## Online play
-Online play is peer-to-peer over WebRTC (PeerJS), with join codes. Most home networks connect directly. Mobile data and school or office networks may need a relay (TURN) server, which you can add in `js/netconfig.js`.
+Online play is peer-to-peer over WebRTC (PeerJS), with join codes. Most home networks connect directly. Mobile data and school or office networks may need a relay (TURN) server: a free one (ExpressTURN or Metered) can be added in `js/netconfig.js`. The game traffic is encrypted end to end either way; a relay only forwards it.
 
 ## Tests (headless Chrome)
 ```
