@@ -57,6 +57,7 @@ const Game = (() => {
   }
   // ---- battle lifecycle
   function startMatch(cfg, opt) {
+    G.flight = null; G.gciT = null;
     stopMatch();
     G.net = !!opt.net;
     G.cockpit = null;
@@ -99,6 +100,7 @@ const Game = (() => {
               if (L && L.locked && L.sk) { if (p.fireMissile(L.sk, id)) { L.t = 0; L.locked = false; } } else UI.toast(STORES[id].name + ': no lock yet'); } }
           if (act === 'flares') p.dropFlares();
           if (act === 'tutorialReset' && m.mode === 'tutorial') Tutorial.restartStep(m);
+          if (act === 'orderAttack' || act === 'orderCover' || act === 'orderFree') wingmenOrder(m, p, act);
           if (act === 'gear') p.toggleGear && p.toggleGear();
           if (act === 'flapsDown') p.setFlaps(1);
           if (act === 'flapsUp') p.setFlaps(-1);
@@ -139,6 +141,20 @@ const Game = (() => {
     if (p) Sound.engineSet(p);
     UI.battleTick(m, dt);
     if (m.over && !G.resultShown) { G.endT += dt; if (G.endT > 2.5) { G.resultShown = true; finish(false); } }
+  }
+  // your flight: the two friendly fighter bots nearest to you (replaced when one is lost). Orders go by radio; the host
+  // flies the bots, so orders work in singleplayer and when you host.
+  function wingmenOrder(m, p, act) {
+    if (!m.isHost || m.mode === 'tutorial') return UI.toast('Only the host can give wingmen orders');
+    G.flight = (G.flight || []).filter(c => c.alive && !c.wreck && c.team === p.team);
+    if (G.flight.length < 2) for (const c of m.crafts.filter(c => c.isBot && c.alive && !c.wreck && c.team === p.team && c.ai && c.def.role !== 'bomber' && !G.flight.includes(c)).sort((a, b) => a.pos.distanceTo(p.pos) - b.pos.distanceTo(p.pos))) { if (G.flight.length >= 2) break; G.flight.push(c); }
+    if (!G.flight.length) return UI.toast('No wingmen');
+    const tgt = G.target && G.target.alive ? G.target : null;
+    if (act === 'orderAttack' && !tgt) return UI.toast('No target to attack (point your nose at an enemy first)');
+    const order = act === 'orderAttack' ? { type: 'attack', target: tgt } : act === 'orderCover' ? { type: 'cover' } : null;
+    for (const c of G.flight) { c.ai.order = order; c.ai.think = 0; }
+    const names = G.flight.map(c => c.name).join(' and ');
+    m.events.push({ t: m.time, e: 'msg', text: act === 'orderAttack' ? `${names}: engaging the ${tgt.def.short}` : act === 'orderCover' ? `${names}: forming up on your wing` : `${names}: engaging at will` });
   }
   // ground-control / AWACS radio calls: the nearest enemy group's bearing, range and height, as fighter controllers
   // passed them (radar ground control from WW2, AWACS in the jet age; WW1 aircraft had no radio). Only while no enemy is

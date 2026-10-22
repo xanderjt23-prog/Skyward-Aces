@@ -84,7 +84,7 @@ class BotBrain {
         const b = this.protect, bf = new V3(0, 0, -1).applyQuaternion(b.quat), side = (c.id % 2 ? 1 : -1) * (120 + (c.id % 5) * 60);
         const slot = b.pos.clone().addScaledVector(bf, -250).add(new V3(bf.z * side, 250 + (c.id % 3) * 80, -bf.x * side));
         dir = slot.clone().addScaledVector(b.vel, 3).sub(c.pos); const d = dir.length(); dir.normalize();
-        throttle = d > 800 ? 1.05 : Math.max(0.35, Math.min(1, b.speed / c.perf.vmax + (d - 200) / 1500));
+        throttle = d > 800 ? 1.1 : Math.max(0.35, Math.min(1, b.speed / c.perf.vmax + (d - 200) / 1500));
       }
       else { // patrol towards the enemy side at a sensible altitude
         const goal = this.patrolPoint || (this.patrolPoint = new V3((Math.random() - 0.5) * m.spread, 0, (c.team === 0 ? -1 : 1) * m.spread * 0.2));
@@ -155,6 +155,15 @@ class BotBrain {
       }
     }
     this.mode = 'air';
+    // the player's wingmen follow their leader's orders: attack his target, or cover him (stay on his wing and go for
+    // anything that comes at him)
+    const o = this.order, P = m.player;
+    if (o && o.type === 'attack' && o.target && o.target.alive && !o.target.wreck) { this.protect = null; this.target = o.target; if (this.seen) this.seen.set(o.target, m.time); return; } // the leader talks them on to it
+    if (o && o.type === 'cover' && P && P.alive) { this.protect = P;
+      // only what is coming at him: an enemy chasing him, or anything very close to him (no chasing off after others)
+      const threats = m.crafts.filter(e => e.alive && !e.wreck && e.team !== c.team && (e.pos.distanceTo(P.pos) < 1000 || (e.ai && e.ai.target === P && e.pos.distanceTo(P.pos) < 2500)));
+      this.target = threats.length ? threats.reduce((a, e) => e.pos.distanceTo(P.pos) < a.pos.distanceTo(P.pos) ? e : a) : null; return; }
+    if (o && o.type === 'attack') this.order = null; // target gone: back to free hunting
     // escorts stay with their bombers and only engage fighters that come close to them
     if (c.spec.task === 'escort') {
       const flock = m.crafts.filter(e => e.alive && !e.wreck && e.team === c.team && (e.spec.task === 'bomb' || e.def.role === 'bomber'));

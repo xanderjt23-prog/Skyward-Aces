@@ -142,7 +142,7 @@ const Profile = (() => {
     const pl = PLANES[planeId], m = modsOf(planeId), belts = {};
     for (const g of gunsOf(pl)) belts[g] = hasBelt(planeId, g, m.beltSel[g]) ? (m.beltSel[g] || 'std') : 'std';
     const inst = {}; for (const k in m.inst) if (m.inst[k] && m.upg[k]) inst[k] = true;
-    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst, livery: m.livery || null, keys: Object.assign({}, m.keys || {}) };
+    return { belts, stores: m.slots.slice(), perSlot: true, mods: inst, livery: m.livery || null, keys: Object.assign({}, m.keys || {}), conv: m.conv || null };
   }
 
   // ---- stats & achievements

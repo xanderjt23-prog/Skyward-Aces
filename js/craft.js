@@ -4,7 +4,7 @@
 // is moved from network state. Either way it has a model and hit boxes.
 // ============================================================================
 const V3 = THREE.Vector3;
-const CONV = [0, 150, 220, 300, 400, 500, 500, 500]; // gun convergence by era (m)
+const CONV = [0, 150, 220, 300, 400, 500, 500, 500]; // gun convergence by era (m): the default; pilots set their own (Modifications)
 
 const _ax = new THREE.Vector3();
 class Craft {
@@ -45,8 +45,10 @@ class Craft {
     this.crashed = false; this.dmgVer++; this.onGround = false; this.gearDown = false; this.serviceT = 0; this.serviced = false; this.brakes = false; this.missileWarn = 0; this.lockTarget = null; this.lockT = 0;
     if (this.ai) this.ai.reset();
   }
+  // where the wing guns' fire meets: the pilot's setting (Modifications -> Gun ammunition), else the era's usual
+  static convOf(def, lo) { const c = lo && +lo.conv; return c >= 100 && c <= 1000 ? c : CONV[def.era]; }
   buildGuns() {
-    const d = this.def, lay = Models.layout(d), conv = CONV[d.era], out = [];
+    const d = this.def, lay = Models.layout(d), conv = Craft.convOf(d, this.lo), out = [];
     const mk = (gid, n, mount, beltId, pod) => {
       const g = GUNS[gid], b = BELTS[beltId] || BELTS.std, bar = [];
       for (let i = 0; i < n; i++) {

@@ -165,6 +165,8 @@ const UI = (() => {
       <span class="pill">Coins: <b>${fmt(p.coins)}</b></span></div>
       <div class="tabs">${[['ammo', 'Gun ammunition'], ['loadout', 'Ordnance & loadout'], ['upg', 'Airframe upgrades'], ['paint', 'Paint schemes']].map(([k, n]) => `<button class="tab ${modsTab === k ? 'sel' : ''}" data-mt="${k}">${n}</button>`).join('')}</div>`;
     if (modsTab === 'ammo') {
+      if (pl.guns.some(g => g[2] === 'wing')) { const cv = Craft.convOf(pl, { conv: m.conv });
+        h += `<div class="card" style="margin-bottom:10px"><h3>Gun convergence: <span id="conv-v">${cv}</span> m</h3><p class="small muted">The wing guns are angled in so their fire meets at this distance; closer than that the streams pass either side of the target, much further and they have crossed. Pilots set it to suit their tactics: Allied fighters often 230-370 m (250-400 yd), aces closer.</p><input type="range" id="conv" min="150" max="800" step="10" value="${cv}"></div>`; }
       for (const gid of Profile.gunsOf(pl)) {
         const sel = Profile.loadoutFor(pl.id).belts[gid];
         h += `<div class="card" style="margin-bottom:10px"><h3>${GUNS[gid].name}</h3>`;
@@ -223,6 +225,7 @@ const UI = (() => {
     const after = ok => { if (!ok) toastMenu('Not enough coins'); Profile.checkAchievements(); refresh(); renderMods(); };
     $$('[data-buybelt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.buybelt.split('|'); after(Profile.buyBelt(pl.id, g, k)); });
     $$('[data-belt]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.belt.split('|'); Profile.selectBelt(pl.id, g, k); renderMods(); });
+    if ($('#conv')) { $('#conv').oninput = e => { $('#conv-v').textContent = e.target.value; }; $('#conv').onchange = e => { Profile.modsOf(pl.id).conv = +e.target.value; Profile.save(); }; }
     $$('[data-buystore]').forEach(b => b.onclick = () => after(Profile.buyStore(pl.id, b.dataset.buystore)));
     $$('[data-kw]').forEach(b => b.onclick = () => { keyPick = keyPick === b.dataset.kw ? null : b.dataset.kw; renderMods(); });
     $$('[data-kk]').forEach(b => b.onclick = () => { if (!keyPick) return toastMenu('Click a weapon first'); Profile.setWeaponKey(pl.id, keyPick, +b.dataset.kk); keyPick = null; renderMods(); });

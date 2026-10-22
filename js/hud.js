@@ -60,7 +60,7 @@ const HUD = (() => {
     }
     if (p && p.alive && !p.wreck) {
       // nose reticle (where the guns converge) and mouse-aim circle
-      const conv = CONV[p.def.era];
+      const conv = Craft.convOf(p.def, p.lo);
       const ns = proj(p.pos.clone().addScaledVector(fwd, conv), cam), cc = Profile.get().settings.cross || '#ffffff';
       // drawn twice: a dark outline first so the reticle shows on snow, cloud and sea alike
       if (ns && !pit) for (const [col, w] of [['rgba(0,0,0,0.65)', 4], [cc, 2]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(ns.x - 14, ns.y); g.lineTo(ns.x - 5, ns.y); g.moveTo(ns.x + 5, ns.y); g.lineTo(ns.x + 14, ns.y); g.moveTo(ns.x, ns.y + 5); g.lineTo(ns.x, ns.y + 12); g.stroke(); ring(ns.x, ns.y, 2, col, w); }
