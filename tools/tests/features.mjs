@@ -29,13 +29,13 @@ export default async function (t) {
   const nb0 = await t.eval("Game.match.player.count('b')"); await t.key('1'); await t.key('1', 'keyUp'); const nb1 = await t.eval("Game.match.player.count('b')");
   console.log('bombs before/after key 1:', nb0, nb1, '| bombs in the air', await t.eval("Game.match.combat.bombs.length"));
   await t.key('b'); await t.eval("Game.leave(); document.querySelector('#res-ok') && document.querySelector('#res-ok').click(); 1");
-  // ---- F-16C with two missile types: key 5 switches, key 3 fires (needs a lock: just check the selection)
+  // ---- F-16C with two missile types: each type has its own key (1 = infrared, 2 = radar); pressing one arms that type
   await t.eval(`(() => { const sl = Loadout.slots(PLANES.f16c), ms = Object.keys(STORES).filter(k => STORES[k].kind === 'm' && sl.some(s => Loadout.allowed(PLANES.f16c, s, k))); ms.forEach(k => Profile.buyStore('f16c', k));
     const a = ms.find(k => STORES[k].seek === 'ir'), b = ms.find(k => STORES[k].seek !== 'ir'); let n = 0; for (const s of sl) { if (Loadout.allowed(PLANES.f16c, s, n % 2 ? b : a)) Profile.setSlot('f16c', s.i, n++ % 2 ? b : a, false); }
     Profile.get().selected = 'f16c'; const cfg = Plan.build({ mode: 'dogfight', teamSize: [1, 1], time: 300 }, [{ name: 'T', plane: 'f16c', loadout: Profile.loadoutFor('f16c'), owner: 'H', team: 0 }]);
     Game.startMatch(cfg, { playerId: cfg.roster.find(r => !r.bot).id, isHost: true }); return 1; })()`);
   await t.eval("for (let k = 0; k < 10; k++) Game.update(1/30); 1");
-  const s0 = await t.eval("Game.match.player.missileStation() && Game.match.player.missileSel"); await t.key('5'); const s1 = await t.eval("Game.match.player.missileSel");
-  console.log('missile types', await t.eval("JSON.stringify(Game.match.player.missileTypes())"), 'selected', s0, '-> after 5:', s1);
-  console.log('binds', await t.eval("['bombs','rockets','missile','flares','missileSelect','bombsight','brakes'].map(a => a + '=' + Input.label(Input.bind(a))).join(' ')"));
+  const slots = await t.eval("JSON.stringify(Game.match.player.weaponSlots())"); await t.key('2'); const armed2 = await t.eval("Game.armed"); await t.key('1'); const armed1 = await t.eval("Game.armed");
+  console.log('weapon slots', slots, '| armed after 2:', armed2, 'after 1:', armed1);
+  console.log('binds', await t.eval("['weapon1','weapon2','weapon3','flares','bombsight','brakes'].map(a => a + '=' + Input.label(Input.bind(a))).join(' ')"));
 }

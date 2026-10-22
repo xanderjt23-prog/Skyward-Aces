@@ -214,6 +214,7 @@ class Craft {
       st.meshes.forEach((m, i) => { m.visible = i < left; }); }
   }
   loadStores() {
+    this._wslots = null; // weapon slots are rebuilt from the new loadout
     const d = this.def;
     this.mass = d.mass + (this.lo.mods.armor ? 40 : 0);
     const sl = Loadout.slots(d), ids = Loadout.of(d, this.lo);
@@ -225,7 +226,10 @@ class Craft {
     while (dm.events.length) {
       const e = dm.events.shift(); this.dmgVer++;
       const u = this.model.userData;
-      if (e === 'wingL' || e === 'wingR') { const w = e === 'wingL' ? u.wingL : u.wingR; if (w.visible) { w.visible = false; this.match.spawnDebris(this, w); } }
+      if (e === 'wingL' || e === 'wingR') { const w = e === 'wingL' ? u.wingL : u.wingR; if (w.visible) { w.visible = false; this.match.spawnDebris(this, w); }
+        // everything hanging on that wing goes with it (the same weapon on the other wing stays usable)
+        const side = e === 'wingL' ? -1 : 1;
+        for (const st of this.stations || []) if (st.slot && st.slot.side === side && st.slot.band >= 2 && st.n > 0) { this.releaseMass(st, st.n); st.n = 0; for (const mk of st.meshes || []) mk.visible = false; } }
       if (this.local) this.match.onDamageEvent(this, e);
     }
   }
@@ -284,6 +288,14 @@ class Craft {
   }
   // ---- secondary weapons
   stationsOf(kind) { return this.stations.filter(s => s.s.kind === kind && s.n > 0); }
+  // weapon slots: every store type carried (missiles first, infrared before radar, then bombs, rockets), fixed for the sortie
+  // so the keys never shift as weapons are used up
+  weaponSlots() {
+    if (!this._wslots) { const ids = [...new Set(this.stations.filter(s => s.s.kind !== 'g').map(s => s.id))], ord = id => { const st = STORES[id]; return ({ m: 0, b: 2, r: 3 })[st.kind] + (st.kind === 'm' && st.seek !== 'ir' ? 1 : 0); };
+      this._wslots = ids.sort((a, b) => ord(a) - ord(b)); }
+    return this._wslots;
+  }
+  countOf(id) { return this.stations.filter(s => s.id === id).reduce((a, s) => a + s.n, 0); }
   // the next pylon(s) to release from: of the given type (or the first in line), outboard pylons first, and its loaded
   // mirror on the other wing so the aircraft stays balanced
   releaseSet(kind, pick) {
@@ -293,9 +305,9 @@ class Craft {
   releasePoint(st) { const p = st.local ? st.local.clone() : new V3(0, -Models.layout(this.def).fr - 0.5, 0); return p.applyQuaternion(this.quat).add(this.pos); }
   count(kind) { return this.stationsOf(kind).reduce((a, s) => a + s.n, 0); }
   releaseMass(s, n) { this.mass -= s.s.mass / (s.s.count || 1) * n; this.perf = Flight.perf(this.def, this.lo.mods, this.mass); }
-  dropBomb() {
+  dropBomb(id) {
     if (this.dm.destroyed) return false;
-    const heavy = this.stationsOf('b').reduce((m, s) => Math.max(m, s.s.mass), 0), set = this.releaseSet('b', s => s.s.mass === heavy); if (!set.length) return false;
+    const heavy = this.stationsOf('b').reduce((m, s) => Math.max(m, s.s.mass), 0), set = this.releaseSet('b', id ? s => s.id === id : s => s.s.mass === heavy); if (!set.length) return false;
     for (const st of set) { const n = st.slot.bay ? Math.min(st.n, 2) : 1; // a bay releases two at a time, an external pylon its one bomb
       for (let i = 0; i < n; i++) {
         // bombs tumble and scatter a little on release (more from high altitude level bombers)
@@ -315,8 +327,8 @@ class Craft {
     const g = this.guns.find(x => x.ammo > 0) || this.guns[0], ms = g ? g.g.ms : 800, d = t.pos.distanceTo(this.pos), tof = d / ms;
     return t.pos.clone().addScaledVector(t.vel.clone().sub(this.vel), tof).add(new V3(0, 4.9 * tof * tof, 0));
   }
-  fireRockets() {
-    if (this.dm.destroyed) return false; const set = this.releaseSet('r'); if (!set.length) return false;
+  fireRockets(id) {
+    if (this.dm.destroyed) return false; const set = this.releaseSet('r', id ? s => s.id === id : null); if (!set.length) return false;
     for (const st of set) { const salvo = st.id === 'r4m' ? Math.min(st.n, 3) : 1;
       for (let i = 0; i < salvo; i++) { const dir = new V3((Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008, -1).normalize().applyQuaternion(this.quat);
         this.match.combat.rocket(this.releasePoint(st), dir, this.vel.clone(), this, st.s); }
@@ -326,7 +338,7 @@ class Craft {
   // best missile & target for the current nose direction (used for the lock tone and AI)
   // the selected missile type (cycled with its key); by default the first infrared type
   missileTypes() { return [...new Set(this.stationsOf('m').map(s => s.id))]; }
-  missileStation() { const types = this.missileTypes(); if (!types.length) return null;
+  missileStation(id) { if (id) return this.releaseSet('m', s => s.id === id)[0] || null; const types = this.missileTypes(); if (!types.length) return null;
     if (!types.includes(this.missileSel)) this.missileSel = types.slice().sort((a, b) => (STORES[b].seek === 'ir') - (STORES[a].seek === 'ir'))[0];
     return this.releaseSet('m', s => s.id === this.missileSel)[0] || null; }
   cycleMissile() { const t = this.missileTypes(); if (t.length < 2) return false; this.missileStation(); this.missileSel = t[(t.indexOf(this.missileSel) + 1) % t.length]; return true; }
@@ -350,7 +362,7 @@ class Craft {
     return best;
   }
   fireMissile(target) {
-    const st = this.missileStation(); if (!st || !target || this.dm.destroyed) return false;
+    const st = this.missileStation(arguments[1]); if (!st || !target || this.dm.destroyed) return false;
     this.match.combat.missile(this.releasePoint(st), this.vel.clone(), this, st.s, target, st.id);
     st.n--; this.releaseMass(st, 1); return true;
   }

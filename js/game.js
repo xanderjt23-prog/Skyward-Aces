@@ -83,21 +83,24 @@ const Game = (() => {
       Input.keys[code] = true;
       const m = G.match, p = m && m.player;
       for (const act of Input.actionsFor(code)) {
-        if (e && (act === 'scoreboard' || act === 'bombs' || act === 'brakes')) e.preventDefault();
+        if (e && (act === 'scoreboard' || act === 'brakes' || act.startsWith('weapon'))) e.preventDefault();
         if (act === 'scoreboard') UI.scoreboard(true);
         if (!p) continue;
         if (act === 'camera') G.camMode = G.camMode === 'chase' ? 'nose' : 'chase';
         if (act === 'bombsight') { if (p.def.bombsight) G.camMode = G.camMode === 'sight' ? 'chase' : 'sight'; else UI.toast('No bombsight on this aircraft'); }
         if (p.alive && !p.wreck) {
-          if (act === 'bombs') p.dropBomb();
-          if (act === 'rockets') p.fireRockets();
-          if (act === 'missile') { if (G.locked && G.seeker) { if (p.fireMissile(G.seeker)) { G.lockT = 0; G.locked = false; } } else UI.toast('No missile lock'); }
+          if (act.startsWith('weapon')) { const id = p.weaponSlots()[+act.slice(6) - 1];
+            if (!id) { UI.toast('Nothing on weapon key ' + act.slice(6)); }
+            else if (!p.countOf(id)) UI.toast(STORES[id].name + ': none left');
+            else if (STORES[id].kind === 'b') p.dropBomb(id);
+            else if (STORES[id].kind === 'r') p.fireRockets(id);
+            else { G.armed = id; const L = G.locks && G.locks[id];
+              if (L && L.locked && L.sk) { if (p.fireMissile(L.sk, id)) { L.t = 0; L.locked = false; } } else UI.toast(STORES[id].name + ': no lock yet'); } }
           if (act === 'flares') p.dropFlares();
           if (act === 'gear') p.toggleGear && p.toggleGear();
           if (act === 'flapsDown') p.setFlaps(1);
           if (act === 'flapsUp') p.setFlaps(-1);
           if (act === 'guns') p.cycleGuns();
-          if (act === 'missileSelect') { if (p.cycleMissile()) UI.toast('Missile: ' + STORES[p.missileSel].name); }
         }
       }
       if (p && !p.alive && (code === 'Space' || code === 'Enter' || code === 'Mouse0')) UI.tryRespawn();
@@ -183,14 +186,18 @@ const Game = (() => {
     let best = null, bs = 0.2;
     for (const c of m.crafts) { if (!c.alive || c.team === p.team || c.wreck) continue; const to = c.pos.clone().sub(p.pos), d = to.length(); if (d > 3500) continue; const a = Math.acos(Math.max(-1, Math.min(1, to.dot(G.aimDir) / d))) + (c === G.target ? -0.05 : 0); if (a < bs) { bs = a; best = c; } }
     G.target = best;
-    // missile seeker and lock tone
-    const st = p.missileStation();
-    if (st) {
-      const hobs = st.s.fov >= 45; const sk = p.seekerTarget(st, hobs ? G.aimDir : null);
-      if (sk && sk === G.seeker) G.lockT += dt; else { G.lockT = 0; }
-      G.seeker = sk; G.locked = !!sk && G.lockT > (st.s.seek === 'ir' ? 0.7 : 1.2);
-      Sound.lockTone(sk ? (G.locked ? 2 : 1) : 0);
-    } else { G.seeker = null; G.locked = false; Sound.lockTone(0); }
+    // seekers: every missile type carried searches on its own (an infrared seeker for the heat seekers, the radar for the
+    // radar missiles), so whichever key is pressed fires that missile at its own lock. The tone and the HUD follow the type
+    // last used (the "armed" one), or the first missile type
+    G.locks = G.locks || {}; const types = p.missileTypes();
+    if (!types.includes(G.armed)) G.armed = types[0] || null;
+    for (const id of Object.keys(G.locks)) if (!types.includes(id)) delete G.locks[id];
+    for (const id of types) { const st = p.missileStation(id), L = G.locks[id] || (G.locks[id] = { sk: null, t: 0 }); if (!st) continue;
+      const hobs = st.s.fov >= 45, sk = p.seekerTarget(st, hobs ? G.aimDir : null);
+      if (sk && sk === L.sk) L.t += dt; else L.t = 0; L.sk = sk; L.locked = !!sk && L.t > (st.s.seek === 'ir' ? 0.7 : 1.2); }
+    const A = G.armed && G.locks[G.armed];
+    G.seeker = A ? A.sk : null; G.locked = !!(A && A.locked); G.lockT = A ? A.t : 0;
+    Sound.lockTone(A && A.sk ? (A.locked ? 2 : 1) : 0, G.armed && STORES[G.armed].seek !== 'ir');
     // out of bounds
     if (Math.abs(p.pos.x) > m.half || Math.abs(p.pos.z) > m.half) { G.oobT += dt; if (G.oobT > 20) { G.oobT = 0; m.onCrash(p, false); } } else G.oobT = 0;
   }

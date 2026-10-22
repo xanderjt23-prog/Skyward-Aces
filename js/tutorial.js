@@ -6,6 +6,8 @@
 // ============================================================================
 const Tutorial = (() => {
   const K = a => Input.label(Input.bind(a));
+  // the number key of the first weapon type on the player's aircraft that passes `test` (each type has its own key)
+  const WK = test => { const p = Game.match && Game.match.player, i = p ? p.weaponSlots().findIndex(id => test(STORES[id])) : -1; return i < 0 ? '?' : K('weapon' + (i + 1)); };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const agl = (m, p) => p.pos.y - m.world.groundAt(p.pos.x, p.pos.z);
   const bankDeg = p => { const ax = Flight.axes(p); return Math.atan2(-ax.right.y, ax.up.y) * 180 / Math.PI; };
@@ -70,7 +72,7 @@ const Tutorial = (() => {
       steps: [
         { text: () => `A factory is straight ahead. Press ${K('bombsight')} to look through the Norden bombsight.`, done: c => c.G.camMode === 'sight' },
         { text: () => `The cross hair marks where a bomb released now would land. Steer gently (mouse or ${K('rollLeft')} / ${K('rollRight')}) so the target slides down the vertical course hair.`, done: c => c.onCourse(250) },
-        { text: () => `Release the bombs with ${K('bombs')} just as the target meets the cross hair. Each press drops two.`, done: c => c.p.count('b') < c.full },
+        { text: () => `Release the bombs with ${WK(s => s.kind === 'b')} just as the target meets the cross hair. Each press drops two.`, done: c => c.p.count('b') < c.full },
         { text: () => `Keep dropping until the factory is destroyed. Out of bombs? They are reloaded for another pass.`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
       ] },
     { id: 'divebomb', name: 'Dive bombing', icon: '⬇️', plane: 'ju87', desc: 'The Ju 87 Stuka: fly over the target, extend the dive brakes, dive at 60-80°, release low and pull out.',
@@ -78,7 +80,7 @@ const Tutorial = (() => {
       steps: [
         { text: () => `Fly towards the camp ahead until it is almost under you.`, done: c => c.hdist(enemyBase(c.m).pos) < 700 },
         { text: () => `Hold ${K('brakes')} to extend the dive brakes, then push the nose down: aim the mouse at the target and dive steeper than 60°.`, done: c => diveDeg(c.p) < -60 },
-        { text: () => `Keep the target in the middle and release with ${K('bombs')} below 1,000 m.`, done: c => c.p.count('b') < c.full && agl(c.m, c.p) < 1100 },
+        { text: () => `Keep the target in the middle and release with ${WK(s => s.kind === 'b')} below 1,000 m.`, done: c => c.p.count('b') < c.full && agl(c.m, c.p) < 1100 },
         { text: () => `Pull out! Let go of the brakes and climb away.`, done: c => c.p.vel.y > 0 && agl(c.m, c.p) > 150 },
         { text: () => `Did it hit? Make more passes until the camp is destroyed (bombs are reloaded when you run out).`, done: c => { const b = enemyBase(c.m); if (b && !b.dead && !c.p.count('b') && !c.m.combat.bombs.length) c.reload(); return b && b.dead; } },
       ] },
@@ -86,18 +88,17 @@ const Tutorial = (() => {
       start: { alt: 1200, z: 3500 }, lo: pl => loadout(pl, 'r'), tanks: 4,
       steps: [
         { text: () => `Tanks ahead (red diamonds). Line up on them in a shallow 20-30° dive.`, done: c => c.m.vehicles.list.some(v => !v.dead && v.pos.distanceTo(c.p.pos) < 1500) && diveDeg(c.p) < -10 },
-        { text: () => `Fire rockets with ${K('rockets')}: they fall a little, so put the nose just above the tank.`, done: c => c.p.count('r') < c.full },
+        { text: () => `Fire rockets with ${WK(s => s.kind === 'r')}: they fall a little, so put the nose just above the tank.`, done: c => c.p.count('r') < c.full },
         { text: () => `Destroy two tanks.`, done: c => c.m.vehicles.list.filter(v => v.dead).length >= 2 },
       ] },
-    { id: 'missiles', name: 'Air-to-air missiles', icon: '🎯', plane: 'f16c', desc: 'The F-16C with Sidewinders and AMRAAMs: getting a lock, firing, and switching missile types.',
+    { id: 'missiles', name: 'Air-to-air missiles', icon: '🎯', plane: 'f16c', desc: 'The F-16C with Sidewinders and AMRAAMs: getting a lock and firing, with each missile type on its own key.',
       start: { alt: 4000 }, lo: pl => missileFit(pl),
       bots: () => [target('m1', 'mig21bis', 200, 4100, -3500), target('m2', 'mig21bis', -600, 4300, -14000)],
       steps: [
         { text: () => `Point the nose at the target ahead. The Sidewinder's seeker growls when it sees the heat; LOCK appears and the tone rises when it has a lock.`, done: c => c.G.locked },
-        { text: () => `Fire with ${K('missile')}.`, done: c => c.m.combat.missiles.some(x => x.owner === c.p) || c.kills() >= 1 },
+        { text: () => `Fire the Sidewinder with ${WK(s => s.kind === 'm' && s.seek === 'ir')}.`, done: c => c.m.combat.missiles.some(x => x.owner === c.p) || c.kills() >= 1 },
         { text: () => `Wait for the hit. If it missed, lock and fire again.`, done: c => c.kills() >= 1 },
-        { text: () => `The second target is 10 km out: too far for a Sidewinder. Press ${K('missileSelect')} to switch to the radar-guided AMRAAM.`, done: c => c.p.missileSel && STORES[c.p.missileSel].seek !== 'ir' },
-        { text: () => `Point at the second target, wait for the lock and fire (${K('missile')}). The AMRAAM guides itself.`, done: c => c.kills() >= 2 },
+        { text: () => `The second target is 10 km out: too far for a Sidewinder. Each weapon has its own key: the radar-guided AMRAAM is on ${WK(s => s.kind === 'm' && s.seek !== 'ir')}. Point at the target, wait for the lock and press it. The AMRAAM guides itself.`, done: c => c.kills() >= 2 },
       ] },
     { id: 'flares', name: 'Missile defence', icon: '🎆', plane: 'f16c', desc: 'Heat-seeking missiles are fired at you: release flares and turn hard to make them miss.',
       start: { alt: 4000 }, bots: () => [target('e1', 'mig29', 0, 4000, 4000, { team: 1 })],

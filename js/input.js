@@ -16,12 +16,11 @@ const Input = (() => {
     ['yawRight', 'Rudder right', 'KeyE', 'hold'],
     ['pitchUp', 'Pull — manual override (stall, cobra)', 'ArrowDown', 'hold'],
     ['pitchDown', 'Push — manual override', 'ArrowUp', 'hold'],
-    // secondary weapons on the number row
-    ['bombs', 'Drop bombs', 'Digit1', 'press'],
-    ['rockets', 'Fire rockets', 'Digit2', 'press'],
-    ['missile', 'Fire missile', 'Digit3', 'press'],
-    ['flares', 'Release flares / countermeasures', 'Digit4', 'press'],
-    ['missileSelect', 'Switch missile type', 'Digit5', 'press'],
+    // secondary weapons on the number row: every weapon type the aircraft carries gets its own key, in the order shown in
+    // the weapons line (e.g. 1 = AIM-9, 2 = AIM-120, 3 = Mk 82): press it to fire / drop that weapon
+    ['weapon1', 'Weapon 1', 'Digit1', 'press'], ['weapon2', 'Weapon 2', 'Digit2', 'press'], ['weapon3', 'Weapon 3', 'Digit3', 'press'], ['weapon4', 'Weapon 4', 'Digit4', 'press'],
+    ['weapon5', 'Weapon 5', 'Digit5', 'press'], ['weapon6', 'Weapon 6', 'Digit6', 'press'], ['weapon7', 'Weapon 7', 'Digit7', 'press'], ['weapon8', 'Weapon 8', 'Digit8', 'press'],
+    ['flares', 'Countermeasures (flares, and chaff on jets with a dispenser)', 'KeyX', 'press'],
     ['bombsight', 'Bombsight view (bombers with a bomb aimer)', 'KeyB', 'press'],
     ['flapsDown', 'Flaps down one notch (combat / take-off / landing)', 'KeyZ', 'press'],
     ['flapsUp', 'Flaps up one notch', 'KeyH', 'press'],

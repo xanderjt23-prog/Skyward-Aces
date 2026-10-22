@@ -130,7 +130,7 @@ const HUD = (() => {
     const rows = [[s.name, ''], ['Height', Math.round(agl) + ' m'], ['Air speed', Math.round(p.speed * 3.6) + ' km/h'], ['Ground speed', Math.round(gs * 3.6) + ' km/h'], ['Drift', (drift >= 0 ? 'R ' : 'L ') + Math.abs(drift).toFixed(1) + '°'],
       ['Time of fall', ip ? ip.tti.toFixed(1) + ' s' : '—'], ['Dropping angle', ip ? (Math.atan2(Math.hypot(ip.x - p.pos.x, ip.z - p.pos.z), agl) * 180 / Math.PI).toFixed(1) + '°' : '—'], ['Bombs', String(p.count('b'))]];
     rows.forEach(([a, b], i) => { text(a, 24, 40 + i * 20, i ? '#cfd8e0' : '#ffd34d', i ? 13 : 15, 'left', !i); if (b) text(b, 190, 40 + i * 20, '#ffffff', 13, 'left', true); });
-    text(`${s.gyro ? 'Gyro-stabilised' : 'Fixed (not stabilised): keep the wings level'} · release: ${Input.label(Input.bind('bombs'))} · zoom: ${Input.label(Input.bind('zoom'))} · leave: ${Input.label(Input.bind('bombsight'))}`, W / 2, 76, '#cfd8e0', 12, 'center', true);
+    text(`${s.gyro ? 'Gyro-stabilised' : 'Fixed (not stabilised): keep the wings level'} · release: ${(() => { const i = p.weaponSlots().findIndex(id => STORES[id].kind === 'b'); return i < 0 ? '-' : Input.label(Input.bind('weapon' + (i + 1))); })()} · zoom: ${Input.label(Input.bind('zoom'))} · leave: ${Input.label(Input.bind('bombsight'))}`, W / 2, 76, '#cfd8e0', 12, 'center', true);
   }
   // ---- arrows at the screen edge for enemies that are off screen
   function offscreen(game, p, cam) {
@@ -166,9 +166,8 @@ const HUD = (() => {
     if (p.flaps) parts.push('FLAPS ' + Craft.FLAP_NAMES[p.flaps].toUpperCase()); else if (p.flapsBroken) parts.push('FLAPS DAMAGED');
     if (p.airbrakeOut) parts.push('AIRBRAKE');
     for (const g2 of p.guns) if (g2.pod) parts.push(`POD ${Math.max(0, g2.pod.gunAmmo | 0)}`);
-    const nb = p.count('b'), nr = p.count('r'), nm = p.count('m');
-    if (nb) parts.push(`BOMBS ${nb} [${Input.label(Input.bind('bombs'))}]`); if (nr) parts.push(`ROCKETS ${nr} [${Input.label(Input.bind('rockets'))}]`);
-    if (nm) { const st = p.missileStation(); parts.push(`${st.s.name.split(' ')[0]} ×${nm} [${Input.label(Input.bind('missile'))}]`); }
+    p.weaponSlots().forEach((id, i) => { const n = p.countOf(id), s = STORES[id], short = s.name.replace(/ \(.*\)$/, '').replace(/ (pod|rockets).*$/, '').slice(0, 18);
+      parts.push(`[${Input.label(Input.bind('weapon' + (i + 1)))}] ${short} ×${n}${s.kind === 'm' && id === game.armed && game.locked ? ' LOCK' : ''}`); });
     if (p.def.flares) parts.push(`FLARES ${p.flares} [${Input.label(Input.bind('flares'))}]`);
     if (game.match.cfg.realistic) parts.push(Models.layout(p.def).fixed ? 'GEAR FIXED' : p.gearDown ? 'GEAR ▼ DOWN' : 'GEAR ▲ UP');
     if (pit) { const t2 = parts.join('   '); g.font = '12px sans-serif'; const w2 = g.measureText(t2).width + 24; g.fillStyle = 'rgba(8,14,22,0.5)'; round(cx - w2 / 2, 62, w2, 22, 8); g.fill(); text(t2, cx, 77, COL.white, 12, 'center'); }
