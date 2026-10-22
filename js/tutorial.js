@@ -104,23 +104,26 @@ const Tutorial = (() => {
   function clearGuide(m, T) { if (T.guide) { m.scene.remove(T.guide); T.guide.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry && o.geometry !== RING) o.geometry.dispose(); }); T.guide = null; } }
   function buildGates(m, T, pts, R) {
     clearGuide(m, T); const S = T.S; S.gates = pts; S.gi = 0; S.gR = R; S.far = 0;
-    const grp = new THREE.Group(); T.guide = grp; m.scene.add(grp);
+    const grp = new THREE.Group(); grp.userData.tutGuide = true; T.guide = grp; m.scene.add(grp);
     S.rings = pts.map((q, i) => { const tg = (pts[i + 1] || q).clone().sub(pts[i - 1] || q).normalize(); const r = new THREE.Mesh(RING, ringMat()); r.position.copy(q); r.scale.setScalar(R * 0.7); r.lookAt(q.clone().add(tg)); grp.add(r); return r; });
     const curve = new THREE.CatmullRomCurve3(pts), line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(pts.length * 8)), new THREE.LineBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.55, depthWrite: false, fog: false }));
     grp.add(line); S.line = line;
   }
   function guideRel(m, T, q, r) { // one moving ring and a line to it
-    const S = T.S; if (!T.guide) { const grp = new THREE.Group(); T.guide = grp; m.scene.add(grp); S.relRing = new THREE.Mesh(RING, ringMat()); grp.add(S.relRing);
+    const S = T.S; if (!T.guide) { const grp = new THREE.Group(); grp.userData.tutGuide = true; T.guide = grp; m.scene.add(grp); S.relRing = new THREE.Mesh(RING, ringMat()); grp.add(S.relRing);
       S.relLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new V3(), new V3()]), new THREE.LineBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.5, depthWrite: false, fog: false })); grp.add(S.relLine); }
     S.relRing.position.copy(q); S.relRing.scale.setScalar(r); S.relRing.lookAt(m.player.pos); S.relLine.geometry.setFromPoints([m.player.pos.clone().add(new V3(0, -3, 0)), q]);
   }
   // per frame: scripted aircraft, gates passed, the moving ring reached
   function guide(m, T, st, c, dt) {
     const S = T.S, p = m.player;
-    if (!S.setup) { S.setup = true; S.F = frame(p); S.k = { R: turnR(p), v: p.speed }; S.bt = 0; clearGuide(m, T);
+    if (!S.setup) {
+      const ready = Math.abs(pitchDeg(p)) < 20 && Math.abs(bankDeg(p)) < 35 && upY(p) > 0.5 && p.speed > p.perf.vs * 1.6;
+      S.readyT = ready ? (S.readyT || 0) + dt : 0; S.waitLevel = S.readyT < 0.8; if (S.waitLevel) return;
+      S.setup = true; S.F = frame(p); S.k = { R: turnR(p), v: p.speed }; S.bt = 0; clearGuide(m, T);
       for (const b of m.crafts) if (b !== p && b.spec && b.spec.tid) { park(b); b.rollA = 0; b.rollBase = null; }
       if (st.setup) st.setup(c, S.F, S.k);
-      if (st.gates) buildGates(m, T, st.gates(S.k).map(q => at(S.F, ...q)), Math.max(45, S.k.R * (st.gateR || 0.22))); }
+      if (st.gates) { const g = st.gates(S.k); if (g[0][2] > S.k.R * 0.2) g.unshift([0, 0, Math.min(g[0][2] * 0.5, S.k.R * 0.15)]); buildGates(m, T, g.map(q => at(S.F, ...q)), Math.max(45, S.k.R * (st.gateR || 0.22))); } } // a lead-in ring straight ahead
     S.bt += dt;
     if (st.script) st.script(c, dt, S.bt);
     for (const b of m.crafts) if (b !== p && b.spec && b.spec.tid && b.pos.z > 50000) { park(b); }
@@ -132,7 +135,8 @@ const Tutorial = (() => {
         if (skip >= 0) { S.gi = skip + 1; continue; } break; }
       S.rings.forEach((r, i) => { r.visible = i >= S.gi && i < S.gi + 6; r.material.opacity = i === S.gi ? 0.95 : 0.35; r.material.color.setHex(i === S.gi ? 0xffd34d : 0xffffff); });
       // strayed far from the next ring for a while: the path is laid out again from here
-      if (S.gi < S.gates.length) { const d = p.pos.distanceTo(S.gates[S.gi]); S.far = d > Math.max(1500, S.k.R * 4) ? S.far + dt : 0; if (S.far > 4) { S.setup = false; S.again = (S.again || 0) + 1; } }
+      if (S.gi < S.gates.length) { const g = S.gates[S.gi], d = p.pos.distanceTo(g), behind = g.clone().sub(p.pos).dot(p.vel) < 0 && d > S.gR * 2.5;
+        S.far = d > Math.max(1500, S.k.R * 4) || behind ? S.far + dt : 0; if (S.far > (behind ? 2.5 : 4)) { S.setup = false; S.again = (S.again || 0) + 1; S.gates = null; clearGuide(m, T); m.events.push({ t: m.time, e: 'msg', text: 'Missed the rings: they are laid out again ahead of you' }); } }
       else if (T.guide) clearGuide(m, T);
     }
     if (st.rel) { const who = bot(m, st.rel.who); if (!S.ri) S.ri = 0;
@@ -455,7 +459,7 @@ const Tutorial = (() => {
   // ---- HUD: the instruction panel and the waypoint marker
   function draw(g, W, H, m, cam, text, proj) {
     const T = m.tut; if (!T) return; const st = T.t.steps[Math.min(T.step, T.t.steps.length - 1)];
-    const msg = T.done ? 'Tutorial complete!' : st.text(ctx(m)), w = Math.min(820, W - 40), x = W / 2 - w / 2;
+    const msg = T.done ? 'Tutorial complete!' : T.S.waitLevel ? 'Get ready: level out. Wings level, nose on the horizon, a good cruising speed: the next maneuver is laid out ahead of you when you are.' : st.text(ctx(m)), w = Math.min(820, W - 40), x = W / 2 - w / 2;
     // the goal is the first sentence (up to the first colon or full stop), shown on its own; the how-to follows
     const cut = msg.search(/[:.](\s|$)/), goal = cut > 0 && cut < 90 ? msg.slice(0, cut + 1) : '', rest0 = goal ? msg.slice(cut + 1).trim() : msg, rest = rest0.charAt(0).toUpperCase() + rest0.slice(1);
     const wrap = (s, font) => { g.font = font; const out = ['']; for (const wd of s.split(' ')) { const tl = out[out.length - 1] + (out[out.length - 1] ? ' ' : '') + wd; if (g.measureText(tl).width > w - 34 && out[out.length - 1]) out.push(wd); else out[out.length - 1] = tl; } return out.filter(Boolean); };
@@ -465,6 +469,13 @@ const Tutorial = (() => {
     gl.forEach((l, i) => text(l, W / 2, 54 + i * 21, '#ffffff', 17, 'center', true));
     bl.forEach((l, i) => text(l, W / 2, 54 + gl.length * 21 + i * 18, '#d8e2ea', 14, 'center'));
     if (!T.done) text(`${K('tutorialReset')}: start this step again`, W / 2, 10 + h - 9, 'rgba(255,255,255,0.5)', 11, 'center');
+    // where the next ring is: its distance when it is on screen, an arrow at the edge of the screen when it is not
+    const S = T.S, next = S.gates && S.gi < S.gates.length ? S.gates[S.gi] : S.relRing && T.guide ? S.relRing.position : null;
+    if (next && !T.done) { const s = proj(next, cam), d = Math.round(next.distanceTo(m.player.pos));
+      if (s && s.x > 30 && s.x < W - 30 && s.y > 30 && s.y < H - 30) text(d + ' m', s.x, s.y + 4, '#ffd34d', 13, 'center', true);
+      else { const v = next.clone().sub(cam.position).applyQuaternion(cam.quaternion.clone().invert()), a = Math.atan2(-v.y, v.x), r = Math.min(W, H) * 0.32, ax = W / 2 + Math.cos(a) * r, ay = H / 2 + Math.sin(a) * r;
+        g.save(); g.translate(ax, ay); g.rotate(a); g.fillStyle = '#ffd34d'; g.beginPath(); g.moveTo(18, 0); g.lineTo(-8, -11); g.lineTo(-3, 0); g.lineTo(-8, 11); g.closePath(); g.fill(); g.restore();
+        text('next ring ' + d + ' m', ax, ay + 26, '#ffd34d', 12, 'center', true); } }
     if (st.wp && !T.done) { const s = proj(st.wp, cam); if (s) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(s.x, s.y - 16); g.lineTo(s.x + 16, s.y); g.lineTo(s.x, s.y + 16); g.lineTo(s.x - 16, s.y); g.closePath(); g.stroke();
       text(Math.round(st.wp.distanceTo(m.player.pos)) + ' m', s.x, s.y + 32, '#ffd34d', 12, 'center', true); } }
   }

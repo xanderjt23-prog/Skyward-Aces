@@ -660,6 +660,7 @@ class Match {
   }
   dispose() {
     this.combat.clear();
+    for (const o of this.scene.children.filter(o => o.userData && o.userData.tutGuide)) this.scene.remove(o); // a tutorial's rings never outlive it
     for (const c of this.crafts) this.scene.remove(c.model);
     for (const b of this.bases) { this.scene.remove(b.group); for (const a of b.aa) this.scene.remove(a.mount); }
     for (const d of this.debris) this.scene.remove(d.m);
