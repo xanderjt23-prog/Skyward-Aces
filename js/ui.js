@@ -57,6 +57,7 @@ const UI = (() => {
     ({ play: renderPlay, hangar: renderHangar, achievements: renderAch, mods: renderMods, research: renderResearch, profile: renderProfile, board: renderBoard })[name]();
   }
   function close() { panel = null; $('#panel').classList.add('hidden'); $('#side').classList.add('hidden'); $('#panel').classList.remove('narrow'); Game.menuView = 'default'; $$('#mainmenu button').forEach(b => b.classList.remove('sel')); Game.showPlane(P().selected); }
+  { const b = document.querySelector('meta[name=build]'), el = document.getElementById('build-id'); if (b && el && b.content) el.textContent = 'build ' + b.content; } // which published version is loaded
   const body = html => { $('#panel-body').innerHTML = html; };
   function toastMenu(t) { const el = $('#toast'); el.textContent = t; el.style.opacity = 1; el.style.zIndex = 30; clearTimeout(toastMenu.t); toastMenu.t = setTimeout(() => el.style.opacity = 0, 3500); }
 

@@ -159,3 +159,5 @@ button.ghost { opacity: 0.7; border-style: dashed; }
 .side-photo { display: block; width: 100%; max-height: 210px; object-fit: cover; border-radius: 8px; margin: 6px 0 2px; }
 .credit { font-size: 10px; color: var(--muted); margin-bottom: 8px; } .credit a { color: var(--muted); }
 .store-photo { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; background: rgba(255, 255, 255, 0.06); }
+
+#build-id { font: 500 10px Inter, sans-serif; letter-spacing: 0; color: rgba(255,255,255,0.35); margin-left: 10px; vertical-align: middle; }
