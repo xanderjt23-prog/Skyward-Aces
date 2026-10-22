@@ -21,6 +21,7 @@ const Input = (() => {
     ['weapon1', 'Weapon 1', 'Digit1', 'press'], ['weapon2', 'Weapon 2', 'Digit2', 'press'], ['weapon3', 'Weapon 3', 'Digit3', 'press'], ['weapon4', 'Weapon 4', 'Digit4', 'press'],
     ['weapon5', 'Weapon 5', 'Digit5', 'press'], ['weapon6', 'Weapon 6', 'Digit6', 'press'], ['weapon7', 'Weapon 7', 'Digit7', 'press'], ['weapon8', 'Weapon 8', 'Digit8', 'press'],
     ['flares', 'Countermeasures (flares, and chaff on jets with a dispenser)', 'KeyX', 'press'],
+    ['tutorialReset', 'Tutorials: start the current step again', 'KeyR', 'press'],
     ['bombsight', 'Bombsight view (bombers with a bomb aimer)', 'KeyB', 'press'],
     ['flapsDown', 'Flaps down one notch (combat / take-off / landing)', 'KeyZ', 'press'],
     ['flapsUp', 'Flaps up one notch', 'KeyH', 'press'],

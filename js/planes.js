@@ -246,6 +246,7 @@ function storeAllowed(plane, storeId, station) {
   if (s.nat && !s.nat.includes(plane.nation)) return false;
   if (s.bloc && s.bloc !== plane.bloc) return false;
   if (s.kind === 'm' && s.radar && !plane.radar) return false;
+  if (s.planes && !s.planes.includes(plane.id)) return false; // only the types really cleared to carry it
   return true;
 }
 function storesFor(plane) {

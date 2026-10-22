@@ -79,6 +79,7 @@ const Profile = (() => {
     const pl = PLANES[planeId];
     if (!m.slots || m.slots.length !== Loadout.slots(pl).length) m.slots = Loadout.normalise(pl, m.loadout, false); // per pylon (older saves: per group)
     migrateBombs(pl, m);
+    { const sl = Loadout.slots(pl); m.slots = m.slots.map((id, i) => id && !Loadout.allowed(pl, sl[i], id) ? null : id); } // nothing the aircraft cannot really carry
     if (!m.liveries) m.liveries = {}; if (m.livery === undefined) m.livery = null;
     return m;
   }

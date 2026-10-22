@@ -98,6 +98,7 @@ const Game = (() => {
             else { G.armed = id; const L = G.locks && G.locks[id];
               if (L && L.locked && L.sk) { if (p.fireMissile(L.sk, id)) { L.t = 0; L.locked = false; } } else UI.toast(STORES[id].name + ': no lock yet'); } }
           if (act === 'flares') p.dropFlares();
+          if (act === 'tutorialReset' && m.mode === 'tutorial') Tutorial.restartStep(m);
           if (act === 'gear') p.toggleGear && p.toggleGear();
           if (act === 'flapsDown') p.setFlaps(1);
           if (act === 'flapsUp') p.setFlaps(-1);
@@ -130,7 +131,7 @@ const Game = (() => {
   // ---- per frame
   function update(dt) {
     const m = G.match, p = m.player;
-    if (p && p.alive && !p.wreck) controlPlayer(dt, p);
+    if (p && p.alive && !p.wreck) { controlPlayer(dt, p); radioCalls(dt, p); }
     else if (p) { p.setTrigger(false); }
     m.cameraPos = camera.position;
     m.update(dt);
@@ -138,6 +139,21 @@ const Game = (() => {
     if (p) Sound.engineSet(p);
     UI.battleTick(m, dt);
     if (m.over && !G.resultShown) { G.endT += dt; if (G.endT > 2.5) { G.resultShown = true; finish(false); } }
+  }
+  // ground-control / AWACS radio calls: the nearest enemy group's bearing, range and height, as fighter controllers
+  // passed them (radar ground control from WW2, AWACS in the jet age; WW1 aircraft had no radio). Only while no enemy is
+  // close, so it steers you into the fight and stays quiet in it. Western aircraft hear feet and miles, Soviet metres.
+  function radioCalls(dt, p) {
+    const m = G.match; if (m.mode === 'tutorial' || p.def.era < 3) return;
+    G.gciT = (G.gciT == null ? 6 : G.gciT) - dt; if (G.gciT > 0) return; G.gciT = 32;
+    const foes = m.crafts.filter(c => c.alive && !c.wreck && c.team !== p.team); if (!foes.length) return;
+    const near = foes.reduce((a, c) => c.pos.distanceTo(p.pos) < a.pos.distanceTo(p.pos) ? c : a), d = near.pos.distanceTo(p.pos); if (d < 5000) { G.gciT = 10; return; }
+    const group = foes.filter(c => c.pos.distanceTo(near.pos) < 3000), to = near.pos.clone().sub(p.pos);
+    const brg = Math.round(((Math.atan2(to.x, -to.z) * 180 / Math.PI) + 360) % 360), hot = near.vel.clone().normalize().dot(to.clone().normalize().negate()) > 0.5;
+    const soviet = p.def.nation === 'ussr', who = p.def.era >= 5 ? (soviet ? 'Ground control' : 'AWACS') : 'Ground control';
+    const range = soviet ? Math.round(d / 1000) + ' km' : Math.round(d / 1852) + ' miles', alt = soviet ? Math.round(near.pos.y / 100) * 100 + ' m' : 'angels ' + Math.max(1, Math.round(near.pos.y * 3.281 / 1000));
+    const what = group.length > 1 ? `${group.length} bandits` : 'single bandit', bomb = group.some(c => c.def.role === 'bomber');
+    m.events.push({ t: m.time, e: 'msg', text: `${who}: ${what}${bomb ? ' (bombers)' : ''}, bearing ${String(brg).padStart(3, '0')}, ${range}, ${alt}${p.def.era >= 5 ? (hot ? ', hot' : ', cold') : ''}` });
   }
   function controlPlayer(dt, p) {
     const m = G.match;

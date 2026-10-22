@@ -180,6 +180,27 @@ const MISSILE_PHYS = {
   magic1: [2.72, 0.157, 1.9], s530f: [3.54, 0.263, 2.0, 4.5], micaem: [3.10, 0.16, 5.0, 0, 10000], asraam: [2.90, 0.166, 3.0], aim120d: [3.66, 0.178, 9.0, 0, 15000],
 };
 for (const id in MISSILE_PHYS) { const [len, dia, burn, sus, seekR] = MISSILE_PHYS[id]; Object.assign(STORES[id], { len, dia, burn, sus: sus || 0, seekR: seekR || 0 }); }
+// ---- which aircraft really carried each air-to-air missile (only types cleared for it in service; the era, nation
+// and pylon rules still apply on top). Missiles not listed here follow the general rules.
+const AAM_FITS = {
+  aim9b: ['f86f', 'f86fj', 'sabre6', 'f100d', 'f104g', 'f104j', 'f4e', 'f4ej', 'mirage3c'],
+  aim9d: ['f4e'], aim9p: ['f4e', 'f4ej', 'f104g', 'f104j', 'f16c', 'f1j'],
+  aim9l: ['f15c', 'f15j', 'f15e', 'f16c', 'fa18e', 'f14a', 'f22a', 'a10a', 'tornadoids', 'tornadogr1', 'tornadof3', 'ef2000g', 'ef2000uk', 'f2a', 'f1j', 'f4ej'],
+  aim9x: ['fa18e', 'f22a', 'f35a', 'f15e'],
+  aim4d: [],
+  aim7e: ['f4e', 'f4ej', 'f14a'], aim7f: ['f14a', 'f15c', 'f15j', 'f4ej', 'f2a'], aim7m: ['f14a', 'f15c', 'f15j', 'f15e', 'fa18e', 'f2a'],
+  aim120: ['f15c', 'f15e', 'f16c', 'fa18e', 'f22a', 'f35a', 'ef2000g', 'ef2000uk', 'tornadof3'], aim120d: ['fa18e', 'f22a', 'f35a', 'f15e'],
+  aim54: ['f14a'],
+  firestreak: ['lightning'], redtop: ['lightning'], skyflash: ['tornadof3'], asraam: ['ef2000uk', 'tornadof3'], meteor: ['ef2000g', 'ef2000uk', 'rafalec'],
+  irist: ['ef2000g', 'tornadoids'], micair: ['rafalec'], micaem: ['rafalec'],
+  magic1: ['mirage3c', 'mirageF1c', 'jaguar', 'm2000c'], magic2: ['m2000c', 'm2000d', 'mirageF1c', 'rafalec'], r530: ['mirage3c', 'mirageF1c'], s530f: ['mirageF1c'], s530d: ['m2000c'],
+  aam3: ['f15j', 'f2a', 'f4ej'], aam4: ['f15j', 'f2a'],
+  r3s: ['mig21mf', 'mig21bis', 'mig23'], r13m: ['mig21mf', 'mig21bis', 'mig23'], r60: ['mig21bis', 'mig23', 'mig25pd', 'mig29', 'mig29g', 'su27', 'su24', 'su25', 'su35s'],
+  r73: ['mig29', 'mig29g', 'su27', 'su35s', 'su57', 'su34'], r74: ['su35s', 'su57', 'su34'],
+  r27r: ['mig29', 'mig29g', 'su27', 'su35s', 'su34'], r27er: ['su27', 'su35s', 'su34'], r27et: ['su27', 'su35s', 'su34'],
+  r77: ['su35s', 'su57', 'su34'], r771: ['su35s', 'su57', 'su34'], r40t: ['mig25pd'], r40r: ['mig25pd'],
+};
+for (const id in AAM_FITS) { if (!STORES[id]) throw new Error('AAM_FITS: no store ' + id); STORES[id].planes = AAM_FITS[id]; }
 // the surface-to-air missile of the SAM sites (2K12 Kub / SA-6 class: semi-active radar, the site's radar illuminates)
 const SAM_STORE = { kind: 'm', name: 'SAM', seek: 'sarh', range: 9000, speed: 900, g: 18, fov: 40, ccm: 0.7, life: 25, mass: 599, len: 5.8, dia: 0.335, burn: 4, sus: 15, seekR: 0, radar: true };
 for (const id in STORES) if (STORES[id].kind === 'm' && !STORES[id].len) throw new Error('missile without airframe data: ' + id);

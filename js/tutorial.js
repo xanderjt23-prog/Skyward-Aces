@@ -305,8 +305,8 @@ const Tutorial = (() => {
       bots: () => [target('t1', 'b25j', -300, 1500, -1600), target('t2', 'b25j', 900, 1600, -2600), target('t3', 'b25j', -1200, 1400, -3600)],
       steps: [
         { text: () => `Three target bombers are ahead (red markers). Turn towards the nearest one.`, done: c => c.G.target && c.G.target.pos.distanceTo(c.p.pos) < 1200 },
-        { text: () => `Put your aim on the lead indicator (the circle ahead of the target) and hold ${K('fire')} when it turns white and says FIRE.`, done: c => c.kills() >= 1 },
-        { text: () => `Two more. Short bursts: guns overheat nothing here, but ammunition runs out.`, done: c => c.kills() >= 3 },
+        { text: () => `Lead the target: put your aim on the lead indicator (the circle ahead of it, shown in the outside view) and hold ${K('fire')} when it turns white and says FIRE. In the cockpit you aim with the aircraft's own gunsight instead.`, done: c => c.kills() >= 1 },
+        { text: () => `Shoot down the other two. Fire short bursts: your ammunition runs out quickly.`, done: c => c.kills() >= 3 },
       ] },
     { id: 'bombing', cat: 'mech', fits: pl => !!pl.bombsight && carries(pl, s => s.kind === 'b'), name: 'Level bombing with a bombsight', icon: '💣', plane: 'b17g', realistic: true, desc: 'A B-17G with its Norden bombsight: look through the sight, steer the target down the course hair and release at the cross hair to destroy a factory from 3,000 m.',
       start: { alt: 3000, z: 7500 }, lo: pl => loadout(pl, 'b'), target: { size: 'medium', kind: 'factory', x: 0, z: -2000 },
@@ -455,14 +455,20 @@ const Tutorial = (() => {
   // ---- HUD: the instruction panel and the waypoint marker
   function draw(g, W, H, m, cam, text, proj) {
     const T = m.tut; if (!T) return; const st = T.t.steps[Math.min(T.step, T.t.steps.length - 1)];
-    const msg = T.done ? 'Tutorial complete!' : st.text(ctx(m)), w = Math.min(760, W - 40), x = W / 2 - w / 2;
-    g.fillStyle = 'rgba(8,14,22,0.78)'; g.beginPath(); g.roundRect ? g.roundRect(x, 10, w, 74, 10) : g.rect(x, 10, w, 74); g.fill();
+    const msg = T.done ? 'Tutorial complete!' : st.text(ctx(m)), w = Math.min(820, W - 40), x = W / 2 - w / 2;
+    // the goal is the first sentence (up to the first colon or full stop), shown on its own; the how-to follows
+    const cut = msg.search(/[:.](\s|$)/), goal = cut > 0 && cut < 90 ? msg.slice(0, cut + 1) : '', rest0 = goal ? msg.slice(cut + 1).trim() : msg, rest = rest0.charAt(0).toUpperCase() + rest0.slice(1);
+    const wrap = (s, font) => { g.font = font; const out = ['']; for (const wd of s.split(' ')) { const tl = out[out.length - 1] + (out[out.length - 1] ? ' ' : '') + wd; if (g.measureText(tl).width > w - 34 && out[out.length - 1]) out.push(wd); else out[out.length - 1] = tl; } return out.filter(Boolean); };
+    const gl = goal ? wrap(goal, '600 17px sans-serif') : [], bl = wrap(rest, '14px sans-serif'), h = 34 + gl.length * 21 + bl.length * 18 + 22;
+    g.fillStyle = 'rgba(8,14,22,0.82)'; g.beginPath(); g.roundRect ? g.roundRect(x, 10, w, h, 10) : g.rect(x, 10, w, h); g.fill();
     text(`TUTORIAL · ${T.t.name.toUpperCase()} · STEP ${Math.min(T.step + 1, T.t.steps.length)} / ${T.t.steps.length}`, W / 2, 30, '#ffd34d', 12, 'center', true);
-    // wrap the instruction onto two lines
-    const words = msg.split(' '), lines = ['']; g.font = '15px sans-serif'; for (const wd of words) { const tl = lines[lines.length - 1] + (lines[lines.length - 1] ? ' ' : '') + wd; if (g.measureText(tl).width > w - 30 && lines[lines.length - 1]) lines.push(wd); else lines[lines.length - 1] = tl; }
-    lines.slice(0, 3).forEach((l, i) => text(l, W / 2, 52 + i * 18, '#ffffff', 15, 'center'));
+    gl.forEach((l, i) => text(l, W / 2, 54 + i * 21, '#ffffff', 17, 'center', true));
+    bl.forEach((l, i) => text(l, W / 2, 54 + gl.length * 21 + i * 18, '#d8e2ea', 14, 'center'));
+    if (!T.done) text(`${K('tutorialReset')}: start this step again`, W / 2, 10 + h - 9, 'rgba(255,255,255,0.5)', 11, 'center');
     if (st.wp && !T.done) { const s = proj(st.wp, cam); if (s) { g.strokeStyle = '#ffd34d'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(s.x, s.y - 16); g.lineTo(s.x + 16, s.y); g.lineTo(s.x, s.y + 16); g.lineTo(s.x - 16, s.y); g.closePath(); g.stroke();
       text(Math.round(st.wp.distanceTo(m.player.pos)) + ' m', s.x, s.y + 32, '#ffd34d', 12, 'center', true); } }
   }
-  return { LIST, CATS, byId, fits, plan, spawn, start, update, draw, ctx, _dbg: { at, frame, bot, PATH } };
+  // start the current step again (R): its measurements, its path laid out from where you are, its scripted aircraft back in place
+  function restartStep(m) { const T = m.tut; if (!T || T.done) return; clearGuide(m, T); T.S = {}; T.stepT = 0; T.inFlight = false; T.launchT = 2; m.events.push({ t: m.time, e: 'msg', text: 'Step restarted' }); }
+  return { LIST, CATS, byId, fits, plan, spawn, start, update, draw, ctx, restartStep, _dbg: { at, frame, bot, PATH } };
 })();
