@@ -65,12 +65,17 @@ const UI = (() => {
     const guns = pl.guns.map(([g, n]) => `${n}× ${GUNS[g].name}`).join('<br>') || '—';
     const tur = pl.turrets.map(([g, n, arc]) => `${n}× ${GUNS[g].name} (${arc})`).join('<br>');
     const hp = pl.hp.map(st => `${esc(st[0])}: ${st[3]}× ${st[1].split('').map(k => KIND_NAMES[k]).join('/')} ≤${st[2]} kg`).join('<br>') || 'None';
-    const eng = `${pl.eng}× ${pl.kind === 'jet' ? (pl.ab ? 'turbojet with afterburner' : 'turbojet') : 'piston'}`;
+    const eq = (typeof EQUIP !== 'undefined' && EQUIP[pl.id]) || {};
+    const eng = eq.e ? esc(eq.e) : `${pl.eng}× ${pl.kind === 'jet' ? (pl.ab ? 'turbojet with afterburner' : 'turbojet') : 'piston'}`;
     const rows = [['Type', esc(pl.type)], ['Era', `${ERAS[pl.era].name} (${pl.year})`], ['Top speed', `${pl.spd} km/h`], ['Climb rate', `${pl.clb} m/s`], ['Turn time', `${pl.turn} s`], ['Roll rate', `${pl.roll} °/s`],
       ['G limit', `${pl.g} G`], ['Weight', `${fmt(pl.mass)} kg`], ['Span / length', `${pl.span} / ${pl.len} m`], ['Engines', eng], ['Crew', pl.crew.join(', ')], ['Guns', guns]];
     if (tur) rows.push(['Defensive guns', tur]);
     rows.push(['Hardpoints', hp], ['Max payload', `${fmt(pl.payload)} kg`]);
-    if (pl.radar) rows.push(['Radar', 'Yes']); if (pl.flares) rows.push(['Countermeasures', `${pl.flares} flares`]);
+    // the real fit (js/equipment.js): radar set, other sensors, warning receivers, countermeasures, sights
+    rows.push(['Radar', eq.r ? esc(eq.r) : pl.radar ? 'Yes' : 'None']);
+    if (eq.s) rows.push(['Other sensors', esc(eq.s)]); if (eq.w) rows.push(['Warning systems', esc(eq.w)]);
+    if (eq.c || pl.flares) rows.push(['Countermeasures', [eq.c && esc(eq.c), pl.flares && `in game: ${pl.flares} flares/chaff`].filter(Boolean).join('<br>')]);
+    if (eq.g) rows.push(['Sight / fire control', esc(eq.g)]); if (pl.bombsight && !/bomb/i.test(eq.g || '')) rows.push(['Bombsight', esc(pl.bombsight.name)]);
     return rows.map(([a, b]) => `<div class="stat"><span>${a}</span><span style="text-align:right">${b}</span></div>`).join('');
   }
   function nationTabs(sel, cb) { return `<div class="tabs">${NATION_ORDER.map(n => `<button class="tab ${n === sel ? 'sel' : ''}" data-nat="${n}">${flag(n)} ${NATIONS[n].name}</button>`).join('')}</div>`; }

@@ -18,7 +18,7 @@ B('ger', 'do17', 'Dornier Do 17 Z-2', 2, 1938, 'Medium bomber', { shape: 'bomber
 B('ger', 'ju88', 'Junkers Ju 88 A-4', 3, 1941, 'Medium bomber', { shape: 'bomber2', eng: 2, spd: 470, clb: 6, turn: 30, roll: 60, mass: 12100, span: 20.1, len: 14.4, crew: ['pilot', 'gunner', 'gunner', 'gunner'], turrets: [['mg15', 1, 'nose'], ['mg131', 1, 'dorsal'], ['mg15', 2, 'ventral']], guns: [], hp: [['Bomb bay', 'b', 500, 4], ['Wing racks', 'b', 500, 2]], payload: 2500, g: 5 });
 P('ger', 'bf110', 'Messerschmitt Bf 110 G-2', 3, 1942, { type: 'Heavy fighter', shape: 'twin', eng: 2, spd: 550, clb: 11, turn: 22, roll: 75, mass: 9900, span: 16.3, len: 12.1, crew: ['pilot', 'gunner'], turrets: [['mg15', 2, 'rear']], guns: [['mg151', 2, 'nose'], ['mg17', 4, 'nose']], hp: [['Belly racks', 'b', 500, 2], ['Wing racks', 'b', 50, 4]], payload: 1200, g: 8, armor: 1 });
 B('ger', 'ar234', 'Arado Ar 234 B-2 Blitz', 3, 1944, 'Jet bomber', { shape: 'jet_s2', kind: J, eng: 2, spd: 742, clb: 13, turn: 30, roll: 70, mass: 9800, span: 14.4, len: 12.6, guns: [], hp: [['Engine nacelles', 'b', 500, 2], ['Centreline', 'b', 1000, 1]], payload: 1500, g: 5, aoa: 14 });
-A('ger', 'g91', 'Fiat G.91 R/3 (Luftwaffe)', 5, 1962, 'Light attack aircraft', { shape: 'jet_sw', kind: J, spd: 1075, clb: 30, turn: 24, roll: 150, mass: 5500, span: 8.6, len: 10.3, guns: [['defa', 2, 'nose']], hp: [['Pylons', 'brm', 500, 4]], payload: 1800, g: 7.3, aoa: 17, flares: 20 });
+A('ger', 'g91', 'Fiat G.91 R/3 (Luftwaffe)', 5, 1962, 'Light attack aircraft', { shape: 'jet_sw', kind: J, spd: 1075, clb: 30, turn: 24, roll: 150, mass: 5500, span: 8.6, len: 10.3, guns: [['defa', 2, 'nose']], hp: [['Pylons', 'brm', 500, 4]], payload: 1800, g: 7.3, aoa: 17 });
 A('ger', 'tornadoids', 'Panavia Tornado IDS', 6, 1981, 'Strike aircraft', { shape: 'jet_sw2', kind: J, eng: 2, ab: true, spd: 2400, clb: 220, turn: 26, roll: 170, mass: 24500, span: 13.9, len: 16.7, crew: ['pilot', 'wso'], guns: [['bk27', 2, 'nose']], hp: [['Belly', 'b', 1000, 4], ['Inner wing', 'bm', 1000, 2], ['Outer wing', 'm', 100, 2]], payload: 9000, g: 7.5, aoa: 22, radar: true, flares: 60 });
 // ------------------------------------------------------------------ Britain
 B('uk', 'dh9a', 'Airco DH.9A', 1, 1918, 'Light bomber', { shape: 'bi', spd: 198, clb: 4, turn: 17, roll: 60, mass: 2100, span: 14, len: 9.2, crew: ['pilot', 'gunner'], turrets: [['lewis', 2, 'rear']], guns: [['vickers', 1, 'sync']], hp: [['Bomb racks', 'b', 100, 2]], payload: 300, g: 5 });
@@ -35,7 +35,7 @@ B('ussr', 'tb3', 'Tupolev TB-3', 2, 1932, 'Heavy bomber', { shape: 'bomber4', en
 B('ussr', 'sb2', 'Tupolev SB-2M-103', 2, 1938, 'Fast bomber', { shape: 'bomber2', eng: 2, spd: 450, clb: 8, turn: 28, roll: 60, mass: 7900, span: 20.3, len: 12.6, crew: ['pilot', 'gunner', 'gunner'], turrets: [['shkas', 2, 'nose'], ['shkas', 1, 'dorsal']], guns: [], hp: [['Bomb bay', 'b', 250, 4]], payload: 600, g: 5 });
 B('ussr', 'tu2', 'Tupolev Tu-2S', 3, 1944, 'Medium bomber', { shape: 'bomber2', eng: 2, spd: 547, clb: 8, turn: 30, roll: 60, mass: 11400, span: 18.9, len: 13.8, crew: ['pilot', 'gunner', 'gunner'], turrets: [['ubs', 1, 'dorsal'], ['ubs', 1, 'ventral']], guns: [['shvak', 2, 'wing']], hp: [['Bomb bay', 'b', 1000, 3]], payload: 3000, g: 5 });
 B('ussr', 'il28', 'Ilyushin Il-28', 4, 1950, 'Jet bomber', { shape: 'jet_s2', kind: J, eng: 2, spd: 902, clb: 15, turn: 30, roll: 80, mass: 21200, span: 21.5, len: 17.6, crew: ['pilot', 'wso', 'gunner'], turrets: [['nr23', 2, 'tail']], guns: [['nr23', 2, 'nose']], hp: [['Bomb bay', 'b', 1000, 3]], payload: 3000, g: 4.5, aoa: 15 });
-A('ussr', 'su7b', 'Sukhoi Su-7BMK', 5, 1971, 'Fighter-bomber', { shape: 'jet_sw', kind: J, ab: true, spd: 2150, clb: 160, turn: 32, roll: 140, mass: 13500, span: 9.3, len: 16.8, guns: [['nr30', 2, 'wing']], hp: [['Pylons', 'brm', 500, 6]], payload: 2000, g: 7, aoa: 18, flares: 20 });
+A('ussr', 'su7b', 'Sukhoi Su-7BMK', 5, 1971, 'Fighter-bomber', { shape: 'jet_sw', kind: J, ab: true, spd: 2150, clb: 160, turn: 32, roll: 140, mass: 13500, span: 9.3, len: 16.8, guns: [['nr30', 2, 'wing']], hp: [['Pylons', 'brm', 500, 6]], payload: 2000, g: 7, aoa: 18 });
 A('ussr', 'su25', 'Sukhoi Su-25 Frogfoot', 6, 1981, 'Ground-attack aircraft', { shape: 'jet_s2', kind: J, eng: 2, spd: 975, clb: 58, turn: 20, roll: 120, mass: 17600, span: 14.4, len: 15.5, guns: [['gsh30', 1, 'nose']], hp: [['Pylons', 'brm', 500, 8], ['Rails', 'm', 100, 2]], payload: 4400, g: 6.5, aoa: 20, armor: 3, flares: 128 });
 A('ussr', 'su34', 'Sukhoi Su-34', 7, 2014, 'Strike fighter', { shape: 'jet_tt', kind: J, eng: 2, ab: true, spd: 1900, clb: 200, turn: 22, roll: 200, mass: 39000, span: 14.7, len: 23.3, crew: ['pilot', 'wso'], guns: [['gsh30', 1, 'wing']], hp: [['Pylons', 'bmr', 1500, 10]], payload: 8000, g: 7, aoa: 30, radar: true, flares: 96 });
 // ------------------------------------------------------------------ Japan
@@ -76,6 +76,8 @@ const BOMBSIGHT_OF = { b17g: 'norden', b29: 'norden', b25j: 'norden', b10: 'nord
 // fighters, the French voice in Dassault jets). Aircraft without one get no spoken warnings.
 const VOICE_OF = { f16c: 'en-US', fa18e: 'en-US', f22a: 'en-US', ef2000g: 'en-GB', ef2000uk: 'en-GB', rafalec: 'fr-FR', m2000c: 'fr-FR', m2000d: 'fr-FR',
   mig29: 'ru-RU', mig29g: 'ru-RU', su27: 'ru-RU', su35s: 'ru-RU', su34: 'ru-RU', su57: 'ru-RU' };
+// Cold War jets that never had a radar warning receiver as built (js/equipment.js lists what each one carried)
+const NO_RWR = ['f104g', 'f104j', 'lightning', 'mirage3c', 'g91', 'vautour', 'tu16'];
 const DIVE_BRAKES = ['ju87', 'sbd', 'd3a', 'pe2', 'a1h'];
 // aircraft with a missile approach warning system as standard: F-22A (AN/AAR-56), F-35A (AN/AAQ-37 DAS), Eurofighter
 // Typhoon (Praetorian DASS), Rafale (SPECTRA DDM), Su-35S and Su-57 (ultraviolet / infrared MAWS)
@@ -88,7 +90,7 @@ for (const p of PLANE_LIST) {
   p.airbrake = (p.kind === 'jet' && p.era >= 4) || DIVE_BRAKES.includes(p.id);
   if (TYPES[p.id]) p.type = TYPES[p.id];
   p.bombsight = BOMBSIGHT_OF[p.id] ? SIGHTS[BOMBSIGHT_OF[p.id]] : null;
-  p.voice = VOICE_OF[p.id] || null; p.rwr = p.kind === 'jet' && p.era >= 5; // radar-warning / ground-proximity tones from the Cold War on
+  p.voice = VOICE_OF[p.id] || null; p.rwr = p.kind === 'jet' && p.era >= 5 && !NO_RWR.includes(p.id); // radar-warning / ground-proximity tones from the Cold War on
   // missile approach warning (sees the rocket motor's plume, so it also warns of heat seekers, which a radar warner
   // never hears): only the types fitted with one as standard
   p.maws = MAWS.includes(p.id);

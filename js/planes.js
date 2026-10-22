@@ -74,9 +74,9 @@ P('ger', 'me262', 'Messerschmitt Me 262 A-1a', 3, 1944, { shape: 'jet_s2', kind:
   desc: 'The world\'s first operational jet fighter: four 30 mm cannon.' });
 P('ger', 'sabre6', 'Canadair Sabre Mk 6 (Luftwaffe)', 4, 1957, { shape: 'jet_sw', kind: J, spd: 1142, clb: 60, turn: 24, roll: 160, mass: 6700, span: 11.6, len: 11.4, guns: [['m3', 6, 'nose']], hp: [['Inner pylons', 'brm', 500, 2]], payload: 900, g: 8, aoa: 18,
   desc: 'The best-performing Sabre, equipping the new Bundesluftwaffe.' });
-P('ger', 'f104g', 'Lockheed F-104G Starfighter', 5, 1960, { shape: 'jet_s', kind: J, ab: true, spd: 2125, clb: 250, turn: 40, roll: 220, mass: 13170, span: 6.7, len: 16.7, guns: [['m61', 1, 'nose']], hp: [['Wingtip rails', 'm', 100, 2], ['Wing pylons', 'brm', 450, 2], ['Centreline', 'b', 1000, 1]], payload: 1800, g: 7.3, aoa: 15, radar: true, flares: 20, tTail: true,
+P('ger', 'f104g', 'Lockheed F-104G Starfighter', 5, 1960, { shape: 'jet_s', kind: J, ab: true, spd: 2125, clb: 250, turn: 40, roll: 220, mass: 13170, span: 6.7, len: 16.7, guns: [['m61', 1, 'nose']], hp: [['Wingtip rails', 'm', 100, 2], ['Wing pylons', 'brm', 450, 2], ['Centreline', 'b', 1000, 1]], payload: 1800, g: 7.3, aoa: 15, radar: true, tTail: true,
   desc: '"Missile with a man in it": blistering speed, terrible turning.' });
-P('ger', 'mig21mf', 'MiG-21MF (NVA)', 5, 1972, { shape: 'jet_d', kind: J, ab: true, spd: 2230, clb: 225, turn: 22, roll: 210, mass: 8200, span: 7.2, len: 15.8, guns: [['gsh23', 1, 'nose']], hp: [['Inner pylons', 'brmg', 500, 2], ['Outer pylons', 'mr', 250, 2]], payload: 1500, g: 8.5, aoa: 22, radar: true, flares: 20, bloc: 'east',
+P('ger', 'mig21mf', 'MiG-21MF (NVA)', 5, 1972, { shape: 'jet_d', kind: J, ab: true, spd: 2230, clb: 225, turn: 22, roll: 210, mass: 8200, span: 7.2, len: 15.8, guns: [['gsh23', 1, 'nose']], hp: [['Inner pylons', 'brmg', 500, 2], ['Outer pylons', 'mr', 250, 2]], payload: 1500, g: 8.5, aoa: 22, radar: true, bloc: 'east',
   desc: 'East German Fishbed: small, fast and hard to see.' });
 P('ger', 'mig29g', 'MiG-29G Fulcrum', 6, 1991, { shape: 'jet_tt', kind: J, eng: 2, ab: true, spd: 2400, clb: 330, turn: 16, roll: 280, mass: 15300, span: 11.4, len: 17.3, guns: [['gsh30', 1, 'wing']], hp: [['Outer pylons', 'm', 150, 2], ['Mid pylons', 'mr', 500, 2], ['Inner pylons', 'mbr', 600, 2]], payload: 3500, g: 9, aoa: 30, radar: true, flares: 60, bloc: 'east',
   desc: 'Inherited from the NVA at reunification and flown by the Luftwaffe until 2004.' });
@@ -100,7 +100,7 @@ P('uk', 'meteor8', 'Gloster Meteor F.8', 4, 1950, { shape: 'jet_s2', kind: J, en
   desc: 'Britain\'s first jet, refined into a capable day fighter.' });
 P('uk', 'hunter6', 'Hawker Hunter F.6', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1150, clb: 87, turn: 22, roll: 160, mass: 8050, span: 10.3, len: 14.0, guns: [['aden', 4, 'nose']], hp: [['Inner pylons', 'br', 500, 2], ['Outer pylons', 'r', 250, 2]], payload: 1800, g: 7.5, aoa: 18,
   desc: 'Beautiful, beloved, and armed with four 30 mm ADENs.' });
-P('uk', 'lightning', 'English Electric Lightning F.6', 5, 1965, { shape: 'jet_sw', kind: J, eng: 2, ab: true, spd: 2100, clb: 250, turn: 25, roll: 210, mass: 18900, span: 10.6, len: 16.8, guns: [['aden', 2, 'nose']], hp: [['Missile pylons', 'm', 150, 2]], payload: 300, g: 7, aoa: 20, radar: true, flares: 20,
+P('uk', 'lightning', 'English Electric Lightning F.6', 5, 1965, { shape: 'jet_sw', kind: J, eng: 2, ab: true, spd: 2100, clb: 250, turn: 25, roll: 210, mass: 18900, span: 10.6, len: 16.8, guns: [['aden', 2, 'nose']], hp: [['Missile pylons', 'm', 150, 2]], payload: 300, g: 7, aoa: 20, radar: true, 
   desc: 'Stacked engines and an astonishing climb rate: the RAF\'s great interceptor.' });
 P('uk', 'tornadof3', 'Panavia Tornado F.3', 6, 1986, { shape: 'jet_sw2', kind: J, eng: 2, ab: true, spd: 2400, clb: 230, turn: 23, roll: 180, mass: 22500, span: 13.9, len: 18.7, crew: ['pilot', 'wso'], guns: [['bk27', 1, 'nose']], hp: [['Belly wells', 'm', 250, 4], ['Inner wing', 'mb', 1000, 2]], payload: 5800, g: 7.5, aoa: 22, radar: true, flares: 60,
   desc: 'Long-range swing-wing interceptor guarding the UK air defence region.' });
@@ -124,7 +124,7 @@ P('ussr', 'mig15', 'Mikoyan-Gurevich MiG-15bis', 4, 1950, { shape: 'jet_sw', kin
   desc: 'The shock of Korea: heavy cannon built to kill B-29s.' });
 P('ussr', 'mig17', 'Mikoyan-Gurevich MiG-17F', 4, 1953, { shape: 'jet_sw', kind: J, ab: true, spd: 1145, clb: 65, turn: 21, roll: 160, mass: 6070, span: 9.6, len: 11.3, guns: [['n37', 1, 'nose'], ['nr23', 2, 'nose']], hp: [['Wing pylons', 'br', 250, 2]], payload: 500, g: 8, aoa: 18,
   desc: 'Agile subsonic gunfighter that troubled Phantoms over Vietnam.' });
-P('ussr', 'mig21bis', 'Mikoyan-Gurevich MiG-21bis', 5, 1972, { shape: 'jet_d', kind: J, ab: true, spd: 2230, clb: 225, turn: 21, roll: 210, mass: 8700, span: 7.2, len: 15.8, guns: [['gsh23', 1, 'nose']], hp: [['Inner pylons', 'brmg', 500, 2], ['Outer pylons', 'mr', 250, 2]], payload: 2000, g: 8.5, aoa: 22, radar: true, flares: 20,
+P('ussr', 'mig21bis', 'Mikoyan-Gurevich MiG-21bis', 5, 1972, { shape: 'jet_d', kind: J, ab: true, spd: 2230, clb: 225, turn: 21, roll: 210, mass: 8700, span: 7.2, len: 15.8, guns: [['gsh23', 1, 'nose']], hp: [['Inner pylons', 'brmg', 500, 2], ['Outer pylons', 'mr', 250, 2]], payload: 2000, g: 8.5, aoa: 22, radar: true, 
   desc: 'The most-produced supersonic jet in history.' });
 P('ussr', 'mig23', 'Mikoyan MiG-23MLD', 5, 1975, { shape: 'jet_sw2', kind: J, ab: true, spd: 2500, clb: 240, turn: 25, roll: 180, mass: 15700, span: 13.97, len: 16.7, guns: [['gsh23', 1, 'nose']], hp: [['Glove pylons', 'mb', 500, 2], ['Wing pylons', 'mr', 500, 2], ['Belly', 'bg', 500, 1]], payload: 3000, g: 7.5, aoa: 22, radar: true, flares: 30,
   desc: 'Variable-geometry Flogger, the Soviet answer to the Phantom.' });
@@ -154,7 +154,7 @@ P('jpn', 'ki84', 'Nakajima Ki-84 Hayate', 3, 1944, { shape: 'mono', spd: 660, cl
   desc: 'Japan\'s best wartime fighter when its engine ran right.' });
 P('jpn', 'f86fj', 'F-86F-40 Sabre (JASDF)', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1106, clb: 47, turn: 24, roll: 160, mass: 7700, span: 11.9, len: 11.4, guns: [['m3', 6, 'nose']], hp: [['Inner pylons', 'brm', 500, 2]], payload: 900, g: 8, aoa: 18,
   desc: 'Extended-wing Sabre that founded the Japan Air Self-Defense Force\'s fighter arm.' });
-P('jpn', 'f104j', 'Mitsubishi F-104J Eiko', 5, 1962, { shape: 'jet_s', kind: J, ab: true, spd: 2125, clb: 250, turn: 40, roll: 220, mass: 13000, span: 6.7, len: 16.7, guns: [['m61', 1, 'nose']], hp: [['Wingtip rails', 'm', 100, 2], ['Wing pylons', 'm', 100, 2]], payload: 600, g: 7.3, aoa: 15, radar: true, flares: 20, tTail: true,
+P('jpn', 'f104j', 'Mitsubishi F-104J Eiko', 5, 1962, { shape: 'jet_s', kind: J, ab: true, spd: 2125, clb: 250, turn: 40, roll: 220, mass: 13000, span: 6.7, len: 16.7, guns: [['m61', 1, 'nose']], hp: [['Wingtip rails', 'm', 100, 2], ['Wing pylons', 'm', 100, 2]], payload: 600, g: 7.3, aoa: 15, radar: true, tTail: true,
   desc: 'Licence-built pure interceptor, "Glory" in Japanese service.' });
 P('jpn', 'f4ej', 'Mitsubishi F-4EJ Kai', 5, 1971, { shape: 'jet_sw2', kind: J, eng: 2, ab: true, spd: 2370, clb: 210, turn: 27, roll: 150, mass: 18800, span: 11.7, len: 19.2, crew: ['pilot', 'rio'], guns: [['m61', 1, 'nose']], hp: [['Sparrow wells', 'm', 250, 4], ['Inner pylons', 'bm', 1400, 2], ['Outer pylons', 'brg', 1100, 2]], payload: 8400, g: 7.3, aoa: 22, radar: true, flares: 30,
   desc: 'The last Phantoms in Japanese service flew until 2021.' });
@@ -178,7 +178,7 @@ P('fra', 'ouragan', 'Dassault MD 450 Ouragan', 4, 1952, { shape: 'jet_s', kind: 
   desc: 'Dassault\'s first jet fighter.' });
 P('fra', 'mystere4', 'Dassault Mystère IV A', 4, 1955, { shape: 'jet_sw', kind: J, spd: 1120, clb: 40, turn: 23, roll: 160, mass: 8510, span: 11.1, len: 12.9, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'brm', 500, 2]], payload: 1000, g: 7.5, aoa: 18,
   desc: 'Swept-wing fighter that fought in Suez and the Six-Day War.' });
-P('fra', 'mirage3c', 'Dassault Mirage IIIC', 5, 1961, { shape: 'jet_d', kind: J, ab: true, spd: 2350, clb: 85, turn: 24, roll: 200, mass: 12700, span: 8.2, len: 15.0, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'mbr', 500, 2], ['Centreline', 'mb', 500, 1]], payload: 2000, g: 7, aoa: 25, radar: true, flares: 20,
+P('fra', 'mirage3c', 'Dassault Mirage IIIC', 5, 1961, { shape: 'jet_d', kind: J, ab: true, spd: 2350, clb: 85, turn: 24, roll: 200, mass: 12700, span: 8.2, len: 15.0, guns: [['defa', 2, 'nose']], hp: [['Wing pylons', 'mbr', 500, 2], ['Centreline', 'mb', 500, 1]], payload: 2000, g: 7, aoa: 25, radar: true, 
   desc: 'The delta that made Dassault famous, with an optional rocket booster.' });
 P('fra', 'm2000c', 'Dassault Mirage 2000C', 6, 1984, { shape: 'jet_d', kind: J, ab: true, spd: 2530, clb: 285, turn: 17, roll: 270, mass: 13800, span: 9.13, len: 14.36, guns: [['defa', 2, 'nose']], hp: [['Outer pylons', 'm', 150, 2], ['Inner pylons', 'mbr', 1000, 2], ['Fuselage', 'mb', 500, 2]], payload: 6300, g: 9, aoa: 30, radar: true, flares: 60,
   desc: 'Fly-by-wire delta: fast, agile and with superb high-alpha handling.' });
